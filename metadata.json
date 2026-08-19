@@ -1,0 +1,6 @@
+{
+  "name": "MTC Compliance Checker",
+  "description": "Automated Material Test Certificate (MTC) vs. Material Data Sheet (MDS) compliance engine with deterministic rule validation, evidence traceability, and human-in-the-loop technical review.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
