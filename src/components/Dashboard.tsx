@@ -133,69 +133,80 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* 1. DASHBOARD HERO: Infinite Grid Animated Operational Header */}
-      <div className="rounded-xl overflow-hidden border border-slate-800 shadow-sm">
-        <InfiniteGrid
-          cellSize={36}
-          lineColor="rgba(148, 163, 184, 0.12)"
-          crosshairColor="rgba(16, 185, 129, 0.4)"
-          spotlightColor="rgba(16, 185, 129, 0.15)"
-          spotlightRadius={260}
-          backgroundColor="#090e1a"
-          enableTilt={true}
-          className="p-5 md:p-6"
-        >
-          <div className="w-full flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="space-y-1.5 text-left">
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-950/90 text-emerald-300 border border-emerald-800/60 backdrop-blur-xs">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  SYSTEM ACTIVE
-                </span>
-                <span className="text-xs text-slate-400 font-mono">EN 10204 3.1 & ISO 9001 Workstation</span>
+      {/* 1. DASHBOARD HERO: Infinite Grid Animated Operational Header with Perimeter Highlight */}
+      <div className="relative p-[1px] rounded-xl overflow-hidden shadow-sm">
+        {/* Animated Perimeter Flow Highlight: Teal -> Cyan -> Blue -> Purple -> Teal */}
+        <div
+          aria-hidden="true"
+          className="absolute -inset-[150%] animate-perimeter-flow opacity-35 pointer-events-none"
+          style={{
+            background:
+              'conic-gradient(from 0deg at 50% 50%, #0d9488 0deg, #06b6d4 90deg, #3b82f6 180deg, #8b5cf6 270deg, #0d9488 360deg)',
+          }}
+        />
+        <div className="relative rounded-[11px] overflow-hidden border border-slate-800 bg-[#090e1a]">
+          <InfiniteGrid
+            cellSize={36}
+            lineColor="rgba(148, 163, 184, 0.12)"
+            crosshairColor="rgba(16, 185, 129, 0.4)"
+            spotlightColor="rgba(16, 185, 129, 0.15)"
+            spotlightRadius={260}
+            backgroundColor="#090e1a"
+            enableTilt={true}
+            className="p-5 md:p-6"
+          >
+            <div className="w-full flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div className="space-y-1.5 text-left">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-950/90 text-emerald-300 border border-emerald-800/60 backdrop-blur-xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    SYSTEM ACTIVE
+                  </span>
+                  <span className="text-xs text-slate-400 font-mono">EN 10204 3.1 & ISO 9001 Workstation</span>
+                </div>
+                <h1 className="text-xl font-bold tracking-tight text-white">
+                  {getGreeting()}
+                </h1>
+                <p className="text-xs text-slate-400">
+                  Material certificate compliance at a glance.
+                </p>
               </div>
-              <h1 className="text-xl font-bold tracking-tight text-white">
-                {getGreeting()}
-              </h1>
-              <p className="text-xs text-slate-400">
-                Material certificate compliance at a glance.
-              </p>
+
+              {/* Action Controls with PixelButtonPro */}
+              <div className="flex items-center gap-3 flex-wrap shrink-0">
+                <PixelButtonPro
+                  onClick={onLoadPilotCase}
+                  variant="secondary"
+                  size="sm"
+                  reveal="diagonalTopLeft"
+                  icon={<Sparkles className="w-3.5 h-3.5" />}
+                >
+                  Pilot Benchmark
+                </PixelButtonPro>
+
+                <PixelButtonPro
+                  onClick={onOpenTestSuite}
+                  variant="amber"
+                  size="sm"
+                  reveal="centerOut"
+                  icon={<PlayCircle className="w-3.5 h-3.5" />}
+                >
+                  Test Suite
+                </PixelButtonPro>
+
+                <PixelButtonPro
+                  onClick={onOpenNewComparison}
+                  variant="primary"
+                  size="sm"
+                  reveal="random"
+                  icon={<Plus className="w-4 h-4" />}
+                >
+                  + New Comparison
+                </PixelButtonPro>
+              </div>
             </div>
-
-            {/* Action Controls with PixelButtonPro */}
-            <div className="flex items-center gap-3 flex-wrap shrink-0">
-              <PixelButtonPro
-                onClick={onLoadPilotCase}
-                variant="secondary"
-                size="sm"
-                reveal="diagonalTopLeft"
-                icon={<Sparkles className="w-3.5 h-3.5" />}
-              >
-                Pilot Benchmark
-              </PixelButtonPro>
-
-              <PixelButtonPro
-                onClick={onOpenTestSuite}
-                variant="amber"
-                size="sm"
-                reveal="centerOut"
-                icon={<PlayCircle className="w-3.5 h-3.5" />}
-              >
-                Test Suite
-              </PixelButtonPro>
-
-              <PixelButtonPro
-                onClick={onOpenNewComparison}
-                variant="primary"
-                size="sm"
-                reveal="random"
-                icon={<Plus className="w-4 h-4" />}
-              >
-                + New Comparison
-              </PixelButtonPro>
-            </div>
-          </div>
-        </InfiniteGrid>
+          </InfiniteGrid>
+        </div>
       </div>
 
       {/* 2. KPI CARDS: 4-Card Operational QC Metrics */}
@@ -205,8 +216,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
           onClick={() => handleCardClick('pass')}
           className={`bg-white rounded-xl p-5 border transition-all cursor-pointer text-left relative shadow-xs hover:shadow-sm border-l-4 border-l-emerald-500 ${
             statusFilter === 'pass'
-              ? 'border-emerald-500 ring-1 ring-emerald-500/30 bg-emerald-50/20'
-              : 'border-slate-200 hover:border-emerald-300'
+              ? 'border-emerald-500 ring-2 ring-emerald-500/30 bg-emerald-50/20'
+              : 'border-slate-300/80 hover:border-emerald-400/80'
           }`}
           role="button"
           tabIndex={0}
@@ -214,7 +225,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="flex items-start justify-between">
             <div className="space-y-0.5">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
                   CONFORMING (PASS)
                 </span>
                 {statusFilter === 'pass' && (
@@ -230,11 +241,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <span className="font-medium text-emerald-700">Satisfies client requirements</span>
               </p>
             </div>
-            <div className="w-9 h-9 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+            <div className="w-9 h-9 rounded-lg bg-emerald-50 border border-emerald-200/80 flex items-center justify-center text-emerald-600 shrink-0">
               <CheckCircle2 className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
+          <div className="mt-3 pt-2.5 border-t border-slate-200/70 flex items-center justify-between text-xs">
             <span className="text-emerald-700 font-semibold flex items-center gap-1">
               <span>{statusFilter === 'pass' ? 'Reset filter' : 'Filter compliant'}</span>
               <ArrowRight className="w-3.5 h-3.5 text-emerald-500" />
@@ -244,9 +255,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 e.stopPropagation();
                 setAboutModalCategory('pass');
               }}
-              className="text-slate-400 hover:text-slate-700 flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded hover:bg-slate-100 transition-colors cursor-pointer"
+              className="text-slate-500 hover:text-slate-700 flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded border border-slate-200/80 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer"
             >
-              <Info className="w-3 h-3" />
+              <Info className="w-3 h-3 text-slate-400" />
               <span>Criteria</span>
             </button>
           </div>
@@ -257,8 +268,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
           onClick={() => handleCardClick('deviations')}
           className={`bg-white rounded-xl p-5 border transition-all cursor-pointer text-left relative shadow-xs hover:shadow-sm border-l-4 border-l-rose-500 ${
             statusFilter === 'deviations'
-              ? 'border-rose-500 ring-1 ring-rose-500/30 bg-rose-50/20'
-              : 'border-slate-200 hover:border-rose-300'
+              ? 'border-rose-500 ring-2 ring-rose-500/30 bg-rose-50/20'
+              : 'border-slate-300/80 hover:border-rose-400/80'
           }`}
           role="button"
           tabIndex={0}
@@ -266,7 +277,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="flex items-start justify-between">
             <div className="space-y-0.5">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
                   DEVIATIONS (FAIL)
                 </span>
                 {statusFilter === 'deviations' && (
@@ -282,11 +293,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <span className="font-medium text-rose-700">Conflicts with specified limit</span>
               </p>
             </div>
-            <div className="w-9 h-9 rounded-lg bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shrink-0">
+            <div className="w-9 h-9 rounded-lg bg-rose-50 border border-rose-200/80 flex items-center justify-center text-rose-600 shrink-0">
               <AlertTriangle className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
+          <div className="mt-3 pt-2.5 border-t border-slate-200/70 flex items-center justify-between text-xs">
             <span className="text-rose-700 font-semibold flex items-center gap-1">
               <span>{statusFilter === 'deviations' ? 'Reset filter' : 'Filter deviations'}</span>
               <ArrowRight className="w-3.5 h-3.5 text-rose-500" />
@@ -296,9 +307,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 e.stopPropagation();
                 setAboutModalCategory('deviations');
               }}
-              className="text-slate-400 hover:text-slate-700 flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded hover:bg-slate-100 transition-colors cursor-pointer"
+              className="text-slate-500 hover:text-slate-700 flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded border border-slate-200/80 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer"
             >
-              <Info className="w-3 h-3" />
+              <Info className="w-3 h-3 text-slate-400" />
               <span>Criteria</span>
             </button>
           </div>
@@ -309,8 +320,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
           onClick={() => handleCardClick('gaps')}
           className={`bg-white rounded-xl p-5 border transition-all cursor-pointer text-left relative shadow-xs hover:shadow-sm border-l-4 border-l-amber-500 ${
             statusFilter === 'gaps'
-              ? 'border-amber-500 ring-1 ring-amber-500/30 bg-amber-50/20'
-              : 'border-slate-200 hover:border-amber-300'
+              ? 'border-amber-500 ring-2 ring-amber-500/30 bg-amber-50/20'
+              : 'border-slate-300/80 hover:border-amber-400/80'
           }`}
           role="button"
           tabIndex={0}
@@ -318,7 +329,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="flex items-start justify-between">
             <div className="space-y-0.5">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
                   DOCUMENTATION GAPS
                 </span>
                 {statusFilter === 'gaps' && (
@@ -334,11 +345,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <span className="font-medium text-amber-700">Missing test/NDE certificates</span>
               </p>
             </div>
-            <div className="w-9 h-9 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600 shrink-0">
+            <div className="w-9 h-9 rounded-lg bg-amber-50 border border-amber-200/80 flex items-center justify-center text-amber-600 shrink-0">
               <FileQuestion className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
+          <div className="mt-3 pt-2.5 border-t border-slate-200/70 flex items-center justify-between text-xs">
             <span className="text-amber-700 font-semibold flex items-center gap-1">
               <span>{statusFilter === 'gaps' ? 'Reset filter' : 'Filter gaps'}</span>
               <ArrowRight className="w-3.5 h-3.5 text-amber-500" />
@@ -348,9 +359,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 e.stopPropagation();
                 setAboutModalCategory('gaps');
               }}
-              className="text-slate-400 hover:text-slate-700 flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded hover:bg-slate-100 transition-colors cursor-pointer"
+              className="text-slate-500 hover:text-slate-700 flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded border border-slate-200/80 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer"
             >
-              <Info className="w-3 h-3" />
+              <Info className="w-3 h-3 text-slate-400" />
               <span>Criteria</span>
             </button>
           </div>
@@ -361,8 +372,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
           onClick={() => handleCardClick('review')}
           className={`bg-white rounded-xl p-5 border transition-all cursor-pointer text-left relative shadow-xs hover:shadow-sm border-l-4 border-l-blue-500 ${
             statusFilter === 'review'
-              ? 'border-blue-500 ring-1 ring-blue-500/30 bg-blue-50/20'
-              : 'border-slate-200 hover:border-blue-300'
+              ? 'border-blue-500 ring-2 ring-blue-500/30 bg-blue-50/20'
+              : 'border-slate-300/80 hover:border-blue-400/80'
           }`}
           role="button"
           tabIndex={0}
@@ -370,7 +381,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="flex items-start justify-between">
             <div className="space-y-0.5">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
                   REVIEW REQUIRED
                 </span>
                 {statusFilter === 'review' && (
@@ -386,11 +397,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <span className="font-medium text-blue-700">Ambiguous / human review</span>
               </p>
             </div>
-            <div className="w-9 h-9 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+            <div className="w-9 h-9 rounded-lg bg-blue-50 border border-blue-200/80 flex items-center justify-center text-blue-600 shrink-0">
               <HelpCircle className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
+          <div className="mt-3 pt-2.5 border-t border-slate-200/70 flex items-center justify-between text-xs">
             <span className="text-blue-700 font-semibold flex items-center gap-1">
               <span>{statusFilter === 'review' ? 'Reset filter' : 'Filter reviews'}</span>
               <ArrowRight className="w-3.5 h-3.5 text-blue-500" />
@@ -400,132 +411,143 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 e.stopPropagation();
                 setAboutModalCategory('review');
               }}
-              className="text-slate-400 hover:text-slate-700 flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded hover:bg-slate-100 transition-colors cursor-pointer"
+              className="text-slate-500 hover:text-slate-700 flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded border border-slate-200/80 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer"
             >
-              <Info className="w-3 h-3" />
+              <Info className="w-3 h-3 text-slate-400" />
               <span>Criteria</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* 3. NEEDS YOUR ATTENTION SECTION: Key Operational Focus */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-rose-500" />
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-              Needs Your Attention ({attentionItems.length})
-            </h2>
-          </div>
-          <span className="text-[11px] text-slate-500 font-mono">
-            Items requiring QA/QC engineer review or supplier clarification
-          </span>
-        </div>
-
-        {attentionItems.length === 0 ? (
-          <div className="p-8 text-center space-y-2">
-            <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 mx-auto flex items-center justify-center">
-              <ShieldCheck className="w-5 h-5" />
+      {/* 3. NEEDS YOUR ATTENTION SECTION: Key Operational Focus with Perimeter Highlight */}
+      <div className="relative p-[1px] rounded-xl overflow-hidden shadow-xs">
+        {/* Animated Perimeter Flow Highlight: Teal -> Cyan -> Blue -> Purple -> Teal */}
+        <div
+          aria-hidden="true"
+          className="absolute -inset-[150%] animate-perimeter-flow opacity-30 pointer-events-none"
+          style={{
+            background:
+              'conic-gradient(from 0deg at 50% 50%, #0d9488 0deg, #06b6d4 90deg, #3b82f6 180deg, #8b5cf6 270deg, #0d9488 360deg)',
+          }}
+        />
+        <div className="relative rounded-[11px] bg-white border border-slate-300/80 overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-slate-200 bg-slate-50/85 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-rose-500" />
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                Needs Your Attention ({attentionItems.length})
+              </h2>
             </div>
-            <h3 className="text-sm font-bold text-slate-800">All recent material reviews are up to date.</h3>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              No non-conformances, documentation gaps, or pending review triggers requiring attention.
-            </p>
+            <span className="text-[11px] text-slate-500 font-mono">
+              Items requiring QA/QC engineer review or supplier clarification
+            </span>
           </div>
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {attentionItems.map((item) => {
-              const isDeviation = item.deviationCount > 0 || item.status === 'rejected';
-              const isGap = item.documentationGapCount > 0;
-              const heatsText = item.heats && item.heats.length > 0 ? ` · Heat ${item.heats.join(', ')}` : '';
 
-              return (
-                <div
-                  key={item.id}
-                  onClick={() => onSelectAnalysis(item.id)}
-                  className="p-4 hover:bg-slate-50/80 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer group"
-                >
-                  <div className="flex items-start gap-3 min-w-0">
-                    <div className="mt-0.5 shrink-0">
+          {attentionItems.length === 0 ? (
+            <div className="p-8 text-center space-y-2">
+              <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 mx-auto flex items-center justify-center">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-800">All recent material reviews are up to date.</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                No non-conformances, documentation gaps, or pending review triggers requiring attention.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-200/70">
+              {attentionItems.map((item) => {
+                const isDeviation = item.deviationCount > 0 || item.status === 'rejected';
+                const isGap = item.documentationGapCount > 0;
+                const heatsText = item.heats && item.heats.length > 0 ? ` · Heat ${item.heats.join(', ')}` : '';
+
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => onSelectAnalysis(item.id)}
+                    className="p-4 hover:bg-slate-50/90 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer group"
+                  >
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="mt-0.5 shrink-0">
+                        {isDeviation ? (
+                          <div className="w-2.5 h-2.5 rounded-full bg-rose-500 ring-4 ring-rose-100" />
+                        ) : isGap ? (
+                          <div className="w-2.5 h-2.5 rounded-full bg-amber-500 ring-4 ring-amber-100" />
+                        ) : (
+                          <div className="w-2.5 h-2.5 rounded-full bg-blue-500 ring-4 ring-blue-100" />
+                        )}
+                      </div>
+
+                      <div className="space-y-0.5 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono font-bold text-xs text-slate-900 group-hover:text-emerald-700 transition-colors">
+                            {item.mtcNumber}
+                          </span>
+                          <span className="text-xs text-slate-500 font-medium">
+                            {item.materialGrade}{heatsText}
+                          </span>
+                          <span className="text-slate-300">·</span>
+                          <span className="text-xs text-slate-500 truncate">
+                            {item.supplierName}
+                          </span>
+                        </div>
+
+                        <p className="text-xs text-slate-700 font-medium leading-relaxed">
+                          {getAttentionSummary(item)}
+                        </p>
+
+                        <div className="flex items-center gap-2 pt-0.5 text-[11px] text-slate-400 font-mono">
+                          <span>Reviewed: {new Date(item.createdAt).toLocaleDateString()}</span>
+                          {item.poNumber && <span>· PO: {item.poNumber}</span>}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
                       {isDeviation ? (
-                        <div className="w-2.5 h-2.5 rounded-full bg-rose-500 ring-4 ring-rose-100" />
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-rose-50 text-rose-700 border border-rose-200">
+                          <AlertTriangle className="w-3 h-3" />
+                          <span>DEVIATION</span>
+                        </span>
                       ) : isGap ? (
-                        <div className="w-2.5 h-2.5 rounded-full bg-amber-500 ring-4 ring-amber-100" />
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-50 text-amber-700 border border-amber-200">
+                          <FileQuestion className="w-3 h-3" />
+                          <span>DOCUMENTATION GAP</span>
+                        </span>
                       ) : (
-                        <div className="w-2.5 h-2.5 rounded-full bg-blue-500 ring-4 ring-blue-100" />
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-blue-50 text-blue-700 border border-blue-200">
+                          <HelpCircle className="w-3 h-3" />
+                          <span>REVIEW REQUIRED</span>
+                        </span>
                       )}
-                    </div>
 
-                    <div className="space-y-0.5 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono font-bold text-xs text-slate-900 group-hover:text-emerald-700 transition-colors">
-                          {item.mtcNumber}
-                        </span>
-                        <span className="text-xs text-slate-500 font-medium">
-                          {item.materialGrade}{heatsText}
-                        </span>
-                        <span className="text-slate-300">·</span>
-                        <span className="text-xs text-slate-500 truncate">
-                          {item.supplierName}
-                        </span>
-                      </div>
-
-                      <p className="text-xs text-slate-700 font-medium leading-relaxed">
-                        {getAttentionSummary(item)}
-                      </p>
-
-                      <div className="flex items-center gap-2 pt-0.5 text-[11px] text-slate-400 font-mono">
-                        <span>Reviewed: {new Date(item.createdAt).toLocaleDateString()}</span>
-                        {item.poNumber && <span>· PO: {item.poNumber}</span>}
-                      </div>
+                      <PixelButtonPro
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectAnalysis(item.id);
+                        }}
+                        size="sm"
+                        variant="dark"
+                        reveal="leftToRight"
+                        iconRight={<ArrowRight className="w-3.5 h-3.5" />}
+                      >
+                        Review
+                      </PixelButtonPro>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
-                    {isDeviation ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-rose-50 text-rose-700 border border-rose-200">
-                        <AlertTriangle className="w-3 h-3" />
-                        <span>DEVIATION</span>
-                      </span>
-                    ) : isGap ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-50 text-amber-700 border border-amber-200">
-                        <FileQuestion className="w-3 h-3" />
-                        <span>DOCUMENTATION GAP</span>
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-blue-50 text-blue-700 border border-blue-200">
-                        <HelpCircle className="w-3 h-3" />
-                        <span>REVIEW REQUIRED</span>
-                      </span>
-                    )}
-
-                    <PixelButtonPro
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onSelectAnalysis(item.id);
-                      }}
-                      size="sm"
-                      variant="dark"
-                      reveal="leftToRight"
-                      iconRight={<ArrowRight className="w-3.5 h-3.5" />}
-                    >
-                      Review
-                    </PixelButtonPro>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 4. MAIN GRID: Recent Comparisons Record Table (2 cols) & Approved Library (1 col) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" id="recent-comparisons-table">
         {/* Recent Comparisons Table (2 Cols) */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden flex flex-col">
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-300/80 shadow-xs overflow-hidden flex flex-col">
           {/* Table Header & Filter Toolbar */}
-          <div className="p-4 border-b border-slate-200 space-y-3 bg-slate-50/50">
+          <div className="p-4 border-b border-slate-200 space-y-3 bg-slate-50/75">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div>
                 <h2 className="text-sm font-bold text-slate-900">
@@ -550,7 +572,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
             {/* Filter Bar & Search */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
-              <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg shrink-0">
+              <div className="flex items-center gap-1 bg-slate-200/70 p-0.5 rounded-lg border border-slate-300/50 shrink-0">
                 <button
                   onClick={() => setStatusFilter('all')}
                   className={`px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${
@@ -610,7 +632,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   placeholder="Search MTC #, PO, Material, Supplier..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  className="w-full pl-8 pr-3 py-1 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 />
               </div>
             </div>
@@ -639,7 +661,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             ) : (
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                  <tr className="border-b border-slate-200 bg-slate-100/90 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                     <th className="py-2.5 px-4">MTC Number</th>
                     <th className="py-2.5 px-3">Supplier</th>
                     <th className="py-2.5 px-3">Material & Heats</th>
@@ -649,7 +671,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     <th className="py-2.5 px-4 text-right">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
+                <tbody className="divide-y divide-slate-200/60 text-xs">
                   {filteredAnalyses.map((analysis) => {
                     const hasDeviations = analysis.deviationCount > 0;
                     const hasGaps = analysis.documentationGapCount > 0;
@@ -659,7 +681,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       <tr
                         key={analysis.id}
                         onClick={() => onSelectAnalysis(analysis.id)}
-                        className="hover:bg-slate-50/70 transition-colors cursor-pointer group"
+                        className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
                       >
                         {/* MTC ID */}
                         <td className="py-3 px-4">
@@ -773,10 +795,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
 
         {/* Approved Requirement Library (1 Col) */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-4 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="bg-white rounded-xl border border-slate-300/80 shadow-xs p-4 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-3">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+              <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center">
                 <BookOpen className="w-3.5 h-3.5" />
               </div>
               <div>
@@ -799,7 +821,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             {requirementSets.slice(0, 3).map((set) => (
               <div
                 key={set.id}
-                className="p-3 rounded-lg border border-slate-200 bg-slate-50/50 hover:bg-slate-100/70 transition-colors cursor-pointer"
+                className="p-3 rounded-lg border border-slate-200/90 bg-slate-50/70 hover:bg-slate-100/80 transition-colors cursor-pointer shadow-2xs"
                 onClick={onOpenLibrary}
               >
                 <div className="flex items-center justify-between">
@@ -810,7 +832,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </div>
                 <div className="text-xs text-slate-700 mt-1 font-medium">{set.materialGrade}</div>
                 <div className="text-[10px] text-slate-500 font-mono mt-0.5 truncate">{set.mdsNumber}</div>
-                <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-slate-200 font-mono">
+                <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 pt-2 border-t border-slate-200/70 font-mono">
                   <span>{set.requirements.length} Clauses</span>
                   <span>Effective: {set.effectiveDate}</span>
                 </div>
@@ -819,7 +841,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
 
           {/* Quick Pilot Prompt Info Box */}
-          <div className="p-3 bg-emerald-50/70 rounded-lg border border-emerald-200/80 text-emerald-950 text-xs space-y-1">
+          <div className="p-3 bg-emerald-50/70 rounded-lg border border-emerald-300/70 text-emerald-950 text-xs space-y-1">
             <p className="font-bold flex items-center gap-1.5 text-emerald-900">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
               Pilot Case Pre-Configured
