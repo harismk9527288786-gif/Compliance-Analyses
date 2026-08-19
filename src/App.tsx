@@ -509,6 +509,7 @@ export default function App() {
           <Dashboard
             analyses={analyses}
             requirementSets={requirementSets}
+            currentUser={currentUser}
             onSelectAnalysis={handleSelectAnalysis}
             onOpenNewComparison={() => setShowNewComparison(true)}
             onLoadPilotCase={handleLoadPilotCase}
@@ -522,6 +523,7 @@ export default function App() {
           <Dashboard
             analyses={analyses}
             requirementSets={requirementSets}
+            currentUser={currentUser}
             onSelectAnalysis={handleSelectAnalysis}
             onOpenNewComparison={() => setShowNewComparison(true)}
             onLoadPilotCase={handleLoadPilotCase}
