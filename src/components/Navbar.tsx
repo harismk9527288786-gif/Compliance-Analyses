@@ -12,7 +12,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { User, Organization } from '../types';
-import { DottedOffsetButton } from './DottedOffsetButton';
+import { PixelButtonPro } from './PixelButtonPro';
 
 interface NavbarProps {
   activeTab: string;
@@ -108,15 +108,16 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>Test Suite (16 Specs)</span>
             </button>
 
-            {/* Primary Action CTA with DottedOffsetButton */}
-            <DottedOffsetButton
+            {/* Primary Action CTA with PixelButtonPro */}
+            <PixelButtonPro
               onClick={onOpenNewComparison}
               variant="primary"
               size="sm"
+              reveal="random"
               icon={<Plus className="w-4 h-4" />}
             >
               New Comparison
-            </DottedOffsetButton>
+            </PixelButtonPro>
 
             <div className="h-5 w-px bg-slate-800 hidden sm:block" />
 

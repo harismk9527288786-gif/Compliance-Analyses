@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { AnalysisRecord, RequirementSet, User } from '../types';
 import { InfiniteGrid } from './InfiniteGrid';
-import { DottedOffsetButton } from './DottedOffsetButton';
+import { PixelButtonPro } from './PixelButtonPro';
 
 interface DashboardProps {
   analyses: AnalysisRecord[];
@@ -162,35 +162,37 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </p>
             </div>
 
-            {/* Action Controls with DottedOffsetButton */}
+            {/* Action Controls with PixelButtonPro */}
             <div className="flex items-center gap-3 flex-wrap shrink-0">
-              <DottedOffsetButton
+              <PixelButtonPro
                 onClick={onLoadPilotCase}
                 variant="secondary"
                 size="sm"
-                icon={<Sparkles className="w-3.5 h-3.5 text-emerald-400" />}
+                reveal="diagonalTopLeft"
+                icon={<Sparkles className="w-3.5 h-3.5" />}
               >
                 Pilot Benchmark
-              </DottedOffsetButton>
+              </PixelButtonPro>
 
-              <DottedOffsetButton
+              <PixelButtonPro
                 onClick={onOpenTestSuite}
-                variant="secondary"
+                variant="amber"
                 size="sm"
-                textColor="text-amber-300"
-                icon={<PlayCircle className="w-3.5 h-3.5 text-amber-400" />}
+                reveal="centerOut"
+                icon={<PlayCircle className="w-3.5 h-3.5" />}
               >
                 Test Suite
-              </DottedOffsetButton>
+              </PixelButtonPro>
 
-              <DottedOffsetButton
+              <PixelButtonPro
                 onClick={onOpenNewComparison}
                 variant="primary"
                 size="sm"
+                reveal="random"
                 icon={<Plus className="w-4 h-4" />}
               >
                 + New Comparison
-              </DottedOffsetButton>
+              </PixelButtonPro>
             </div>
           </div>
         </InfiniteGrid>
@@ -498,16 +500,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       </span>
                     )}
 
-                    <button
+                    <PixelButtonPro
                       onClick={(e) => {
                         e.stopPropagation();
                         onSelectAnalysis(item.id);
                       }}
-                      className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-900 hover:bg-slate-800 text-white flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+                      size="sm"
+                      variant="dark"
+                      reveal="leftToRight"
+                      iconRight={<ArrowRight className="w-3.5 h-3.5" />}
                     >
-                      <span>Review</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
+                      Review
+                    </PixelButtonPro>
                   </div>
                 </div>
               );
@@ -734,15 +738,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         {/* Action Buttons */}
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            <button
+                            <PixelButtonPro
                               onClick={(e) => {
                                 e.stopPropagation();
                                 onSelectAnalysis(analysis.id);
                               }}
-                              className="px-2.5 py-1 text-xs font-semibold rounded bg-slate-900 hover:bg-slate-800 text-white transition-colors cursor-pointer"
+                              size="sm"
+                              variant="dark"
+                              reveal="centerOut"
                             >
                               Open
-                            </button>
+                            </PixelButtonPro>
                             {onDeleteAnalysis && (
                               <button
                                 onClick={(e) => {
