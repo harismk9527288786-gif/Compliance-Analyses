@@ -28,7 +28,7 @@ export const NewComparison: React.FC<NewComparisonProps> = ({
   const [mtcFile, setMtcFile] = useState<File | null>(null);
   const [mdsFile, setMdsFile] = useState<File | null>(null);
   const [selectedReqSetId, setSelectedReqSetId] = useState<string>(requirementSets[0]?.id || '');
-  const [mdsSourceMode, setMdsSourceMode] = useState<'library' | 'upload'>('library');
+  const [mdsSourceMode, setMdsSourceMode] = useState<'library' | 'upload'>('upload');
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentStepText, setCurrentStepText] = useState<string>('Initializing verification engine...');
