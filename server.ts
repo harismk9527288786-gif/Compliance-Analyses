@@ -64,7 +64,7 @@ async function startServer() {
       }
 
       const docType = (req.body.type as 'mtc' | 'mds') || 'mtc';
-      const userId = (req.body.userId as string) || 'user-zarique-shaikh';
+      const userId = (req.body.userId as string) || 'user-lead-qc';
       const user = USERS.find((u) => u.id === userId) || USERS[0];
       const orgId = user.organizationId;
 

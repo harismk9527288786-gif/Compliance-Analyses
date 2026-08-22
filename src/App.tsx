@@ -41,9 +41,9 @@ export default function App() {
       } catch (e) {}
     }
     return {
-      id: 'user-zarique-shaikh',
-      name: 'Zarique Shaikh',
-      email: 'zariquekhan@gmail.com',
+      id: 'user-lead-qc',
+      name: 'Lead QC Inspector',
+      email: 'qc.inspector@apexvalves.com',
       role: 'qc_reviewer',
       organizationId: 'org-apex-01',
       organizationName: 'Apex Valve & Flow Engineering Ltd.',
@@ -435,7 +435,7 @@ export default function App() {
   if (!isAuthenticated) {
     return (
       <LoginPage
-        defaultEmail={currentUser.email || 'User7817@gmail.com'}
+        defaultEmail={currentUser.email || 'user@mtc-compliance.local'}
         onLoginSuccess={(user) => {
           setCurrentUser(user);
           setIsAuthenticated(true);
