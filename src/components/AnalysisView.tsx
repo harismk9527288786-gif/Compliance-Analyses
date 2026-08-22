@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -28,6 +28,7 @@ interface AnalysisViewProps {
   findings: ComplianceFinding[];
   feedbackDraft?: ExternalFeedbackDraft;
   currentUser: User;
+  initialStatusTab?: 'all' | 'issues' | 'pass';
   onBack: () => void;
   onSelectFinding: (finding: ComplianceFinding) => void;
   onOpenReportModal: () => void;
@@ -41,6 +42,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
   findings,
   feedbackDraft,
   currentUser,
+  initialStatusTab = 'all',
   onBack,
   onSelectFinding,
   onOpenReportModal,
@@ -48,8 +50,20 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
   onRejectAnalysis,
   onDeleteAnalysis,
 }) => {
-  const [statusTab, setStatusTab] = useState<'all' | 'issues' | 'pass'>('all');
+  const [statusTab, setStatusTab] = useState<'all' | 'issues' | 'pass'>(initialStatusTab);
   const [searchQuery, setSearchQuery] = useState('');
+  const findingsSectionRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (initialStatusTab) {
+      setStatusTab(initialStatusTab);
+      if (initialStatusTab === 'issues') {
+        setTimeout(() => {
+          findingsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 150);
+      }
+    }
+  }, [initialStatusTab, analysis.id]);
 
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -330,6 +344,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
 
       {/* 4. TECHNICAL FINDINGS TABLE WITH FILTER TABS */}
       <section
+        ref={findingsSectionRef}
         aria-label="Compliance Findings Breakdown"
         className="bg-white rounded-xl border border-slate-300 shadow-xs p-5 space-y-4"
       >

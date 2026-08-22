@@ -58,7 +58,7 @@ const KNOWLEDGE_QUESTIONS: Question[] = [
 
 export const LoginPage: React.FC<LoginPageProps> = ({
   onLoginSuccess,
-  defaultEmail = 'user@mtc-compliance.local',
+  defaultEmail = 'qc.inspector@apexvalves.com',
 }) => {
   const [userName, setUserName] = useState('Quality Engineer');
   const [userRole, setUserRole] = useState<'qc_reviewer' | 'engineer' | 'auditor'>('qc_reviewer');

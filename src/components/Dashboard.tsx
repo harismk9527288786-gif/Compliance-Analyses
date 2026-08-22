@@ -22,7 +22,7 @@ interface DashboardProps {
   analyses: AnalysisRecord[];
   requirementSets: RequirementSet[];
   currentUser?: User;
-  onSelectAnalysis: (id: string) => void;
+  onSelectAnalysis: (id: string, initialTab?: 'all' | 'issues' | 'pass') => void;
   onOpenNewComparison: () => void;
   onLoadPilotCase: () => void;
   onOpenTestSuite?: () => void;
@@ -231,12 +231,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Metric 2: Quality Deviations / Gaps */}
         <button
           type="button"
-          onClick={() => setStatusFilter(statusFilter === 'deviations' ? 'all' : 'deviations')}
-          className={`text-left bg-white rounded-xl p-5 border transition-all cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 ${
-            statusFilter === 'deviations'
-              ? 'border-rose-600 ring-2 ring-rose-600 bg-rose-50/20'
-              : 'border-slate-300 hover:border-slate-400 hover:bg-slate-50/60'
-          }`}
+          onClick={() => {
+            const target =
+              attentionItems[0] ||
+              analyses.find((a) => a.deviationCount > 0 || a.documentationGapCount > 0) ||
+              analyses[0];
+            if (target) {
+              onSelectAnalysis(target.id, 'issues');
+            } else {
+              setStatusFilter(statusFilter === 'deviations' ? 'all' : 'deviations');
+            }
+          }}
+          className="text-left bg-white rounded-xl p-5 border border-rose-300 hover:border-rose-500 hover:bg-rose-50/40 transition-all cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 group"
         >
           <div className="flex items-start justify-between">
             <div className="space-y-1">
@@ -246,13 +252,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <div className="text-2xl font-bold font-mono text-rose-700">{totalNeedsAttention}</div>
               <p className="text-[11px] text-slate-500 font-medium">Out-of-spec values or missing NDE reports</p>
             </div>
-            <div className="w-9 h-9 rounded-lg bg-rose-100 text-rose-800 flex items-center justify-center shrink-0 border border-rose-200">
+            <div className="w-9 h-9 rounded-lg bg-rose-100 text-rose-800 flex items-center justify-center shrink-0 border border-rose-200 group-hover:scale-105 transition-transform">
               <AlertTriangle className="w-5 h-5 stroke-[2.5]" aria-hidden="true" />
             </div>
           </div>
           <div className="mt-3 pt-2.5 border-t border-slate-200 flex items-center justify-between text-xs font-bold text-rose-700">
-            <span>{statusFilter === 'deviations' ? 'Showing Discrepancies' : 'Filter Discrepancies'}</span>
-            <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>View Issues Breakdown</span>
+            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" aria-hidden="true" />
           </div>
         </button>
 
@@ -309,11 +315,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   tabIndex={0}
                   role="button"
                   aria-label={`Inspect non-conformance for MTC ${item.mtcNumber}`}
-                  onClick={() => onSelectAnalysis(item.id)}
+                  onClick={() => onSelectAnalysis(item.id, 'issues')}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      onSelectAnalysis(item.id);
+                      onSelectAnalysis(item.id, 'issues');
                     }
                   }}
                   className="bg-white rounded-lg p-4 border border-rose-200 shadow-2xs hover:border-rose-400 hover:shadow-xs transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"

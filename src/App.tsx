@@ -37,7 +37,12 @@ export default function App() {
     const saved = localStorage.getItem('mtc_auth_user');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (parsed && !parsed.email?.includes('gmail.com') && !parsed.email?.includes('zarique')) {
+          return parsed;
+        } else {
+          localStorage.removeItem('mtc_auth_user');
+        }
       } catch (e) {}
     }
     return {
@@ -149,9 +154,12 @@ export default function App() {
     loadAnalysis();
   }, [selectedAnalysisId]);
 
+  const [findingStatusTab, setFindingStatusTab] = useState<'all' | 'issues' | 'pass'>('all');
+
   // Handler to select and view an analysis
-  const handleSelectAnalysis = (id: string) => {
+  const handleSelectAnalysis = (id: string, initialTab: 'all' | 'issues' | 'pass' = 'all') => {
     setSelectedAnalysisId(id);
+    setFindingStatusTab(initialTab);
     setActiveTab('analysis_detail');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -483,6 +491,7 @@ export default function App() {
             findings={activeFindings}
             feedbackDraft={activeFeedbackDraft}
             currentUser={currentUser}
+            initialStatusTab={findingStatusTab}
             onBack={() => {
               setSelectedAnalysisId(null);
               setActiveTab('dashboard');
