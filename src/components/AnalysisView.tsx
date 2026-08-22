@@ -179,11 +179,11 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
         <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
-            onClick={() => exportAnalysisToExcel(analysis, findings)}
+            onClick={() => exportAnalysisToExcel(analysis, findings, feedbackDraft)}
             className="px-3.5 py-2 text-xs font-bold rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer border border-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
           >
             <FileSpreadsheet className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>Excel Export</span>
+            <span>Excel Export (.xlsx)</span>
           </button>
 
           <button

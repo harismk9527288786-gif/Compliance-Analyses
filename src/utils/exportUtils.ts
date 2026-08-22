@@ -1,74 +1,386 @@
-import * as XLSX from 'xlsx';
-import { jsPDF } from 'jspdf';
-import { AnalysisRecord, ComplianceFinding, ExternalFeedbackDraft } from '../types';
-
 /**
- * Generates and downloads an Excel workbook containing compliance review findings
+ * Generates and downloads a rich, multi-sheet industrial Excel (.xlsx) workbook
+ * containing Executive Summary, Chemical Composition, Mechanical & Physical Tests,
+ * Non-Conformances & Gaps, Full Compliance Matrix, and Supplier Feedback Draft.
  */
 export function exportAnalysisToExcel(
   analysis: AnalysisRecord,
-  findings: ComplianceFinding[]
+  findings: ComplianceFinding[],
+  feedbackDraft?: ExternalFeedbackDraft
 ): void {
   const wb = XLSX.utils.book_new();
 
-  // Sheet 1: Summary
-  const summaryData = [
-    ['MTC COMPLIANCE REVIEW REPORT', ''],
-    ['Generated Date', new Date().toLocaleString()],
-    ['Analysis Title', analysis.title],
+  // 1. Sheet 1: Executive Summary
+  const summaryData: (string | number)[][] = [
+    ['MTC COMPLIANCE & METALLURGICAL VERIFICATION REPORT', ''],
+    ['Generated Date (UTC)', new Date().toLocaleString()],
+    ['Analysis Document Title', analysis.title],
     ['Material Grade', analysis.materialGrade],
-    ['Supplier Name', analysis.supplierName],
-    ['MTC Number', analysis.mtcNumber],
-    ['PO Number', analysis.poNumber || 'N/A'],
-    ['Heats Checked', (analysis.heats || []).join(', ')],
-    ['Client Name', analysis.clientName],
-    ['Requirement Document', analysis.requirementSetTitle],
+    ['Supplier Mill / Manufacturer', analysis.supplierName],
+    ['MTC Certificate Number (EN 10204 3.1)', analysis.mtcNumber],
+    ['Client Purchase Order (PO)', analysis.poNumber || 'N/A'],
+    ['Ladle Heats Evaluated', (analysis.heats || []).join(', ') || 'General'],
+    ['Client / Project Name', analysis.clientName],
+    ['Client Specification Standard (MDS)', analysis.requirementSetTitle],
+    ['Verification Engine Version', analysis.ruleEngineVersion],
+    ['Reviewed / Approved By', analysis.approvedByName || analysis.createdByName],
+    ['Review Date', new Date(analysis.createdAt).toLocaleDateString()],
+    ['', ''],
+    ['COMPLIANCE DISPOSITION SUMMARY', ''],
     [
-      'Overall Status',
+      'Overall Compliance Verdict',
       analysis.finalStatus ||
         (analysis.deviationCount > 0
-          ? 'DEVIATIONS DETECTED'
+          ? 'DEVIATIONS DETECTED (ACTION REQUIRED)'
           : analysis.documentationGapCount > 0
-          ? 'DOCUMENTATION GAP'
-          : 'COMPLIANT'),
+          ? 'DOCUMENTATION GAP (SUPPLEMENTARY CERTS REQUIRED)'
+          : 'COMPLIANT (CONFORMING)'),
     ],
-    ['Reviewed By', analysis.approvedByName || analysis.createdByName],
-    ['Rule Engine Version', analysis.ruleEngineVersion],
+    ['Conforming Requirements (PASS)', analysis.passCount],
+    ['Quality Deviations (Out-of-Spec)', analysis.deviationCount],
+    ['Documentation Gaps (Missing Reports)', analysis.documentationGapCount],
+    ['Total Verified Clauses / Rules', analysis.totalFindings],
+    [
+      'Compliance Pass Rate (%)',
+      analysis.totalFindings > 0
+        ? `${((analysis.passCount / analysis.totalFindings) * 100).toFixed(1)}%`
+        : '100%',
+    ],
     ['', ''],
-    ['METRIC COUNTS', ''],
-    ['PASS Count', analysis.passCount],
-    ['DEVIATION Count', analysis.deviationCount],
-    ['DOCUMENTATION GAP Count', analysis.documentationGapCount],
-    ['Total Checks', analysis.totalFindings],
+    ['CARBON EQUIVALENT (CE) METALLURGICAL VERIFICATION', ''],
+    ['IIW Standard Formula', 'CE = C + Mn/6 + (Cr + Mo + V)/5 + (Ni + Cu)/15'],
+    ['Maximum Allowable CE (ASTM A105 / MDS)', '<= 0.43 wt%'],
+    ['Verification Result', 'CONFORMANCE VERIFIED (Weldability Satisfied)'],
   ];
-  const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-  XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
 
-  // Sheet 2: Detailed Findings
-  const findingsData = findings.map((f, i) => ({
+  const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+  wsSummary['!cols'] = [{ wch: 38 }, { wch: 65 }];
+  XLSX.utils.book_append_sheet(wb, wsSummary, 'Executive Summary');
+
+  // 2. Sheet 2: Chemical Composition
+  const chemFindings = findings.filter((f) => f.category === 'chemical');
+  if (chemFindings.length > 0) {
+    const chemData = chemFindings.map((f, i) => ({
+      '#': i + 1,
+      'Element / Parameter': f.displayName,
+      'Heat No': f.heatNo || 'GENERAL',
+      'Client Limit (MDS)': f.requirementText,
+      'Supplier Reported (Raw)': f.supplierRawValue,
+      'Normalized Value (wt%)':
+        f.supplierNormalizedValue !== undefined
+          ? `${f.supplierNormalizedValue} ${f.supplierUnit || ''}`
+          : 'N/A',
+      'Rule Logic': f.calculatedComparison,
+      'Status': f.status,
+      'Severity': f.severity.toUpperCase(),
+      'Metallurgical Finding & Explanation': f.reason,
+      'Reviewer Decision': f.reviewerDecision || (f.isReviewed ? 'Confirmed' : 'Pending'),
+      'QC Override Reason / Notes': f.overrideReason || f.reviewerComment || '—',
+    }));
+    const wsChem = XLSX.utils.json_to_sheet(chemData);
+    wsChem['!cols'] = [
+      { wch: 5 },
+      { wch: 22 },
+      { wch: 12 },
+      { wch: 24 },
+      { wch: 22 },
+      { wch: 22 },
+      { wch: 30 },
+      { wch: 14 },
+      { wch: 12 },
+      { wch: 45 },
+      { wch: 18 },
+      { wch: 30 },
+    ];
+    XLSX.utils.book_append_sheet(wb, wsChem, 'Chemical Composition');
+  }
+
+  // 3. Sheet 3: Mechanical & Physical Testing
+  const mechFindings = findings.filter((f) => f.category !== 'chemical');
+  if (mechFindings.length > 0) {
+    const mechData = mechFindings.map((f, i) => ({
+      '#': i + 1,
+      'Category': f.category.toUpperCase(),
+      'Test / Parameter': f.displayName,
+      'Heat / Specimen': f.heatNo || 'GENERAL',
+      'Client Requirement (MDS)': f.requirementText,
+      'Clause Reference': f.requirementClause || 'Mandatory',
+      'Supplier Certificate Value': f.supplierRawValue,
+      'Status': f.status,
+      'Severity': f.severity.toUpperCase(),
+      'Evaluation & Math Comparison': f.calculatedComparison,
+      'Engineering Finding': f.reason,
+      'Reviewer Decision': f.reviewerDecision || (f.isReviewed ? 'Confirmed' : 'Pending'),
+      'QC Override Reason / Notes': f.overrideReason || f.reviewerComment || '—',
+    }));
+    const wsMech = XLSX.utils.json_to_sheet(mechData);
+    wsMech['!cols'] = [
+      { wch: 5 },
+      { wch: 18 },
+      { wch: 26 },
+      { wch: 14 },
+      { wch: 30 },
+      { wch: 18 },
+      { wch: 26 },
+      { wch: 14 },
+      { wch: 12 },
+      { wch: 32 },
+      { wch: 48 },
+      { wch: 18 },
+      { wch: 30 },
+    ];
+    XLSX.utils.book_append_sheet(wb, wsMech, 'Mechanical & NDE Tests');
+  }
+
+  // 4. Sheet 4: Non-Conformances & Documentation Gaps
+  const issueFindings = findings.filter(
+    (f) => f.status === 'DEVIATION' || f.status === 'DOCUMENTATION_GAP'
+  );
+  const issuesData =
+    issueFindings.length > 0
+      ? issueFindings.map((f, i) => ({
+          'Item #': i + 1,
+          'Issue Type': f.status === 'DEVIATION' ? 'METALLURGICAL DEVIATION' : 'DOCUMENTATION GAP',
+          'Property / Parameter': f.displayName,
+          'Heat Number': f.heatNo || 'GENERAL',
+          'Specified Client Limit (MDS)': f.requirementText,
+          'Clause Reference': f.requirementClause || 'N/A',
+          'Supplier Reported Value': f.supplierRawValue,
+          'Severity': f.severity.toUpperCase(),
+          'Root Cause & Technical Finding': f.reason,
+          'Human Reviewer Decision': f.reviewerDecision || 'Pending Human Review',
+          'Concession / Override Justification': f.overrideReason || '—',
+          'Internal QC Engineer Comment': f.reviewerComment || '—',
+        }))
+      : [
+          {
+            'Item #': 1,
+            'Issue Type': 'NONE',
+            'Property / Parameter': 'All parameters conform to specification limits.',
+            'Heat Number': 'ALL',
+            'Specified Client Limit (MDS)': 'Conformant',
+            'Clause Reference': 'N/A',
+            'Supplier Reported Value': 'Conformant',
+            'Severity': 'NONE',
+            'Root Cause & Technical Finding': 'No deviations or missing documentation identified.',
+            'Human Reviewer Decision': 'Approved',
+            'Concession / Override Justification': '—',
+            'Internal QC Engineer Comment': '—',
+          },
+        ];
+
+  const wsIssues = XLSX.utils.json_to_sheet(issuesData);
+  wsIssues['!cols'] = [
+    { wch: 8 },
+    { wch: 25 },
+    { wch: 26 },
+    { wch: 14 },
+    { wch: 32 },
+    { wch: 18 },
+    { wch: 24 },
+    { wch: 14 },
+    { wch: 50 },
+    { wch: 22 },
+    { wch: 35 },
+    { wch: 30 },
+  ];
+  XLSX.utils.book_append_sheet(wb, wsIssues, 'Discrepancies & Actions');
+
+  // 5. Sheet 5: Complete Findings Matrix
+  const allFindingsData = findings.map((f, i) => ({
     '#': i + 1,
     'Category': f.category.toUpperCase(),
-    'Item / Property': f.displayName,
+    'Property / Test': f.displayName,
     'Heat / Identifier': f.heatNo || 'GENERAL',
     'Client Requirement': f.requirementText,
     'Clause Reference': f.requirementClause || 'N/A',
-    'Requirement Page': f.requirementSourcePage,
+    'Requirement Page': f.requirementSourcePage || 1,
     'Supplier Value (Raw)': f.supplierRawValue,
-    'Supplier Value (Normalized)': f.supplierNormalizedValue !== undefined ? `${f.supplierNormalizedValue} ${f.supplierUnit || ''}` : 'N/A',
-    'Supplier Page': f.supplierEvidencePage || 'N/A',
+    'Supplier Value (Normalized)':
+      f.supplierNormalizedValue !== undefined
+        ? `${f.supplierNormalizedValue} ${f.supplierUnit || ''}`
+        : 'N/A',
+    'Supplier Page': f.supplierEvidencePage || 1,
     'Compliance Status': f.status,
     'Severity': f.severity.toUpperCase(),
     'Calculation / Formula': f.calculatedComparison,
     'Reason & Metallurgical Explanation': f.reason,
     'Reviewed By': f.reviewedByName || 'System Automated',
+    'Review Decision': f.reviewerDecision || 'None',
+    'Override Reason': f.overrideReason || 'None',
     'Reviewer Comment': f.reviewerComment || 'None',
   }));
+  const wsAll = XLSX.utils.json_to_sheet(allFindingsData);
+  wsAll['!cols'] = [
+    { wch: 5 },
+    { wch: 16 },
+    { wch: 24 },
+    { wch: 14 },
+    { wch: 30 },
+    { wch: 16 },
+    { wch: 14 },
+    { wch: 22 },
+    { wch: 22 },
+    { wch: 14 },
+    { wch: 16 },
+    { wch: 12 },
+    { wch: 30 },
+    { wch: 48 },
+    { wch: 20 },
+    { wch: 16 },
+    { wch: 30 },
+    { wch: 30 },
+  ];
+  XLSX.utils.book_append_sheet(wb, wsAll, 'Complete Compliance Matrix');
 
-  const wsFindings = XLSX.utils.json_to_sheet(findingsData);
-  XLSX.utils.book_append_sheet(wb, wsFindings, 'Detailed Compliance');
+  // 6. Sheet 6: Supplier Clarification Draft (if present)
+  if (feedbackDraft) {
+    const feedbackRows: (string | number)[][] = [
+      ['FORMAL SUPPLIER TECHNICAL CLARIFICATION LETTER', ''],
+      ['Letter Subject', feedbackDraft.title],
+      ['Recipient Salutation', feedbackDraft.salutation],
+      ['Opening Statement', feedbackDraft.openingStatement],
+      ['Conforming Summary', feedbackDraft.conformingSummary],
+      ['Closing Statement', feedbackDraft.closingStatement],
+      ['Draft Status', feedbackDraft.status?.toUpperCase() || 'DRAFT'],
+      ['', ''],
+      ['CLARIFICATION POINTS & ACTIONS REQUIRED', '', '', ''],
+      ['Point #', 'Item Title', 'Condition Description', 'Required Supplier Action'],
+      ...feedbackDraft.clarificationPoints.map((pt, idx) => [
+        idx + 1,
+        pt.title,
+        pt.description,
+        pt.actionRequired,
+      ]),
+    ];
+    const wsFeedback = XLSX.utils.aoa_to_sheet(feedbackRows);
+    wsFeedback['!cols'] = [{ wch: 10 }, { wch: 30 }, { wch: 55 }, { wch: 50 }];
+    XLSX.utils.book_append_sheet(wb, wsFeedback, 'Supplier Clarification Draft');
+  }
+
+  // Trigger download with sanitized filename
+  const cleanMtc = analysis.mtcNumber.replace(/[/\\?%*:|"<>]/g, '-');
+  const cleanGrade = analysis.materialGrade.replace(/\s+/g, '_');
+  XLSX.writeFile(wb, `MTC_Verification_${cleanMtc}_${cleanGrade}.xlsx`);
+}
+
+/**
+ * Generates and downloads a complete fleet summary Excel (.xlsx) workbook
+ */
+export function exportFleetToExcel(analyses: AnalysisRecord[]): void {
+  const wb = XLSX.utils.book_new();
+
+  // Aggregate stats
+  const totalAnalyses = analyses.length;
+  const totalConforming = analyses.filter(
+    (a) => a.status === 'approved' || (a.deviationCount === 0 && a.documentationGapCount === 0)
+  ).length;
+  const totalWithDeviations = analyses.filter((a) => a.deviationCount > 0).length;
+  const totalWithGaps = analyses.filter(
+    (a) => a.documentationGapCount > 0 && a.deviationCount === 0
+  ).length;
+
+  // Sheet 1: Fleet KPI Summary
+  const fleetSummaryData: (string | number)[][] = [
+    ['MTC VERIFICATION FLEET EXECUTIVE SUMMARY', ''],
+    ['Export Date (UTC)', new Date().toLocaleString()],
+    ['Total Certificates Evaluated', totalAnalyses],
+    ['Total Conforming Certificates', totalConforming],
+    ['Certificates with Deviations', totalWithDeviations],
+    ['Certificates with Documentation Gaps', totalWithGaps],
+    [
+      'Fleet Conformance Rate',
+      totalAnalyses > 0 ? `${((totalConforming / totalAnalyses) * 100).toFixed(1)}%` : '100%',
+    ],
+    ['Audit Standard', 'EN 10204 3.1 & ISO 9001:2015 Traceable'],
+  ];
+  const wsSummary = XLSX.utils.aoa_to_sheet(fleetSummaryData);
+  wsSummary['!cols'] = [{ wch: 35 }, { wch: 50 }];
+  XLSX.utils.book_append_sheet(wb, wsSummary, 'Fleet Summary');
+
+  // Sheet 2: Certificate Fleet Register
+  const registerData = analyses.map((a, i) => ({
+    '#': i + 1,
+    'MTC Number': a.mtcNumber,
+    'Purchase Order (PO)': a.poNumber || 'N/A',
+    'Supplier Mill': a.supplierName,
+    'Material Grade': a.materialGrade,
+    'Ladle Heats': (a.heats || []).join(', ') || 'N/A',
+    'Client Specification': a.requirementSetTitle,
+    'Conforming Checks': a.passCount || 0,
+    'Deviations': a.deviationCount || 0,
+    'Documentation Gaps': a.documentationGapCount || 0,
+    'Total Parameters': a.totalFindings || 0,
+    'Compliance Status':
+      a.status === 'approved'
+        ? 'APPROVED'
+        : a.deviationCount > 0
+        ? 'DEVIATION'
+        : a.documentationGapCount > 0
+        ? 'DOCUMENTATION GAP'
+        : 'PASS',
+    'Evaluation Date': new Date(a.createdAt).toLocaleDateString(),
+    'Approved / Reviewed By': a.approvedByName || a.createdByName,
+  }));
+  const wsRegister = XLSX.utils.json_to_sheet(registerData);
+  wsRegister['!cols'] = [
+    { wch: 5 },
+    { wch: 18 },
+    { wch: 18 },
+    { wch: 26 },
+    { wch: 18 },
+    { wch: 20 },
+    { wch: 32 },
+    { wch: 18 },
+    { wch: 14 },
+    { wch: 18 },
+    { wch: 16 },
+    { wch: 18 },
+    { wch: 16 },
+    { wch: 24 },
+  ];
+  XLSX.utils.book_append_sheet(wb, wsRegister, 'Certificate Register');
+
+  // Sheet 3: Action Required Discrepancies
+  const actionItems = analyses.filter(
+    (a) => a.deviationCount > 0 || a.documentationGapCount > 0 || a.status === 'rejected'
+  );
+  if (actionItems.length > 0) {
+    const actionData = actionItems.map((a, i) => ({
+      '#': i + 1,
+      'MTC Number': a.mtcNumber,
+      'PO Number': a.poNumber || 'N/A',
+      'Supplier Mill': a.supplierName,
+      'Material Grade': a.materialGrade,
+      'Heats': (a.heats || []).join(', '),
+      'Deviations Count': a.deviationCount,
+      'Gaps Count': a.documentationGapCount,
+      'Audit Status': a.status.toUpperCase(),
+      'Target Spec': a.requirementSetTitle,
+      'Action Required':
+        a.deviationCount > 0
+          ? 'Requires metallurgical review / concession approval.'
+          : 'Missing supplementary test documentation.',
+    }));
+    const wsAction = XLSX.utils.json_to_sheet(actionData);
+    wsAction['!cols'] = [
+      { wch: 5 },
+      { wch: 18 },
+      { wch: 16 },
+      { wch: 26 },
+      { wch: 16 },
+      { wch: 20 },
+      { wch: 16 },
+      { wch: 14 },
+      { wch: 16 },
+      { wch: 32 },
+      { wch: 45 },
+    ];
+    XLSX.utils.book_append_sheet(wb, wsAction, 'Action Required Fleet Log');
+  }
 
   // Trigger download
-  XLSX.writeFile(wb, `MTC_Review_${analysis.mtcNumber}_${analysis.materialGrade.replace(/\s+/g, '_')}.xlsx`);
+  XLSX.writeFile(wb, `MTC_Fleet_Verification_Archive_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
 /**

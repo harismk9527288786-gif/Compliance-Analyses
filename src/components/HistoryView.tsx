@@ -14,8 +14,10 @@ import {
   Building2,
   Calendar,
   Layers,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { AnalysisRecord, RequirementSet, User } from '../types';
+import { exportFleetToExcel } from '../utils/exportUtils';
 
 interface HistoryViewProps {
   analyses: AnalysisRecord[];
@@ -134,15 +136,27 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
 
         <div className="flex items-center gap-3 flex-wrap shrink-0">
           {analyses.length > 0 && (
-            <button
-              type="button"
-              onClick={exportTableCSV}
-              className="px-3.5 py-2 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900"
-              title="Export filtered records as CSV"
-            >
-              <Download className="w-3.5 h-3.5" aria-hidden="true" />
-              <span>Export CSV</span>
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => exportFleetToExcel(filteredAnalyses)}
+                className="px-3.5 py-2 rounded-lg text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white border border-emerald-600 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                title="Export complete fleet archive to multi-sheet Excel spreadsheet"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Export Excel (.xlsx)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={exportTableCSV}
+                className="px-3.5 py-2 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900"
+                title="Export filtered records as CSV"
+              >
+                <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Export CSV</span>
+              </button>
+            </>
           )}
 
           <button
