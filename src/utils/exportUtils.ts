@@ -184,6 +184,43 @@ export function exportAnalysisToPDF(
     y += 8;
   });
 
+  // Supplier Technical Clarification Section (if draft present)
+  if (_feedbackDraft && _feedbackDraft.clarificationPoints && _feedbackDraft.clarificationPoints.length > 0) {
+    if (y > 220) {
+      doc.addPage();
+      y = 20;
+    } else {
+      y += 8;
+    }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(15, 23, 42);
+    doc.text('SUPPLIER TECHNICAL CLARIFICATION / ACTION REQUIRED', 14, y);
+    y += 6;
+
+    _feedbackDraft.clarificationPoints.forEach((pt, idx) => {
+      if (y > 260) {
+        doc.addPage();
+        y = 20;
+      }
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(185, 28, 28);
+      doc.text(`${idx + 1}. ${pt.title}`, 16, y);
+      y += 4.5;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(51, 65, 85);
+      const descLines = doc.splitTextToSize(`Description: ${pt.description}`, pageWidth - 32);
+      doc.text(descLines, 16, y);
+      y += descLines.length * 3.8;
+      const actLines = doc.splitTextToSize(`Required Action: ${pt.actionRequired}`, pageWidth - 32);
+      doc.setTextColor(153, 27, 27);
+      doc.text(actLines, 16, y);
+      y += actLines.length * 3.8 + 3;
+    });
+  }
+
   // Footer / Disclaimer
   const lastPage = doc.internal.pages.length - 1;
   doc.setPage(lastPage);

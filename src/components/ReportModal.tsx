@@ -13,6 +13,9 @@ import {
   CheckCircle2,
   AlertTriangle,
   FileQuestion,
+  Plus,
+  Trash2,
+  RotateCcw,
 } from 'lucide-react';
 import { AnalysisRecord, ComplianceFinding, ExternalFeedbackDraft, User } from '../types';
 import { exportAnalysisToExcel, exportAnalysisToPDF } from '../utils/exportUtils';
@@ -36,6 +39,8 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   const [activeTab, setActiveTab] = useState<'internal' | 'external'>('internal');
   const [copied, setCopied] = useState(false);
   const [isEditingDraft, setIsEditingDraft] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Local draft state
   const [draft, setDraft] = useState<ExternalFeedbackDraft>(
@@ -69,6 +74,15 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     }
   );
 
+  const [draftBackup, setDraftBackup] = useState<ExternalFeedbackDraft>(draft);
+
+  useEffect(() => {
+    if (initialFeedbackDraft) {
+      setDraft(initialFeedbackDraft);
+      setDraftBackup(initialFeedbackDraft);
+    }
+  }, [initialFeedbackDraft]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -79,8 +93,8 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  const handleCopyExternalText = () => {
-    const fullText = `${draft.title}
+  const generateFullText = () => {
+    return `${draft.title}
 
 ${draft.salutation}
 
@@ -92,8 +106,8 @@ ${draft.conformingSummary}
 POINTS FOR TECHNICAL CLARIFICATION / ACTION:
 ${draft.clarificationPoints
   .map(
-    (pt) =>
-      `${pt.itemNumber}. ${pt.title}
+    (pt, idx) =>
+      `${idx + 1}. ${pt.title}
    - Description: ${pt.description}
    - Required Action: ${pt.actionRequired}`
   )
@@ -104,17 +118,91 @@ ${draft.closingStatement}
 Best regards,
 Quality Assurance & Metallurgical Engineering
 Apex Valve & Flow Engineering Ltd.`;
+  };
 
+  const handleCopyExternalText = () => {
+    const fullText = generateFullText();
     navigator.clipboard.writeText(fullText);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleSaveDraft = async () => {
-    if (onSaveFeedbackDraft) {
-      await onSaveFeedbackDraft(draft);
-    }
+  const handleDownloadLetterTxt = () => {
+    const fullText = generateFullText();
+    const blob = new Blob([fullText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Clarification_Letter_${analysis.mtcNumber}_${analysis.supplierName.replace(/\s+/g, '_')}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleStartEdit = () => {
+    setDraftBackup(JSON.parse(JSON.stringify(draft)));
+    setIsEditingDraft(true);
+    setSaveSuccessMsg(null);
+  };
+
+  const handleCancelEdit = () => {
+    setDraft(JSON.parse(JSON.stringify(draftBackup)));
     setIsEditingDraft(false);
+  };
+
+  const handleSaveDraft = async () => {
+    setIsSaving(true);
+    try {
+      if (onSaveFeedbackDraft) {
+        await onSaveFeedbackDraft(draft);
+      }
+      setDraftBackup(JSON.parse(JSON.stringify(draft)));
+      setIsEditingDraft(false);
+      setSaveSuccessMsg('Clarification draft saved successfully.');
+      setTimeout(() => setSaveSuccessMsg(null), 3500);
+    } catch (e) {
+      console.error('Failed to save draft:', e);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleAddClarificationPoint = () => {
+    const newIndex = draft.clarificationPoints.length + 1;
+    const newPoint = {
+      id: `custom-pt-${Date.now()}`,
+      itemNumber: newIndex,
+      title: 'Additional Technical Clarification Item',
+      description: 'Please describe the observed condition or request specification clarification.',
+      actionRequired: 'Provide supporting test evidence or formal supplier concession response.',
+    };
+    setDraft((prev) => ({
+      ...prev,
+      clarificationPoints: [...prev.clarificationPoints, newPoint],
+    }));
+  };
+
+  const handleRemoveClarificationPoint = (id: string) => {
+    setDraft((prev) => ({
+      ...prev,
+      clarificationPoints: prev.clarificationPoints
+        .filter((pt) => pt.id !== id)
+        .map((pt, idx) => ({ ...pt, itemNumber: idx + 1 })),
+    }));
+  };
+
+  const handleUpdateClarificationPoint = (
+    id: string,
+    field: 'title' | 'description' | 'actionRequired',
+    value: string
+  ) => {
+    setDraft((prev) => ({
+      ...prev,
+      clarificationPoints: prev.clarificationPoints.map((pt) =>
+        pt.id === id ? { ...pt, [field]: value } : pt
+      ),
+    }));
   };
 
   return (
@@ -315,7 +403,7 @@ Apex Valve & Flow Engineering Ltd.`;
           ) : (
             /* Tab 2: External Supplier Feedback Draft */
             <div className="bg-white rounded-xl p-6 border border-slate-300 shadow-xs space-y-5">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
                   <span className="text-[10px] font-mono uppercase px-2.5 py-0.5 rounded bg-slate-100 text-slate-800 font-bold border border-slate-300">
                     SUPPLIER CLARIFICATION COMMUNICATION
@@ -328,82 +416,243 @@ Apex Valve & Flow Engineering Ltd.`;
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   {isEditingDraft ? (
-                    <button
-                      type="button"
-                      onClick={handleSaveDraft}
-                      className="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors border border-emerald-400/50"
-                    >
-                      <Save className="w-3.5 h-3.5" aria-hidden="true" />
-                      <span>Save Draft</span>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setIsEditingDraft(true)}
-                      className="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 flex items-center gap-1.5 cursor-pointer transition-colors"
-                    >
-                      <Edit3 className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
-                      <span>Edit Letter</span>
-                    </button>
-                  )}
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleCancelEdit}
+                        disabled={isSaving}
+                        className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 inline mr-1" aria-hidden="true" />
+                        <span>Cancel</span>
+                      </button>
 
-                  <button
-                    type="button"
-                    onClick={handleCopyExternalText}
-                    className="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-slate-900 hover:bg-slate-800 text-white flex items-center gap-1.5 cursor-pointer transition-colors"
-                  >
-                    {copied ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
-                        <span>Copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5" aria-hidden="true" />
-                        <span>Copy Text</span>
-                      </>
-                    )}
-                  </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveDraft}
+                        disabled={isSaving}
+                        className="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors border border-emerald-400/50 disabled:opacity-50"
+                      >
+                        <Save className="w-3.5 h-3.5" aria-hidden="true" />
+                        <span>{isSaving ? 'Saving...' : 'Save Draft'}</span>
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleStartEdit}
+                        className="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 flex items-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
+                        <span>Edit Letter</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleDownloadLetterTxt}
+                        className="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-blue-700 hover:bg-blue-800 text-white flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors border border-blue-600"
+                        title="Download clarification letter as text file"
+                      >
+                        <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                        <span>Download (.txt)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleCopyExternalText}
+                        className="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-slate-900 hover:bg-slate-800 text-white flex items-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        {copied ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
+                            <span>Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                            <span>Copy Text</span>
+                          </>
+                        )}
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
-              {/* Draft Content */}
-              <div className="p-5 bg-slate-50 rounded-lg border border-slate-300 font-mono text-xs space-y-4 text-slate-800">
-                <div>
-                  <strong className="block text-slate-900 font-sans">{draft.title}</strong>
-                  <div className="text-slate-500 mt-1">{draft.salutation}</div>
+              {saveSuccessMsg && (
+                <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-lg text-xs font-bold text-emerald-900 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" aria-hidden="true" />
+                  <span>{saveSuccessMsg}</span>
                 </div>
+              )}
 
-                <div className="leading-relaxed">{draft.openingStatement}</div>
-
-                <div className="p-3 bg-white rounded border border-slate-200 space-y-1">
-                  <div className="font-bold text-slate-900 uppercase text-[11px]">CONFORMING PROPERTIES:</div>
-                  <div className="text-slate-600 font-sans">{draft.conformingSummary}</div>
-                </div>
-
-                {draft.clarificationPoints.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="font-bold text-rose-800 uppercase text-[11px]">
-                      POINTS FOR TECHNICAL CLARIFICATION / ACTION:
+              {/* Draft Content: Interactive Form in Edit Mode vs Formatted Text in View Mode */}
+              {isEditingDraft ? (
+                <div className="p-5 bg-slate-50 rounded-lg border border-slate-300 text-xs space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Document Subject / Title:
+                      </label>
+                      <input
+                        type="text"
+                        value={draft.title}
+                        onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+                        className="w-full p-2 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 text-slate-900 font-semibold"
+                      />
                     </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Recipient Salutation:
+                      </label>
+                      <input
+                        type="text"
+                        value={draft.salutation}
+                        onChange={(e) => setDraft({ ...draft, salutation: e.target.value })}
+                        className="w-full p-2 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 text-slate-900 font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Opening Statement:
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={draft.openingStatement}
+                      onChange={(e) => setDraft({ ...draft, openingStatement: e.target.value })}
+                      className="w-full p-2 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 text-slate-900 leading-relaxed font-sans"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Conforming Properties Summary:
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={draft.conformingSummary}
+                      onChange={(e) => setDraft({ ...draft, conformingSummary: e.target.value })}
+                      className="w-full p-2 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 text-slate-900 leading-relaxed font-sans"
+                    />
+                  </div>
+
+                  {/* Clarification Points List */}
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold uppercase tracking-wider text-rose-800 font-mono">
+                        Points for Technical Clarification ({draft.clarificationPoints.length})
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleAddClarificationPoint}
+                        className="px-2.5 py-1 text-xs font-bold rounded-md bg-emerald-700 hover:bg-emerald-800 text-white flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+                        <span>Add Item</span>
+                      </button>
+                    </div>
+
                     {draft.clarificationPoints.map((pt) => (
-                      <div key={pt.id} className="p-3 bg-rose-50/50 rounded border border-rose-200 space-y-1">
-                        <div className="font-bold text-rose-900">
-                          {pt.itemNumber}. {pt.title}
+                      <div key={pt.id} className="p-3.5 bg-white rounded-lg border border-rose-200 space-y-2.5 shadow-2xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <input
+                            type="text"
+                            value={pt.title}
+                            onChange={(e) => handleUpdateClarificationPoint(pt.id, 'title', e.target.value)}
+                            placeholder="Item Title (e.g. Tensile Elongation Deviation)"
+                            className="w-full p-1.5 text-xs font-bold text-rose-900 bg-rose-50/50 border border-rose-200 rounded focus:outline-none focus:ring-1 focus:ring-rose-600"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveClarificationPoint(pt.id)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 rounded transition-colors cursor-pointer"
+                            title="Remove clarification point"
+                          >
+                            <Trash2 className="w-4 h-4" aria-hidden="true" />
+                            <span className="sr-only">Remove item</span>
+                          </button>
                         </div>
-                        <div className="text-slate-700 font-sans text-xs">{pt.description}</div>
-                        <div className="text-rose-800 font-bold text-xs pt-1">
-                          Required Action: {pt.actionRequired}
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-600 mb-0.5">
+                            Description & Metallurgical Background:
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={pt.description}
+                            onChange={(e) => handleUpdateClarificationPoint(pt.id, 'description', e.target.value)}
+                            className="w-full p-1.5 text-xs bg-slate-50 border border-slate-200 rounded text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-900"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-rose-800 mb-0.5">
+                            Required Action / Response:
+                          </label>
+                          <textarea
+                            rows={1}
+                            value={pt.actionRequired}
+                            onChange={(e) => handleUpdateClarificationPoint(pt.id, 'actionRequired', e.target.value)}
+                            className="w-full p-1.5 text-xs bg-rose-50/30 border border-rose-200 rounded text-rose-900 font-medium focus:outline-none focus:ring-1 focus:ring-rose-600"
+                          />
                         </div>
                       </div>
                     ))}
                   </div>
-                )}
 
-                <div className="leading-relaxed text-slate-600">{draft.closingStatement}</div>
-              </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Closing Statement & Sign-Off Instructions:
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={draft.closingStatement}
+                      onChange={(e) => setDraft({ ...draft, closingStatement: e.target.value })}
+                      className="w-full p-2 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 text-slate-900 leading-relaxed font-sans"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="p-5 bg-slate-50 rounded-lg border border-slate-300 font-mono text-xs space-y-4 text-slate-800">
+                  <div>
+                    <strong className="block text-slate-900 font-sans">{draft.title}</strong>
+                    <div className="text-slate-500 mt-1">{draft.salutation}</div>
+                  </div>
+
+                  <div className="leading-relaxed">{draft.openingStatement}</div>
+
+                  <div className="p-3 bg-white rounded border border-slate-200 space-y-1">
+                    <div className="font-bold text-slate-900 uppercase text-[11px]">CONFORMING PROPERTIES:</div>
+                    <div className="text-slate-600 font-sans">{draft.conformingSummary}</div>
+                  </div>
+
+                  {draft.clarificationPoints.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="font-bold text-rose-800 uppercase text-[11px]">
+                        POINTS FOR TECHNICAL CLARIFICATION / ACTION:
+                      </div>
+                      {draft.clarificationPoints.map((pt) => (
+                        <div key={pt.id} className="p-3 bg-rose-50/50 rounded border border-rose-200 space-y-1">
+                          <div className="font-bold text-rose-900">
+                            {pt.itemNumber}. {pt.title}
+                          </div>
+                          <div className="text-slate-700 font-sans text-xs">{pt.description}</div>
+                          <div className="text-rose-800 font-bold text-xs pt-1">
+                            Required Action: {pt.actionRequired}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="leading-relaxed text-slate-600">{draft.closingStatement}</div>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -90,6 +90,49 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return 'Quality non-conformance recorded.';
   };
 
+  const exportTableCSV = () => {
+    if (filteredAnalyses.length === 0) return;
+    const headers = [
+      'MTC Number',
+      'PO Number',
+      'Supplier',
+      'Material Grade',
+      'Heats',
+      'Requirement Set',
+      'Pass Checks',
+      'Deviations',
+      'Doc Gaps',
+      'Status',
+      'Date',
+      'Reviewed By',
+    ];
+    const rows = filteredAnalyses.map((a) => [
+      a.mtcNumber,
+      a.poNumber || 'N/A',
+      a.supplierName,
+      a.materialGrade,
+      (a.heats || []).join('; '),
+      a.requirementSetTitle,
+      a.passCount || 0,
+      a.deviationCount || 0,
+      a.documentationGapCount || 0,
+      a.status,
+      new Date(a.createdAt).toISOString(),
+      a.approvedByName || a.createdByName,
+    ]);
+
+    const csvContent =
+      'data:text/csv;charset=utf-8,' +
+      [headers.join(','), ...rows.map((e) => e.map((val) => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `MTC_Fleet_Verification_Logs_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // Keyboard accessibility for modals
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -460,6 +503,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all font-medium text-slate-900"
               />
             </div>
+
+            {/* Export CSV Button */}
+            {analyses.length > 0 && (
+              <button
+                type="button"
+                onClick={exportTableCSV}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900"
+                title="Export verification fleet records to CSV"
+              >
+                <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Export CSV</span>
+              </button>
+            )}
 
             {/* Clear All Records Button */}
             {analyses.length > 0 && onClearAllAnalyses && (

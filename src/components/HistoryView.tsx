@@ -158,29 +158,61 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
 
       {/* 2. Statistical Metric Summary */}
       <section aria-label="History Metrics" className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white rounded-xl p-4 border border-slate-300 shadow-2xs space-y-1">
+        <button
+          type="button"
+          onClick={() => setStatusFilter('all')}
+          className={`text-left bg-white rounded-xl p-4 border shadow-2xs space-y-1 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 ${
+            statusFilter === 'all'
+              ? 'border-slate-900 ring-1 ring-slate-900 bg-slate-50/70'
+              : 'border-slate-300 hover:border-slate-400 hover:bg-slate-50/50'
+          }`}
+        >
           <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider font-mono">Total Evaluations</span>
           <div className="text-2xl font-bold font-mono text-slate-900">{totalRecords}</div>
-          <p className="text-[11px] text-slate-500">MTC Certificates</p>
-        </div>
+          <p className="text-[11px] text-slate-500">All MTC Certificates</p>
+        </button>
 
-        <div className="bg-white rounded-xl p-4 border border-slate-300 shadow-2xs space-y-1">
+        <button
+          type="button"
+          onClick={() => setStatusFilter(statusFilter === 'pass' ? 'all' : 'pass')}
+          className={`text-left bg-white rounded-xl p-4 border shadow-2xs space-y-1 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 ${
+            statusFilter === 'pass'
+              ? 'border-emerald-600 ring-1 ring-emerald-600 bg-emerald-50/50'
+              : 'border-slate-300 hover:border-emerald-400 hover:bg-emerald-50/30'
+          }`}
+        >
           <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider font-mono">Conforming</span>
           <div className="text-2xl font-bold font-mono text-emerald-700">{totalPass}</div>
           <p className="text-[11px] text-slate-500">Passed all MDS limits</p>
-        </div>
+        </button>
 
-        <div className="bg-white rounded-xl p-4 border border-slate-300 shadow-2xs space-y-1">
+        <button
+          type="button"
+          onClick={() => setStatusFilter(statusFilter === 'deviations' ? 'all' : 'deviations')}
+          className={`text-left bg-white rounded-xl p-4 border shadow-2xs space-y-1 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 ${
+            statusFilter === 'deviations'
+              ? 'border-rose-600 ring-1 ring-rose-600 bg-rose-50/50'
+              : 'border-slate-300 hover:border-rose-400 hover:bg-rose-50/30'
+          }`}
+        >
           <span className="text-[11px] font-bold text-rose-800 uppercase tracking-wider font-mono">Deviations</span>
           <div className="text-2xl font-bold font-mono text-rose-700">{totalDeviations}</div>
           <p className="text-[11px] text-slate-500">Out-of-specification</p>
-        </div>
+        </button>
 
-        <div className="bg-white rounded-xl p-4 border border-slate-300 shadow-2xs space-y-1">
+        <button
+          type="button"
+          onClick={() => setStatusFilter(statusFilter === 'gaps' ? 'all' : 'gaps')}
+          className={`text-left bg-white rounded-xl p-4 border shadow-2xs space-y-1 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 ${
+            statusFilter === 'gaps'
+              ? 'border-amber-600 ring-1 ring-amber-600 bg-amber-50/50'
+              : 'border-slate-300 hover:border-amber-400 hover:bg-amber-50/30'
+          }`}
+        >
           <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider font-mono">Documentation Gaps</span>
           <div className="text-2xl font-bold font-mono text-amber-700">{totalGaps}</div>
           <p className="text-[11px] text-slate-500">Missing NDE / certs</p>
-        </div>
+        </button>
       </section>
 
       {/* 3. Filter Toolbar & Table */}

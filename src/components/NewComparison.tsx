@@ -17,6 +17,7 @@ interface NewComparisonProps {
   currentUser: User;
   onAnalysisCreated: (analysisId: string) => void;
   onCancel: () => void;
+  initialRequirementSetId?: string;
 }
 
 export const NewComparison: React.FC<NewComparisonProps> = ({
@@ -24,11 +25,16 @@ export const NewComparison: React.FC<NewComparisonProps> = ({
   currentUser,
   onAnalysisCreated,
   onCancel,
+  initialRequirementSetId,
 }) => {
   const [mtcFile, setMtcFile] = useState<File | null>(null);
   const [mdsFile, setMdsFile] = useState<File | null>(null);
-  const [selectedReqSetId, setSelectedReqSetId] = useState<string>(requirementSets[0]?.id || '');
-  const [mdsSourceMode, setMdsSourceMode] = useState<'library' | 'upload'>('upload');
+  const [selectedReqSetId, setSelectedReqSetId] = useState<string>(
+    initialRequirementSetId || requirementSets[0]?.id || ''
+  );
+  const [mdsSourceMode, setMdsSourceMode] = useState<'library' | 'upload'>(
+    initialRequirementSetId ? 'library' : 'upload'
+  );
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentStepText, setCurrentStepText] = useState<string>('Initializing verification engine...');

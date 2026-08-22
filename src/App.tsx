@@ -77,6 +77,7 @@ export default function App() {
 
   const [inspectingFinding, setInspectingFinding] = useState<ComplianceFinding | null>(null);
   const [showNewComparison, setShowNewComparison] = useState(false);
+  const [preselectedReqSetId, setPreselectedReqSetId] = useState<string | undefined>(undefined);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showTestSuiteModal, setShowTestSuiteModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -464,7 +465,10 @@ export default function App() {
         }}
         currentUser={currentUser}
         currentOrg={currentOrg}
-        onOpenNewComparison={() => setShowNewComparison(true)}
+        onOpenNewComparison={() => {
+          setPreselectedReqSetId(undefined);
+          setShowNewComparison(true);
+        }}
         onOpenTestSuite={() => setShowTestSuiteModal(true)}
         onLogout={() => {
           localStorage.setItem('mtc_auth_logged_out', 'true');
@@ -478,12 +482,17 @@ export default function App() {
           <NewComparison
             requirementSets={requirementSets}
             currentUser={currentUser}
+            initialRequirementSetId={preselectedReqSetId}
             onAnalysisCreated={(newId) => {
               setShowNewComparison(false);
+              setPreselectedReqSetId(undefined);
               fetchInitialData();
               handleSelectAnalysis(newId);
             }}
-            onCancel={() => setShowNewComparison(false)}
+            onCancel={() => {
+              setShowNewComparison(false);
+              setPreselectedReqSetId(undefined);
+            }}
           />
         ) : activeTab === 'analysis_detail' && selectedAnalysis ? (
           <AnalysisView
@@ -507,6 +516,7 @@ export default function App() {
             requirementSets={requirementSets}
             currentUser={currentUser}
             onSelectSetForComparison={(setId) => {
+              setPreselectedReqSetId(setId);
               setShowNewComparison(true);
             }}
             onCreateRequirementSet={handleCreateRequirementSet}
@@ -521,7 +531,10 @@ export default function App() {
             requirementSets={requirementSets}
             currentUser={currentUser}
             onSelectAnalysis={handleSelectAnalysis}
-            onOpenNewComparison={() => setShowNewComparison(true)}
+            onOpenNewComparison={() => {
+              setPreselectedReqSetId(undefined);
+              setShowNewComparison(true);
+            }}
             onClearAllAnalyses={handleClearAllAnalyses}
             onDeleteAnalysis={handleDeleteAnalysis}
           />
@@ -532,7 +545,10 @@ export default function App() {
             requirementSets={requirementSets}
             currentUser={currentUser}
             onSelectAnalysis={handleSelectAnalysis}
-            onOpenNewComparison={() => setShowNewComparison(true)}
+            onOpenNewComparison={() => {
+              setPreselectedReqSetId(undefined);
+              setShowNewComparison(true);
+            }}
             onLoadPilotCase={handleLoadPilotCase}
             onOpenTestSuite={() => setShowTestSuiteModal(true)}
             onOpenLibrary={() => setActiveTab('library')}

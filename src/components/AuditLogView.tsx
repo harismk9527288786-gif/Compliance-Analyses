@@ -3,6 +3,7 @@ import {
   ShieldCheck,
   Search,
   Lock,
+  Download,
 } from 'lucide-react';
 import { AuditEvent } from '../types';
 
@@ -24,6 +25,32 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({ auditLogs }) => {
 
     return matchesAction && matchesSearch;
   });
+
+  const exportAuditLogsCSV = () => {
+    if (filteredLogs.length === 0) return;
+    const headers = ['Timestamp UTC', 'Actor Name', 'Actor Role', 'Action Event', 'Object Type', 'Object ID', 'Object Name', 'Details'];
+    const rows = filteredLogs.map((l) => [
+      l.timestamp,
+      l.actorName,
+      l.actorRole,
+      l.action,
+      l.objectType,
+      l.objectId,
+      l.objectName || 'N/A',
+      typeof l.details === 'object' ? JSON.stringify(l.details) : String(l.details || ''),
+    ]);
+
+    const csvContent =
+      'data:text/csv;charset=utf-8,' +
+      [headers.join(','), ...rows.map((e) => e.map((val) => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `Compliance_Audit_Trail_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const actionTypes = [
     { id: 'all', label: 'All Actions' },
@@ -56,9 +83,23 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({ auditLogs }) => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 text-xs font-mono text-slate-700 bg-slate-50 border border-slate-300 px-3.5 py-1.5 rounded-lg">
-          <Lock className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
-          <span>Tenant Isolated & Cryptographically Grounded</span>
+        <div className="flex items-center gap-3 flex-wrap">
+          {auditLogs.length > 0 && (
+            <button
+              type="button"
+              onClick={exportAuditLogsCSV}
+              className="px-3.5 py-2 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900"
+              title="Export filtered audit logs as CSV"
+            >
+              <Download className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Export Audit Trail (CSV)</span>
+            </button>
+          )}
+
+          <div className="flex items-center gap-2 text-xs font-mono text-slate-700 bg-slate-50 border border-slate-300 px-3.5 py-2 rounded-lg">
+            <Lock className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
+            <span>Tenant Isolated & Cryptographically Grounded</span>
+          </div>
         </div>
       </section>
 
