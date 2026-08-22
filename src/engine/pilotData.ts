@@ -95,7 +95,7 @@ export const PILOT_MDS_REQUIREMENT_SET: RequirementSet = {
       maxValue: 0.43,
       unit: '',
       mandatory: true,
-      description: 'CE = C + Mn/6 + (Cr+Mo+V)/5 + (Ni+Cu)/15 max 0.43',
+      description: 'Max 0.43 (IIW Formula)',
       clauseReference: 'Clause 3.2 & Supplementary S5',
       sourceDocument: 'Hawa MDS QE-F-CS-ASTM-A105-NACE-001 Rev A',
       sourcePage: 2,

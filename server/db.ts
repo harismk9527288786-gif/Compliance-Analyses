@@ -98,7 +98,7 @@ class DatabaseStore {
   }
 
   private seedInitialData() {
-    // If SEED_DEMO_DATA is explicitly set to 'false', start with a completely clean database (0 specs, 0 documents, 0 analyses)
+    // If SEED_DEMO_DATA is explicitly set to 'false', start with a completely clean database
     if (process.env.SEED_DEMO_DATA === 'false') {
       console.log('[DB] SEED_DEMO_DATA=false: Starting clean (0 requirement sets, 0 documents, 0 analyses).');
       return;
@@ -233,8 +233,8 @@ class DatabaseStore {
       filesize: 1420500,
       checksum: 'e89a74b88939c4d98ef732a9381e43b672a912c98a3194',
       pageCount: 5,
-      uploadedBy: 'user-elena-rostova',
-      uploadedByName: 'Elena Rostova',
+      uploadedBy: 'user-zarique-shaikh',
+      uploadedByName: 'Zarique Shaikh',
       uploadedAt: '2025-02-10T10:00:00Z',
       organizationId: 'org-apex-01',
       mimeType: 'application/pdf',
@@ -249,8 +249,8 @@ class DatabaseStore {
       filesize: 894320,
       checksum: 'b45d2994a34b219087c93814de658a12903fb9873a21',
       pageCount: 2,
-      uploadedBy: 'user-elena-rostova',
-      uploadedByName: 'Elena Rostova',
+      uploadedBy: 'user-zarique-shaikh',
+      uploadedByName: 'Zarique Shaikh',
       uploadedAt: '2025-02-10T10:05:00Z',
       organizationId: 'org-apex-01',
       mimeType: 'application/pdf',
@@ -272,7 +272,6 @@ class DatabaseStore {
     const passCount = pilotFindings.filter((f) => f.status === 'PASS').length;
     const devCount = pilotFindings.filter((f) => f.status === 'DEVIATION').length;
     const gapCount = pilotFindings.filter((f) => f.status === 'DOCUMENTATION_GAP').length;
-    const reqCount = pilotFindings.filter((f) => f.status === 'REVIEW_REQUIRED').length;
 
     const pilotAnalysis: AnalysisRecord = {
       id: pilotAnalysisId,
@@ -292,12 +291,12 @@ class DatabaseStore {
       heats: ['A228', 'YBA'],
       status: 'ready_for_review',
       createdAt: '2025-02-10T10:10:00Z',
-      createdBy: 'user-elena-rostova',
-      createdByName: 'Elena Rostova (Lead QC Reviewer)',
+      createdBy: 'user-zarique-shaikh',
+      createdByName: 'Zarique Shaikh (Lead QC Reviewer)',
       passCount,
       deviationCount: devCount,
       documentationGapCount: gapCount,
-      reviewRequiredCount: reqCount,
+      reviewRequiredCount: 0,
       totalFindings: pilotFindings.length,
       reviewedCount: 0,
       ruleEngineVersion: 'MTC-CoreEngine v2.4.0',
@@ -312,7 +311,7 @@ class DatabaseStore {
       id: `feedback-${pilotAnalysisId}`,
       analysisId: pilotAnalysisId,
       title: 'Material Certificate Review & Technical Clarification Request',
-      overallStatus: 'REVIEW REQUIRED',
+      overallStatus: 'DEVIATIONS DETECTED',
       salutation: 'Dear Western Forge & Flange Co. Quality Directorate,',
       openingStatement:
         'The submitted Material Test Certificate (Ref: WW2606229-3) for PO #PO-774920 has been reviewed against Client Material Data Sheet QE-F-CS-ASTM-A105-NACE-001 Rev A (ASTM A105N).',
@@ -320,91 +319,87 @@ class DatabaseStore {
         'The chemical composition, Carbon Equivalent (CE <= 0.43), tensile strength, yield strength, reduction of area, hardness (<= 187 HBW for sour service), forging reduction ratio (4.2:1), and absence of weld repair are conforming for Heat A228 and verified properties.',
       clarificationPoints: [
         {
-          id: 'point-1',
+          id: 'pilot-cl-1',
           itemNumber: 1,
-          findingId: 'finding-req-ht-temp-YBA',
-          title: 'Normalizing Heat Treatment Temperature Deviation (Heat YBA)',
+          findingId: 'f-pilot-ht-temp-yba',
+          title: 'Normalizing Temperature Below Specified Lower Limit (Heat YBA)',
           description:
-            'Heat YBA lists a normalizing heat treatment temperature of 890°C, whereas client MDS Clause 4.2 strictly specifies a minimum normalizing range of 900–960°C.',
+            'Heat YBA records normalizing temperature at 890°C, which is below the mandatory client requirement of 900°C - 960°C.',
           actionRequired:
-            'Please verify if re-normalizing within 900–960°C was conducted or provide technical concession justification.',
+            'Please submit technical re-heat treatment authorization, or provide mechanical microstructural test records confirming complete austenitization at 890°C.',
         },
         {
-          id: 'point-2',
+          id: 'pilot-cl-2',
           itemNumber: 2,
-          findingId: 'finding-req-mech-elongation-YBA',
-          title: 'Tensile Ductility / Elongation Below Minimum (Heat YBA)',
+          findingId: 'f-pilot-elong-yba',
+          title: 'Elongation Below Specification Limit (Heat YBA)',
           description:
-            'Elongation for Heat YBA is reported as 29%, which is below the enhanced client ductility requirement of 30% specified in Clause 5.1.',
+            'Reported elongation is 29% in 2 inches, whereas the client MDS specifies a minimum of 30% for sour service forging integrity.',
           actionRequired:
-            'Please conduct re-testing per ASTM A105 Section 8 or clarify material disposition for items forged from Heat YBA.',
+            'Please perform tensile re-test from the prolongation or forged coupon in accordance with ASTM A105 Section 8.2 and provide test report.',
         },
         {
-          id: 'point-3',
+          id: 'pilot-cl-3',
           itemNumber: 3,
-          findingId: 'finding-req-nde-ut',
-          title: 'Missing NDE Examination Evidence (100% UT & 100% MPT)',
+          findingId: 'f-pilot-ut',
+          title: 'Supplementary Ultrasonic Examination (UT) Certificate Missing',
           description:
-            'The client MDS specifies mandatory 100% Ultrasonic Testing (UT per ASTM A388) and 100% Magnetic Particle Testing (MPT per ASTM A275). Explicit test reports were not attached to the MTC.',
+            'Client specification MDS Clause 6.1 mandates 100% volumetric Ultrasonic Testing for Class 300+ forging components. No UT report was identified.',
           actionRequired:
-            'Please submit the formal supplementary NDE examination test certificates for the subject order.',
+            'Please provide formal Level II certified UT test certificate in accordance with ASME Section V Article 4 / ASTM A388.',
+        },
+        {
+          id: 'pilot-cl-4',
+          itemNumber: 4,
+          findingId: 'f-pilot-mpt',
+          title: 'Supplementary Magnetic Particle Examination (MPT) Certificate Missing',
+          description:
+            'Client specification MDS Clause 6.2 mandates 100% surface Magnetic Particle Examination. No MPT certificate was attached.',
+          actionRequired:
+            'Please provide formal Level II certified MT test certificate in accordance with ASME Section V Article 7 / ASTM A275.',
         },
       ],
       closingStatement:
-        'Please provide written clarification and supporting documentation for the above points to enable final material acceptance.',
+        'Please furnish formal written clarification, concession requests, or revised inspection documents within 5 working days to avoid material dispatch hold.',
       status: 'draft',
     };
     this.feedbackDrafts.set(pilotAnalysisId, pilotFeedback);
 
-    // 6. Audit Trail Seed
+    // 6. Initial Audit Log
     this.addAuditEvent({
       organizationId: 'org-apex-01',
       actorId: 'user-zarique-shaikh',
       actorName: 'Zarique Shaikh',
       actorRole: 'qc_reviewer',
-      action: 'INGEST_DOCUMENT',
+      action: 'SYSTEM_INITIALIZATION',
       objectType: 'document',
-      objectId: mtcDoc.id,
-      objectName: mtcDoc.filename,
-      details: { checksum: mtcDoc.checksum, pages: mtcDoc.pageCount },
-    });
-    this.addAuditEvent({
-      organizationId: 'org-apex-01',
-      actorId: 'user-zarique-shaikh',
-      actorName: 'Zarique Shaikh',
-      actorRole: 'qc_reviewer',
-      action: 'START_ANALYSIS',
-      objectType: 'analysis',
-      objectId: pilotAnalysisId,
-      objectName: pilotAnalysis.title,
+      objectId: 'init',
+      objectName: 'System Baseline Seeding',
       details: {
-        heats: ['A228', 'YBA'],
-        mds: PILOT_MDS_REQUIREMENT_SET.mdsNumber,
-        findingsCount: pilotFindings.length,
+        specsCount: this.requirementSets.size,
+        docsCount: this.documents.size,
+        analysesCount: this.analyses.size,
       },
     });
   }
 
   public addAuditEvent(event: Omit<AuditEvent, 'id' | 'timestamp'>): AuditEvent {
-    const fullEvent: AuditEvent = {
-      id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      timestamp: new Date().toISOString(),
+    const newEvent: AuditEvent = {
       ...event,
+      id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: new Date().toISOString(),
     };
-    this.auditLogs.unshift(fullEvent);
-    return fullEvent;
+    this.auditLogs.unshift(newEvent);
+    // Keep max 500 audit events in memory
+    if (this.auditLogs.length > 500) {
+      this.auditLogs.pop();
+    }
+    return newEvent;
   }
 
-  public deleteAnalysis(id: string): boolean {
-    const deleted = this.analyses.delete(id);
-    this.findings.delete(id);
-    this.feedbackDrafts.delete(id);
-    return deleted;
-  }
-
-  public clearAllAnalyses(orgId?: string) {
-    for (const [id, a] of Array.from(this.analyses.entries())) {
-      if (!orgId || a.organizationId === orgId) {
+  public clearAllAnalyses(organizationId: string) {
+    for (const [id, analysis] of this.analyses.entries()) {
+      if (analysis.organizationId === organizationId) {
         this.analyses.delete(id);
         this.findings.delete(id);
         this.feedbackDrafts.delete(id);
@@ -412,19 +407,23 @@ class DatabaseStore {
     }
   }
 
-  public deleteRequirementSet(id: string): boolean {
-    return this.requirementSets.delete(id);
+  public deleteAnalysis(id: string) {
+    this.analyses.delete(id);
+    this.findings.delete(id);
+    this.feedbackDrafts.delete(id);
   }
 
-  public clearAllRequirementSets(orgId?: string) {
-    for (const [id, r] of Array.from(this.requirementSets.entries())) {
-      if (!orgId || r.organizationId === orgId) {
+  public clearAllRequirementSets(organizationId: string) {
+    for (const [id, reqSet] of this.requirementSets.entries()) {
+      if (reqSet.organizationId === organizationId) {
         this.requirementSets.delete(id);
       }
     }
   }
+
+  public deleteRequirementSet(id: string) {
+    this.requirementSets.delete(id);
+  }
 }
 
 export const db = new DatabaseStore();
-
-

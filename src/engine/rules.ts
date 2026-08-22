@@ -312,14 +312,22 @@ function evaluateMatchOperator(
   const cleanTarget = reqTarget.replace(/[\s\-_/]/g, '');
   const cleanEvidence = rawEv.replace(/[\s\-_/]/g, '');
 
-  const isMatch = cleanEvidence.includes(cleanTarget) || cleanTarget.includes(cleanEvidence) || rawEv.includes('pass') || rawEv.includes('conforms') || rawEv.includes('satisfactory') || rawEv.includes('normalized');
+  const isMatch =
+    cleanEvidence.includes(cleanTarget) ||
+    cleanTarget.includes(cleanEvidence) ||
+    rawEv.includes('pass') ||
+    rawEv.includes('conforms') ||
+    rawEv.includes('satisfactory') ||
+    rawEv.includes('normalized') ||
+    (rawEv.includes('3.1') && reqTarget.includes('3.1')) ||
+    (rawEv.includes('nace') && reqTarget.includes('nace'));
 
-  const status: FindingStatus = isMatch ? 'PASS' : 'REVIEW_REQUIRED';
+  const status: FindingStatus = isMatch ? 'PASS' : 'DEVIATION';
   const severity: FindingSeverity = isMatch ? 'info' : 'major';
   const calcStr = `"${evidence.rawValue}" MATCH "${req.targetValue || req.description}" -> ${status}`;
   const reason = isMatch
     ? `Supplier statement satisfies requirement: "${evidence.rawValue}".`
-    : `Supplier statement "${evidence.rawValue}" requires reviewer verification against requirement: "${req.targetValue || req.description}".`;
+    : `Supplier statement "${evidence.rawValue}" does not match specified requirement: "${req.targetValue || req.description}".`;
 
   return {
     id: `finding-${req.id}-${heatNo || 'gen'}-${Date.now()}`,
@@ -362,14 +370,22 @@ function evaluateRequiredOperator(
     return createDocumentationGapFinding(analysisId, req, heatNo);
   }
 
-  const isPositive = raw.includes('yes') || raw.includes('completed') || raw.includes('pass') || raw.includes('conforms') || raw.includes('performed') || raw.includes('certified') || raw.includes('100%');
+  const isPositive =
+    raw.includes('yes') ||
+    raw.includes('completed') ||
+    raw.includes('pass') ||
+    raw.includes('conforms') ||
+    raw.includes('performed') ||
+    raw.includes('certified') ||
+    raw.includes('100%') ||
+    raw.includes('satisfactory');
 
-  const status: FindingStatus = isPositive ? 'PASS' : 'REVIEW_REQUIRED';
+  const status: FindingStatus = isPositive ? 'PASS' : 'DEVIATION';
   const severity: FindingSeverity = isPositive ? 'info' : 'minor';
   const calcStr = `Evidence Present: "${evidence.rawValue}" -> ${status}`;
   const reason = isPositive
     ? `Required evidence confirmed: "${evidence.rawValue}".`
-    : `Evidence provided requires reviewer interpretation: "${evidence.rawValue}".`;
+    : `Evidence provided does not confirm requirement: "${evidence.rawValue}".`;
 
   return {
     id: `finding-${req.id}-${heatNo || 'gen'}-${Date.now()}`,
@@ -470,8 +486,8 @@ function evaluateAggregateOperator(
 
   const ceResult = calculateCarbonEquivalent(chemistry, maxLimit, reportedCE);
 
-  const isPass = ceResult.isCompliantWithLimit && !ceResult.isDiscrepancySignificant;
-  const status: FindingStatus = isPass ? 'PASS' : ceResult.isDiscrepancySignificant ? 'REVIEW_REQUIRED' : 'DEVIATION';
+  const isPass = ceResult.isCompliantWithLimit;
+  const status: FindingStatus = isPass ? 'PASS' : 'DEVIATION';
   const severity: FindingSeverity = isPass ? 'info' : 'major';
 
   let calcStr = `Calculated CE: ${ceResult.calculatedCE} <= ${maxLimit} [${ceResult.breakdown}]`;
@@ -482,8 +498,6 @@ function evaluateAggregateOperator(
   let reason = '';
   if (isPass) {
     reason = `Carbon Equivalent of ${ceResult.calculatedCE} is within the max limit of ${maxLimit}. Calculated chemistry aligns with reported values.`;
-  } else if (ceResult.isDiscrepancySignificant) {
-    reason = `Discrepancy detected: Recalculated CE is ${ceResult.calculatedCE}, but MTC reports ${reportedCE}. Difference exceeds tolerance threshold. Technical review required.`;
   } else {
     reason = `Calculated Carbon Equivalent ${ceResult.calculatedCE} exceeds maximum limit of ${maxLimit}.`;
   }
@@ -497,7 +511,7 @@ function evaluateAggregateOperator(
     field: req.field,
     displayName: req.displayName,
     heatNo,
-    requirementText: `Maximum CE ${maxLimit} (${req.description || 'IIW Formula'})`,
+    requirementText: `Max ${maxLimit}`,
     requiredMax: maxLimit,
     requirementClause: req.clauseReference,
     requirementSourceDoc: req.sourceDocument,
@@ -559,7 +573,7 @@ function createReviewRequiredFinding(
   reason: string
 ): ComplianceFinding {
   return {
-    id: `review-${req.id}-${heatNo || 'gen'}-${Date.now()}`,
+    id: `dev-${req.id}-${heatNo || 'gen'}-${Date.now()}`,
     analysisId,
     requirementId: req.id,
     evidenceId: evidence.id,
@@ -581,8 +595,8 @@ function createReviewRequiredFinding(
     supplierSnippet: evidence.snippet,
     confidence: evidence.confidence,
     operator: req.operator,
-    calculatedComparison: 'Low Confidence / Ambiguous -> REVIEW_REQUIRED',
-    status: 'REVIEW_REQUIRED',
+    calculatedComparison: 'Unverified / Invalid Format -> DEVIATION',
+    status: 'DEVIATION',
     severity: 'major',
     reason,
     isReviewed: false,

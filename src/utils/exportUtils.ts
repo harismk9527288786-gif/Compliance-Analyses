@@ -23,7 +23,15 @@ export function exportAnalysisToExcel(
     ['Heats Checked', (analysis.heats || []).join(', ')],
     ['Client Name', analysis.clientName],
     ['Requirement Document', analysis.requirementSetTitle],
-    ['Overall Status', analysis.finalStatus || (analysis.deviationCount > 0 ? 'REVIEW REQUIRED' : 'COMPLIANT')],
+    [
+      'Overall Status',
+      analysis.finalStatus ||
+        (analysis.deviationCount > 0
+          ? 'DEVIATIONS DETECTED'
+          : analysis.documentationGapCount > 0
+          ? 'DOCUMENTATION GAP'
+          : 'COMPLIANT'),
+    ],
     ['Reviewed By', analysis.approvedByName || analysis.createdByName],
     ['Rule Engine Version', analysis.ruleEngineVersion],
     ['', ''],
@@ -31,7 +39,6 @@ export function exportAnalysisToExcel(
     ['PASS Count', analysis.passCount],
     ['DEVIATION Count', analysis.deviationCount],
     ['DOCUMENTATION GAP Count', analysis.documentationGapCount],
-    ['REVIEW REQUIRED Count', analysis.reviewRequiredCount],
     ['Total Checks', analysis.totalFindings],
   ];
   const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
@@ -70,7 +77,7 @@ export function exportAnalysisToExcel(
 export function exportAnalysisToPDF(
   analysis: AnalysisRecord,
   findings: ComplianceFinding[],
-  feedbackDraft?: ExternalFeedbackDraft
+  _feedbackDraft?: ExternalFeedbackDraft
 ): void {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -94,7 +101,7 @@ export function exportAnalysisToPDF(
   doc.text(`PO Number: ${analysis.poNumber || 'N/A'} | Heats: ${(analysis.heats || []).join(', ')}`, 14, 48);
   doc.text(`Date: ${new Date(analysis.createdAt).toLocaleDateString()} | Reviewer: ${analysis.approvedByName || analysis.createdByName}`, 14, 54);
 
-  // Status Summary
+  // Status Summary Box
   doc.setDrawColor(203, 213, 225);
   doc.setFillColor(248, 250, 252);
   doc.roundedRect(14, 58, pageWidth - 28, 20, 2, 2, 'FD');
@@ -102,12 +109,23 @@ export function exportAnalysisToPDF(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.setTextColor(15, 23, 42);
-  doc.text(`STATUS: ${analysis.finalStatus || 'REVIEW REQUIRED'}`, 20, 70);
+  doc.text(
+    `STATUS: ${
+      analysis.finalStatus ||
+      (analysis.deviationCount > 0
+        ? 'DEVIATIONS DETECTED'
+        : analysis.documentationGapCount > 0
+        ? 'DOCUMENTATION GAP'
+        : 'COMPLIANT')
+    }`,
+    20,
+    70
+  );
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.text(
-    `PASS: ${analysis.passCount}   |   DEVIATIONS: ${analysis.deviationCount}   |   GAPS: ${analysis.documentationGapCount}   |   REVIEW REQ: ${analysis.reviewRequiredCount}`,
+    `PASS: ${analysis.passCount}   |   DEVIATIONS: ${analysis.deviationCount}   |   GAPS: ${analysis.documentationGapCount}`,
     85,
     70
   );

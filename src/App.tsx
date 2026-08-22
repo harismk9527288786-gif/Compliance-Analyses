@@ -12,6 +12,7 @@ import { FindingDetailDrawer } from './components/FindingDetailDrawer';
 import { ReportModal } from './components/ReportModal';
 import { RequirementLibrary } from './components/RequirementLibrary';
 import { AuditLogView } from './components/AuditLogView';
+import { HistoryView } from './components/HistoryView';
 import { TestSuiteModal } from './components/TestSuiteModal';
 import { LoginPage } from './components/LoginPage';
 import {
@@ -41,7 +42,7 @@ export default function App() {
     }
     return {
       id: 'user-zarique-shaikh',
-      name: 'Zarique Khan',
+      name: 'Zarique Shaikh',
       email: 'zariquekhan@gmail.com',
       role: 'qc_reviewer',
       organizationId: 'org-apex-01',
@@ -434,7 +435,7 @@ export default function App() {
   if (!isAuthenticated) {
     return (
       <LoginPage
-        defaultEmail={currentUser.email || 'harismk9527288786@gmail.com'}
+        defaultEmail={currentUser.email || 'User7817@gmail.com'}
         onLoginSuccess={(user) => {
           setCurrentUser(user);
           setIsAuthenticated(true);
@@ -445,7 +446,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100/70 text-slate-900 font-sans flex flex-col antialiased">
+    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col antialiased">
       {/* Top Application Navbar */}
       <Navbar
         activeTab={activeTab}
@@ -506,15 +507,12 @@ export default function App() {
         ) : activeTab === 'audit' ? (
           <AuditLogView auditLogs={auditLogs} />
         ) : activeTab === 'history' ? (
-          <Dashboard
+          <HistoryView
             analyses={analyses}
             requirementSets={requirementSets}
             currentUser={currentUser}
             onSelectAnalysis={handleSelectAnalysis}
             onOpenNewComparison={() => setShowNewComparison(true)}
-            onLoadPilotCase={handleLoadPilotCase}
-            onOpenTestSuite={() => setShowTestSuiteModal(true)}
-            onOpenLibrary={() => setActiveTab('library')}
             onClearAllAnalyses={handleClearAllAnalyses}
             onDeleteAnalysis={handleDeleteAnalysis}
           />

@@ -1,29 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
   AlertTriangle,
   FileQuestion,
-  HelpCircle,
   FileText,
   Download,
   FileSpreadsheet,
   ShieldCheck,
+  ShieldAlert,
   Search,
-  Filter,
-  Eye,
-  Calculator,
-  Flame,
-  Check,
-  X,
-  UserCheck,
   Trash2,
+  ChevronRight,
+  Calculator,
 } from 'lucide-react';
 import {
   AnalysisRecord,
   ComplianceFinding,
-  RequirementCategory,
-  FindingStatus,
   User,
   ExternalFeedbackDraft,
 } from '../types';
@@ -55,8 +48,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
   onRejectAnalysis,
   onDeleteAnalysis,
 }) => {
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('all');
+  const [statusTab, setStatusTab] = useState<'all' | 'issues' | 'pass'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   const [showApprovalModal, setShowApprovalModal] = useState(false);
@@ -65,18 +57,18 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
   const [decisionNotes, setDecisionNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const isApproved = analysis.status === 'approved';
+  const isRejected = analysis.status === 'rejected';
+  const hasDeviations = analysis.deviationCount > 0;
+  const hasGaps = analysis.documentationGapCount > 0;
+
   // Filter findings
   const filteredFindings = findings.filter((f) => {
-    const matchesCategory = selectedCategory === 'all' || f.category === selectedCategory;
     const matchesStatus =
-      selectedStatusFilter === 'all'
+      statusTab === 'all'
         ? true
-        : selectedStatusFilter === 'deviations'
-        ? f.status === 'DEVIATION'
-        : selectedStatusFilter === 'gaps'
-        ? f.status === 'DOCUMENTATION_GAP'
-        : selectedStatusFilter === 'review'
-        ? f.status === 'REVIEW_REQUIRED'
+        : statusTab === 'issues'
+        ? f.status === 'DEVIATION' || f.status === 'DOCUMENTATION_GAP'
         : f.status === 'PASS';
 
     const matchesSearch =
@@ -86,33 +78,41 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
       f.supplierRawValue.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (f.heatNo && f.heatNo.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    return matchesCategory && matchesStatus && matchesSearch;
+    return matchesStatus && matchesSearch;
   });
 
-  const isApproved = analysis.status === 'approved';
-  const isRejected = analysis.status === 'rejected';
-  const hasDeviations = analysis.deviationCount > 0;
-  const hasGaps = analysis.documentationGapCount > 0;
-
-  // Calculate Carbon Equivalent for Heat A228 for instant metallurgical breakdown view
+  // Calculate Carbon Equivalent for Heat A228
   const cFinding = findings.find((f) => f.field === 'C' && f.heatNo === 'A228');
   const mnFinding = findings.find((f) => f.field === 'Mn' && f.heatNo === 'A228');
   const ceFinding = findings.find((f) => f.field === 'CE' && f.heatNo === 'A228');
 
   const chemistryA228 = {
-    C: cFinding?.supplierNormalizedValue || 0.21,
-    Mn: mnFinding?.supplierNormalizedValue || 0.88,
-    P: findings.find((f) => f.field === 'P' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.012,
-    S: findings.find((f) => f.field === 'S' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.008,
-    Si: findings.find((f) => f.field === 'Si' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.24,
-    Cr: findings.find((f) => f.field === 'Cr' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.08,
-    Mo: findings.find((f) => f.field === 'Mo' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.02,
-    Ni: findings.find((f) => f.field === 'Ni' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.05,
-    Cu: findings.find((f) => f.field === 'Cu' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.12,
-    V: findings.find((f) => f.field === 'V' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.01,
+    C: Number(cFinding?.supplierNormalizedValue || 0.21),
+    Mn: Number(mnFinding?.supplierNormalizedValue || 0.88),
+    P: Number(findings.find((f) => f.field === 'P' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.012),
+    S: Number(findings.find((f) => f.field === 'S' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.008),
+    Si: Number(findings.find((f) => f.field === 'Si' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.24),
+    Cr: Number(findings.find((f) => f.field === 'Cr' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.08),
+    Mo: Number(findings.find((f) => f.field === 'Mo' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.02),
+    Ni: Number(findings.find((f) => f.field === 'Ni' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.05),
+    Cu: Number(findings.find((f) => f.field === 'Cu' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.12),
+    V: Number(findings.find((f) => f.field === 'V' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.01),
   };
 
-  const ceCalcResult = calculateCarbonEquivalent(chemistryA228, 0.43, ceFinding?.supplierNormalizedValue || 0.37);
+  const ceCalcResult = calculateCarbonEquivalent(chemistryA228, 0.43, Number(ceFinding?.supplierNormalizedValue || 0.37));
+
+  // Escape key handler for dialogs
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowApprovalModal(false);
+        setShowRejectModal(false);
+        setShowDeleteModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const handleApprove = async () => {
     setIsSubmitting(true);
@@ -149,304 +149,268 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
     }
   };
 
-  const categories = [
-    { id: 'all', label: 'All Requirements' },
-    { id: 'chemical', label: 'Chemical' },
-    { id: 'mechanical', label: 'Mechanical' },
-    { id: 'heat_treatment', label: 'Heat Treatment' },
-    { id: 'hardness', label: 'Hardness' },
-    { id: 'nde', label: 'NDE Testing' },
-    { id: 'certification', label: 'Certification' },
-    { id: 'general', label: 'General / Forging' },
-  ];
-
   return (
     <div className="space-y-6">
-      {/* Top Action Bar */}
-      <div className="flex items-center justify-between">
+      {/* 1. TOP ACTION BAR */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <button
+          type="button"
           onClick={onBack}
-          className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-xs transition-colors"
+          className="inline-flex items-center gap-2 text-xs font-bold text-slate-200 bg-slate-900 hover:bg-slate-800 px-3.5 py-2 rounded-lg shadow-xs transition-colors cursor-pointer border border-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-4 h-4 stroke-[2.5]" aria-hidden="true" />
           <span>Back to Dashboard</span>
         </button>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => exportAnalysisToExcel(analysis, findings)}
+            className="px-3.5 py-2 text-xs font-bold rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer border border-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Excel Export</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => exportAnalysisToPDF(analysis, findings, feedbackDraft)}
+            className="px-3.5 py-2 text-xs font-bold rounded-lg bg-blue-700 hover:bg-blue-800 text-white flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer border border-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            <Download className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>PDF Quality Report</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onOpenReportModal}
+            className="px-3.5 py-2 text-xs font-bold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer border border-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+          >
+            <FileText className="w-3.5 h-3.5 text-slate-300" aria-hidden="true" />
+            <span>Supplier Clarification Draft</span>
+          </button>
+
           {onDeleteAnalysis && (
             <button
+              type="button"
               onClick={() => setShowDeleteModal(true)}
-              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+              className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-rose-300"
+              title="Delete verification record"
             >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Delete</span>
+              <Trash2 className="w-4 h-4" aria-hidden="true" />
+              <span className="sr-only">Delete</span>
             </button>
           )}
-          <button
-            onClick={() => exportAnalysisToExcel(analysis, findings)}
-            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 flex items-center gap-1.5 shadow-xs"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Export Excel</span>
-          </button>
-          <button
-            onClick={() => exportAnalysisToPDF(analysis, findings, feedbackDraft)}
-            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 flex items-center gap-1.5 shadow-xs"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export PDF</span>
-          </button>
-          <button
-            onClick={onOpenReportModal}
-            className="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-slate-900 hover:bg-slate-800 text-white flex items-center gap-1.5 shadow-sm"
-          >
-            <FileText className="w-3.5 h-3.5" />
-            <span>Generate Reports & Feedback</span>
-          </button>
         </div>
       </div>
 
-      {/* Main Analysis Header Card */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-          <div className="space-y-1.5 max-w-3xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <span
-                className={`px-2.5 py-0.5 rounded text-xs font-bold border ${
-                  isApproved
-                    ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                    : isRejected
-                    ? 'bg-rose-100 text-rose-800 border-rose-200'
-                    : hasDeviations || hasGaps
-                    ? 'bg-amber-100 text-amber-800 border-amber-200'
-                    : 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                }`}
-              >
-                {isApproved
-                  ? 'DIGITALLY APPROVED'
-                  : isRejected
-                  ? 'REJECTED'
-                  : hasDeviations
-                  ? 'REVIEW REQUIRED — DEVIATIONS DETECTED'
-                  : hasGaps
-                  ? 'REVIEW REQUIRED — DOCUMENTATION GAPS'
-                  : 'CONFORMING'}
-              </span>
-
-              <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                MTC: {analysis.mtcNumber}
-              </span>
-              {analysis.poNumber && (
-                <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                  PO: {analysis.poNumber}
+      {/* 2. TECHNICAL VERIFICATION HEADER CARD (Industrial dark slate, crisp high contrast) */}
+      <section
+        aria-label="Material Verification Record Header"
+        className="rounded-xl p-6 sm:p-7 space-y-5 text-slate-100 bg-slate-900 border border-slate-800 shadow-sm"
+      >
+        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-5">
+          <div className="space-y-2 max-w-2xl">
+            {/* Metallurgical Document Tags */}
+            <div className="flex items-center gap-2 flex-wrap text-xs font-mono font-bold">
+              {isApproved ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-950 text-emerald-300 border border-emerald-600">
+                  <CheckCircle2 className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
+                  <span>QC APPROVED</span>
+                </span>
+              ) : isRejected ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-rose-950 text-rose-300 border border-rose-600">
+                  <ShieldAlert className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
+                  <span>REJECTED NON-CONFORMANT</span>
+                </span>
+              ) : hasDeviations ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-rose-950 text-rose-300 border border-rose-600">
+                  <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
+                  <span>{analysis.deviationCount} DEVIATION{analysis.deviationCount > 1 ? 'S' : ''} DETECTED</span>
+                </span>
+              ) : hasGaps ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-amber-950 text-amber-300 border border-amber-600">
+                  <FileQuestion className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
+                  <span>DOCUMENTATION GAP</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-950 text-emerald-300 border border-emerald-600">
+                  <CheckCircle2 className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
+                  <span>CONFORMING</span>
                 </span>
               )}
+
+              <span className="px-2.5 py-1 rounded bg-slate-800 text-slate-200 border border-slate-700">
+                MTC #{analysis.mtcNumber}
+              </span>
+              <span className="px-2.5 py-1 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                EN 10204 3.1 Cert
+              </span>
             </div>
 
-            <h1 className="text-xl font-bold text-slate-900">{analysis.title}</h1>
-            <p className="text-xs text-slate-500">
-              Evaluated using <strong>{analysis.ruleEngineVersion}</strong> against client specification{' '}
-              <strong>{analysis.requirementSetTitle}</strong>.
+            <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+              {analysis.title}
+            </h1>
+            <p className="text-xs text-slate-300 font-normal">
+              Evaluated against specification standard: <strong className="text-white">{analysis.requirementSetTitle}</strong>
             </p>
           </div>
 
-          {/* Reviewer Action Buttons */}
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {/* Action Sign-Off / Rejection Controls */}
+          <div className="flex items-center gap-2.5 shrink-0">
             {!isApproved && !isRejected && (
               <>
                 <button
+                  type="button"
                   onClick={() => setShowRejectModal(true)}
-                  className="px-3.5 py-2 text-xs font-bold rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors"
+                  className="px-4 py-2 text-xs font-bold rounded-lg bg-rose-950 text-rose-300 hover:bg-rose-900 border border-rose-700 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
                 >
-                  Reject Material
+                  Reject Certificate
                 </button>
                 <button
+                  type="button"
                   onClick={() => setShowApprovalModal(true)}
-                  className="px-4 py-2 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 shadow transition-colors"
+                  className="px-4 py-2 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400/50 shadow-xs transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                 >
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Technical Sign-Off & Approval</span>
+                  <ShieldCheck className="w-4 h-4 stroke-[2.5]" aria-hidden="true" />
+                  <span>Technical Sign-Off</span>
                 </button>
               </>
             )}
 
             {isApproved && (
-              <div className="px-3.5 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-900">
-                <span className="font-bold flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  Approved by {analysis.approvedByName}
-                </span>
-                <span className="text-[10px] text-emerald-700 block">
-                  {new Date(analysis.approvedAt!).toLocaleString()}
-                </span>
+              <div className="px-3.5 py-2 bg-emerald-950 border border-emerald-700 rounded-lg text-xs text-emerald-300 flex items-center gap-2 font-mono font-bold">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" aria-hidden="true" />
+                <span>Signed off by {analysis.approvedByName || currentUser.name}</span>
               </div>
             )}
           </div>
         </div>
 
-        {/* Metadata Details Strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-3 border-t border-slate-100 text-xs">
-          <div>
-            <span className="text-[10px] uppercase font-semibold text-slate-400 block">Material Grade</span>
-            <strong className="text-slate-800 text-sm">{analysis.materialGrade}</strong>
+        {/* 4 Metadata Traceability Panels */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-800 text-xs">
+          <div className="space-y-0.5">
+            <span className="text-[10px] uppercase font-bold text-slate-400 block font-mono">Material Grade</span>
+            <span className="font-bold text-white text-sm">{analysis.materialGrade}</span>
           </div>
-          <div>
-            <span className="text-[10px] uppercase font-semibold text-slate-400 block">Supplier</span>
-            <strong className="text-slate-800 text-sm">{analysis.supplierName}</strong>
+          <div className="space-y-0.5">
+            <span className="text-[10px] uppercase font-bold text-slate-400 block font-mono">Supplier Mill</span>
+            <span className="font-semibold text-slate-200 truncate block">{analysis.supplierName}</span>
           </div>
-          <div>
-            <span className="text-[10px] uppercase font-semibold text-slate-400 block">Client</span>
-            <strong className="text-slate-800 text-sm">{analysis.clientName}</strong>
+          <div className="space-y-0.5">
+            <span className="text-[10px] uppercase font-bold text-slate-400 block font-mono">Client Specification</span>
+            <span className="font-semibold text-slate-200 truncate block">{analysis.clientName}</span>
           </div>
-          <div>
-            <span className="text-[10px] uppercase font-semibold text-slate-400 block">Heats Evaluated</span>
-            <div className="flex gap-1 mt-0.5">
-              {(analysis.heats || []).map((h) => (
-                <span
-                  key={h}
-                  className="px-1.5 py-0.2 rounded text-[11px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200"
-                >
-                  {h}
-                </span>
-              ))}
-            </div>
+          <div className="space-y-0.5">
+            <span className="text-[10px] uppercase font-bold text-slate-400 block font-mono">Ladle Heats Evaluated</span>
+            <span className="font-mono font-bold text-emerald-300">{(analysis.heats || []).join(', ') || 'N/A'}</span>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Carbon Equivalent (CE) Metallurgical Widget */}
-      <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-xl p-4 text-white shadow-sm border border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* 3. CARBON EQUIVALENT METALLURGICAL VERIFICATION RAIL */}
+      <section
+        aria-label="Carbon Equivalent Verification"
+        className="bg-slate-900 rounded-xl p-4 sm:p-5 text-slate-200 border border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+      >
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-              IIW METALLURGICAL FORMULA VERIFIED
-            </span>
-            <span className="text-xs text-slate-400">Carbon Equivalent (CE) Matrix</span>
+          <div className="font-bold text-emerald-400 flex items-center gap-1.5 font-mono text-xs">
+            <CheckCircle2 className="w-4 h-4 stroke-[2.5]" aria-hidden="true" />
+            <span>Carbon Equivalent (CE) - Conformance Verified</span>
           </div>
-          <div className="text-xs font-mono text-slate-300">
-            IIW Formula: CE = C + Mn/6 + (Cr+Mo+V)/5 + (Ni+Cu)/15
-          </div>
-          <div className="text-xs text-slate-300">
-            Calculated: <strong className="text-emerald-400 font-mono">{ceCalcResult.calculatedCE}</strong> | Reported on MTC: <strong className="text-slate-200 font-mono">{ceCalcResult.reportedCE}</strong> | Limit: <strong className="text-slate-200 font-mono">&le; 0.43</strong>
-          </div>
+          <p className="text-[11px] text-slate-300 font-mono">
+            Calculated: <strong className="text-white">{ceCalcResult.calculatedCE} wt%</strong> | MTC Reported: <strong className="text-white">{ceCalcResult.reportedCE} wt%</strong> | Maximum Allowable: <strong className="text-white">&le; 0.43 wt%</strong>
+          </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <span>CE Compliant (&le; 0.43)</span>
-          </div>
-          <div className="text-[11px] text-slate-400 font-mono text-right">
-            <div>Tolerance: &plusmn;0.01</div>
-            <div>Status: Conforming</div>
-          </div>
+        <div className="text-[11px] text-slate-300 font-mono bg-slate-950 px-3 py-1.5 rounded border border-slate-800">
+          IIW Formula: C + Mn/6 + (Cr+Mo+V)/5 + (Ni+Cu)/15
         </div>
-      </div>
+      </section>
 
-      {/* Findings Matrix Section */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden space-y-0">
-        {/* Filter Controls Bar */}
-        <div className="p-4 border-b border-slate-200 bg-slate-50/70 space-y-3">
-          {/* Category Tabs */}
-          <div className="flex items-center gap-1 overflow-x-auto pb-1">
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
-                  selectedCategory === cat.id
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                {cat.label}
-              </button>
-            ))}
+      {/* 4. TECHNICAL FINDINGS TABLE WITH FILTER TABS */}
+      <section
+        aria-label="Compliance Findings Breakdown"
+        className="bg-white rounded-xl border border-slate-300 shadow-xs p-5 space-y-4"
+      >
+        {/* Filter Controls */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div role="tablist" aria-label="Finding Status Tabs" className="inline-flex p-1 bg-slate-100 rounded-lg border border-slate-300 text-xs">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={statusTab === 'all'}
+              onClick={() => setStatusTab('all')}
+              className={`px-3 py-1 rounded-md font-bold transition-colors cursor-pointer ${
+                statusTab === 'all'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-700 hover:text-slate-900'
+              }`}
+            >
+              All Requirements ({findings.length})
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={statusTab === 'issues'}
+              onClick={() => setStatusTab('issues')}
+              className={`px-3 py-1 rounded-md font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                statusTab === 'issues'
+                  ? 'bg-rose-700 text-white shadow-xs'
+                  : 'text-rose-800 hover:text-rose-900'
+              }`}
+            >
+              <AlertTriangle className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
+              <span>Issues ({analysis.deviationCount + analysis.documentationGapCount})</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={statusTab === 'pass'}
+              onClick={() => setStatusTab('pass')}
+              className={`px-3 py-1 rounded-md font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                statusTab === 'pass'
+                  ? 'bg-emerald-700 text-white shadow-xs'
+                  : 'text-emerald-800 hover:text-emerald-900'
+              }`}
+            >
+              <CheckCircle2 className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
+              <span>Conforming ({analysis.passCount})</span>
+            </button>
           </div>
 
-          {/* Status and Search */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            {/* Status Filter Pills */}
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setSelectedStatusFilter('all')}
-                className={`px-2.5 py-1 rounded text-xs font-medium ${
-                  selectedStatusFilter === 'all'
-                    ? 'bg-slate-800 text-white'
-                    : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-                }`}
-              >
-                All ({findings.length})
-              </button>
-              <button
-                onClick={() => setSelectedStatusFilter('deviations')}
-                className={`px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1 ${
-                  selectedStatusFilter === 'deviations'
-                    ? 'bg-rose-600 text-white'
-                    : 'bg-rose-100 text-rose-800 hover:bg-rose-200'
-                }`}
-              >
-                <AlertTriangle className="w-3 h-3" />
-                <span>Deviations ({analysis.deviationCount})</span>
-              </button>
-              <button
-                onClick={() => setSelectedStatusFilter('gaps')}
-                className={`px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1 ${
-                  selectedStatusFilter === 'gaps'
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
-                }`}
-              >
-                <FileQuestion className="w-3 h-3" />
-                <span>Gaps ({analysis.documentationGapCount})</span>
-              </button>
-              <button
-                onClick={() => setSelectedStatusFilter('pass')}
-                className={`px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1 ${
-                  selectedStatusFilter === 'pass'
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                }`}
-              >
-                <CheckCircle2 className="w-3 h-3" />
-                <span>PASS ({analysis.passCount})</span>
-              </button>
-            </div>
-
-            {/* Search Input */}
-            <div className="relative w-full sm:w-64">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Filter properties, heats, values..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-3 py-1 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              />
-            </div>
+          {/* Search */}
+          <div className="relative sm:w-64">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
+            <input
+              type="text"
+              placeholder="Search property / heat / value..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all font-medium text-slate-900"
+            />
           </div>
         </div>
 
         {/* Findings Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead className="bg-slate-100/80 text-slate-600 border-b border-slate-200 font-semibold">
-              <tr>
-                <th className="p-3">Category</th>
-                <th className="p-3">Property / Item</th>
-                <th className="p-3">Heat Trace</th>
-                <th className="p-3">Client MDS Requirement</th>
-                <th className="p-3">Supplier MTC Evidence</th>
-                <th className="p-3">Deterministic Logic</th>
-                <th className="p-3">Status</th>
-                <th className="p-3 text-right">Review Action</th>
+        <div className="border border-slate-200 rounded-lg overflow-x-auto">
+          <table role="table" className="w-full text-left text-xs border-collapse min-w-[760px]">
+            <caption className="sr-only">Detailed list of compliance findings and metallurgical comparisons</caption>
+            <thead>
+              <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 font-bold text-[11px] uppercase tracking-wider">
+                <th scope="col" className="py-2.5 px-4">Property / Test Parameter</th>
+                <th scope="col" className="py-2.5 px-3">Heat No</th>
+                <th scope="col" className="py-2.5 px-3">Client Limit (MDS)</th>
+                <th scope="col" className="py-2.5 px-3">Supplier Reported Value</th>
+                <th scope="col" className="py-2.5 px-3">Compliance Status Rail</th>
+                <th scope="col" className="py-2.5 px-4 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-200">
               {filteredFindings.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-400">
-                    No findings match the selected filters.
+                  <td colSpan={6} className="p-8 text-center text-slate-500 font-medium">
+                    No findings match the current filter selection.
                   </td>
                 </tr>
               ) : (
@@ -458,81 +422,74 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
                   return (
                     <tr
                       key={f.id}
+                      tabIndex={0}
+                      role="button"
+                      aria-label={`Inspect finding for ${f.displayName}`}
                       onClick={() => onSelectFinding(f)}
-                      className={`hover:bg-slate-50/80 cursor-pointer transition-colors ${
-                        isDeviation
-                          ? 'bg-rose-50/20'
-                          : isGap
-                          ? 'bg-amber-50/20'
-                          : ''
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onSelectFinding(f);
+                        }
+                      }}
+                      className={`hover:bg-slate-50 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 ${
+                        isDeviation ? 'bg-rose-50/40' : isGap ? 'bg-amber-50/30' : ''
                       }`}
                     >
-                      <td className="p-3">
-                        <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
-                          {f.category}
-                        </span>
+                      {/* Property */}
+                      <td className="py-3 px-4">
+                        <div className="font-bold text-slate-900">{f.displayName}</div>
+                        <div className="text-[10px] text-slate-500 font-mono">
+                          {f.category.toUpperCase()} {f.requirementClause ? `· ${f.requirementClause}` : ''}
+                        </div>
                       </td>
 
-                      <td className="p-3 font-bold text-slate-900">
-                        {f.displayName}
-                        {f.isReviewed && (
-                          <span className="ml-1.5 text-[9px] px-1 py-0.2 rounded bg-blue-100 text-blue-800 font-medium">
-                            Reviewed
+                      {/* Heat */}
+                      <td className="py-3 px-3 font-mono font-medium text-slate-700">
+                        {f.heatNo || 'GENERAL'}
+                      </td>
+
+                      {/* Client Limit */}
+                      <td className="py-3 px-3 text-slate-800 font-medium">
+                        {f.requirementText}
+                      </td>
+
+                      {/* Supplier Value */}
+                      <td className="py-3 px-3 font-bold text-slate-900">
+                        {f.supplierRawValue}
+                      </td>
+
+                      {/* Compliance Status Rail (Icon + Label + Color) */}
+                      <td className="py-3 px-3">
+                        {isPass ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold font-mono bg-emerald-100 text-emerald-900 border border-emerald-300">
+                            <CheckCircle2 className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
+                            <span>PASS</span>
+                          </span>
+                        ) : isDeviation ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold font-mono bg-rose-100 text-rose-900 border border-rose-300">
+                            <AlertTriangle className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
+                            <span>DEVIATION</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-100 text-amber-900 border border-amber-300">
+                            <FileQuestion className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
+                            <span>GAP</span>
                           </span>
                         )}
                       </td>
 
-                      <td className="p-3 font-mono font-semibold text-slate-700">
-                        {f.heatNo || 'GENERAL'}
-                      </td>
-
-                      <td className="p-3">
-                        <div className="font-semibold text-slate-800">{f.requirementText}</div>
-                        <div className="text-[10px] text-slate-400">
-                          {f.requirementClause ? `Clause: ${f.requirementClause}` : 'Mandatory'}
-                        </div>
-                      </td>
-
-                      <td className="p-3">
-                        <div className="font-bold text-slate-900">{f.supplierRawValue}</div>
-                        <div className="text-[10px] text-slate-400">
-                          Page {f.supplierEvidencePage || 1}
-                        </div>
-                      </td>
-
-                      <td className="p-3 font-mono text-[11px] text-slate-600 max-w-xs truncate">
-                        {f.calculatedComparison}
-                      </td>
-
-                      <td className="p-3">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold border inline-flex items-center gap-1 ${
-                            isPass
-                              ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                              : isDeviation
-                              ? 'bg-rose-100 text-rose-800 border-rose-200'
-                              : isGap
-                              ? 'bg-amber-100 text-amber-800 border-amber-200'
-                              : 'bg-blue-100 text-blue-800 border-blue-200'
-                          }`}
-                        >
-                          {isPass && <CheckCircle2 className="w-2.5 h-2.5" />}
-                          {isDeviation && <AlertTriangle className="w-2.5 h-2.5" />}
-                          {isGap && <FileQuestion className="w-2.5 h-2.5" />}
-                          <span>{f.status}</span>
-                        </span>
-                      </td>
-
-                      <td className="p-3 text-right">
+                      {/* Action */}
+                      <td className="py-3 px-4 text-right">
                         <button
+                          type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             onSelectFinding(f);
                           }}
-                          className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 inline-flex items-center gap-1 shadow-2xs"
+                          className="px-3 py-1 text-xs font-semibold rounded-md bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900"
                         >
-                          <Eye className="w-3 h-3 text-slate-500" />
-                          <span>Inspect</span>
+                          Inspect
                         </button>
                       </td>
                     </tr>
@@ -542,59 +499,47 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
 
       {/* Approval Modal */}
       {showApprovalModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-lg p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                <ShieldCheck className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-slate-900">
-                  Technical Sign-Off & Approval
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Digital sign-off as <strong>{currentUser.name}</strong> ({currentUser.role.toUpperCase()})
-                </p>
-              </div>
-            </div>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="approve-modal-title"
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-center justify-center p-4"
+        >
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-300 w-full max-w-md p-6 space-y-4">
+            <h3 id="approve-modal-title" className="text-base font-bold text-slate-900">
+              Technical Sign-Off & Approval
+            </h3>
+            <p className="text-xs text-slate-600">
+              Sign off on material certificate as <strong>{currentUser.name}</strong>.
+            </p>
 
-            {hasDeviations && (
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-                <strong>Notice:</strong> This certificate contains {analysis.deviationCount} deviations and {analysis.documentationGapCount} documentation gaps. Approving will record a formal engineering concession acceptance.
-              </div>
-            )}
+            <textarea
+              rows={3}
+              value={decisionNotes}
+              onChange={(e) => setDecisionNotes(e.target.value)}
+              placeholder="Enter approval notes or concession reference number..."
+              className="w-full p-2.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 text-slate-900"
+            />
 
-            <div className="space-y-1">
-              <label className="block text-xs font-semibold text-slate-700">
-                Approval Notes / Concession Justification:
-              </label>
-              <textarea
-                rows={3}
-                value={decisionNotes}
-                onChange={(e) => setDecisionNotes(e.target.value)}
-                placeholder="Enter technical justification, concession reference number, or review remarks..."
-                className="w-full p-2.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              />
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-end gap-2 pt-2">
               <button
+                type="button"
                 onClick={() => setShowApprovalModal(false)}
-                disabled={isSubmitting}
-                className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800"
+                className="px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer border border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleApprove}
                 disabled={isSubmitting}
-                className="px-4 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg shadow transition-colors disabled:opacity-50"
+                className="px-4 py-2 text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg shadow-xs transition-colors cursor-pointer border border-emerald-600 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
               >
-                {isSubmitting ? 'Signing...' : 'Confirm Digital Approval'}
+                {isSubmitting ? 'Signing...' : 'Confirm Sign-Off'}
               </button>
             </div>
           </div>
@@ -603,47 +548,39 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
 
       {/* Reject Modal */}
       {showRejectModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-lg p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center">
-                <X className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-slate-900">
-                  Reject Material Certificate
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Formally mark certificate as non-compliant and rejected.
-                </p>
-              </div>
-            </div>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reject-modal-title"
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-center justify-center p-4"
+        >
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-300 w-full max-w-md p-6 space-y-4">
+            <h3 id="reject-modal-title" className="text-base font-bold text-slate-900">
+              Reject Material Certificate
+            </h3>
+            <p className="text-xs text-slate-600">Formally record non-compliance for this shipment.</p>
 
-            <div className="space-y-1">
-              <label className="block text-xs font-semibold text-slate-700">
-                Reason for Rejection: *
-              </label>
-              <textarea
-                rows={3}
-                value={decisionNotes}
-                onChange={(e) => setDecisionNotes(e.target.value)}
-                placeholder="State why material is rejected (e.g. Heat YBA normalizing temperature below 900°C limit)..."
-                className="w-full p-2.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-rose-500"
-              />
-            </div>
+            <textarea
+              rows={3}
+              value={decisionNotes}
+              onChange={(e) => setDecisionNotes(e.target.value)}
+              placeholder="State metallurgical or contractual reason for rejection..."
+              className="w-full p-2.5 text-xs bg-white border border-rose-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-600 text-slate-900"
+            />
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-end gap-2 pt-2">
               <button
+                type="button"
                 onClick={() => setShowRejectModal(false)}
-                disabled={isSubmitting}
-                className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800"
+                className="px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer border border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleReject}
                 disabled={isSubmitting || !decisionNotes.trim()}
-                className="px-4 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white rounded-lg shadow transition-colors disabled:opacity-50"
+                className="px-4 py-2 text-xs font-bold bg-rose-700 hover:bg-rose-800 text-white rounded-lg shadow-xs transition-colors cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
               >
                 {isSubmitting ? 'Recording...' : 'Confirm Rejection'}
               </button>
@@ -654,37 +591,35 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-md p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center">
-                <Trash2 className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-slate-900">
-                  Delete this Compliance Review?
-                </h3>
-                <p className="text-xs text-slate-500">
-                  This action will remove the record, findings, and feedback draft permanently.
-                </p>
-              </div>
-            </div>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-analysis-modal-title"
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-center justify-center p-4"
+        >
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-300 w-full max-w-md p-6 space-y-4">
+            <h3 id="delete-analysis-modal-title" className="text-base font-bold text-slate-900">
+              Delete Verification Record?
+            </h3>
+            <p className="text-xs text-slate-600">
+              Are you sure you want to remove this verification report?
+            </p>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-end gap-2 pt-2">
               <button
+                type="button"
                 onClick={() => setShowDeleteModal(false)}
-                disabled={isSubmitting}
-                className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-800 cursor-pointer"
+                className="px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer border border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleDelete}
                 disabled={isSubmitting}
-                className="px-4 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white rounded-lg shadow transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                className="px-4 py-2 text-xs font-bold bg-rose-700 hover:bg-rose-800 text-white rounded-lg shadow-xs transition-colors cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>{isSubmitting ? 'Deleting...' : 'Delete Review'}</span>
+                {isSubmitting ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>
