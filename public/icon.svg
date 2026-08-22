@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="110" fill="#0f172a" />
+  <rect x="24" y="24" width="464" height="464" rx="90" fill="none" stroke="#334155" stroke-width="12" />
+  <!-- Certificate Base -->
+  <rect x="110" y="90" width="292" height="332" rx="28" fill="#1e293b" stroke="#059669" stroke-width="16" />
+  <!-- Header bar -->
+  <rect x="145" y="140" width="130" height="24" rx="12" fill="#059669" />
+  <rect x="145" y="180" width="222" height="14" rx="7" fill="#64748b" />
+  <rect x="145" y="210" width="180" height="14" rx="7" fill="#64748b" />
+  <rect x="145" y="240" width="200" height="14" rx="7" fill="#64748b" />
+  <!-- Checkmark Badge -->
+  <circle cx="330" cy="330" r="64" fill="#059669" stroke="#0f172a" stroke-width="12" />
+  <path d="M305 330 L322 347 L358 311" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+</svg>

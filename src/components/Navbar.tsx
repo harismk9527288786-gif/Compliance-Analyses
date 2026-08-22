@@ -11,6 +11,7 @@ import {
   Plus,
   Wrench,
   Building2,
+  Download,
 } from 'lucide-react';
 import { User, Organization } from '../types';
 
@@ -37,8 +38,27 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showToolsMenu, setShowToolsMenu] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const toolsMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -93,7 +113,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             </button>
 
-            {/* Core Navigation (Crisp engineering tabs) */}
+            {/* Core Navigation */}
             <nav aria-label="Main Navigation" className="flex items-center space-x-1 pl-3 border-l border-slate-800">
               <button
                 type="button"
@@ -201,6 +221,19 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Right Action: Verify Button & Profile */}
           <div className="flex items-center space-x-3 shrink-0">
+            {/* Install Desktop App Button (when available) */}
+            {deferredPrompt && (
+              <button
+                type="button"
+                onClick={handleInstallClick}
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/40 shadow-xs transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                title="Install as standalone desktop software"
+              >
+                <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Install Desktop App</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={onOpenNewComparison}
