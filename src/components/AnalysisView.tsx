@@ -57,7 +57,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
   useEffect(() => {
     if (initialStatusTab) {
       setStatusTab(initialStatusTab);
-      if (initialStatusTab === 'issues') {
+      if (initialStatusTab === 'issues' || initialStatusTab === 'pass') {
         setTimeout(() => {
           findingsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 150);

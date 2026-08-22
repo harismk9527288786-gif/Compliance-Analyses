@@ -203,28 +203,34 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Metric 1: Conforming */}
         <button
           type="button"
-          onClick={() => setStatusFilter(statusFilter === 'pass' ? 'all' : 'pass')}
-          className={`text-left bg-white rounded-xl p-5 border transition-all cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 ${
-            statusFilter === 'pass'
-              ? 'border-emerald-600 ring-2 ring-emerald-600 bg-emerald-50/20'
-              : 'border-slate-300 hover:border-slate-400 hover:bg-slate-50/60'
-          }`}
+          onClick={() => {
+            const target =
+              analyses.find((a) => a.status === 'approved' || (a.passCount > 0 && a.deviationCount === 0)) ||
+              analyses.find((a) => a.passCount > 0) ||
+              analyses[0];
+            if (target) {
+              onSelectAnalysis(target.id, 'pass');
+            } else {
+              setStatusFilter(statusFilter === 'pass' ? 'all' : 'pass');
+            }
+          }}
+          className="text-left bg-white rounded-xl p-5 border border-emerald-300 hover:border-emerald-500 hover:bg-emerald-50/40 transition-all cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 group"
         >
           <div className="flex items-start justify-between">
             <div className="space-y-1">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
                 Conforming Checks
               </span>
-              <div className="text-2xl font-bold font-mono text-slate-900">{totalPass}</div>
+              <div className="text-2xl font-bold font-mono text-emerald-700">{totalPass}</div>
               <p className="text-[11px] text-slate-500 font-medium">Satisfies all MDS chemical & mechanical limits</p>
             </div>
-            <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 border border-emerald-200">
+            <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 border border-emerald-200 group-hover:scale-105 transition-transform">
               <CheckCircle2 className="w-5 h-5 stroke-[2.5]" aria-hidden="true" />
             </div>
           </div>
           <div className="mt-3 pt-2.5 border-t border-slate-200 flex items-center justify-between text-xs font-bold text-emerald-800">
-            <span>{statusFilter === 'pass' ? 'Showing Conforming Only' : 'Filter Conforming'}</span>
-            <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>View Conforming Checks</span>
+            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" aria-hidden="true" />
           </div>
         </button>
 
