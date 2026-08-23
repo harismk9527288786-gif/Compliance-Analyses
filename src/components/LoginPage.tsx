@@ -33,13 +33,13 @@ interface LoginPageProps {
 
 export const LoginPage: React.FC<LoginPageProps> = ({
   onLoginSuccess,
-  defaultEmail = 'qc.lead@apexvalves.com',
+  defaultEmail = '',
 }) => {
   const [activeTab, setActiveTab] = useState<'signin' | 'register' | 'accept_invite'>('signin');
 
   // Sign-in Form State
   const [email, setEmail] = useState(() => {
-    return localStorage.getItem('mtc_remembered_email') || defaultEmail;
+    return localStorage.getItem('mtc_remembered_email') || defaultEmail || '';
   });
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -94,7 +94,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     setSuccessMessage(null);
 
     const cleanEmail = email.trim().toLowerCase();
-    const cleanPassword = password;
+    const cleanPassword = password.trim();
 
     if (!cleanEmail) {
       setErrorMessage('Please enter your work email address.');
@@ -144,6 +144,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
     const cleanName = regName.trim();
     const cleanEmail = regEmail.trim().toLowerCase();
+    const cleanPassword = regPassword.trim();
+    const cleanConfirm = regConfirmPassword.trim();
 
     if (!cleanName) {
       setErrorMessage('Please enter your full name.');
@@ -153,11 +155,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       setErrorMessage('Please enter a valid work email address.');
       return;
     }
-    if (!regPassword || regPassword.length < 6) {
+    if (!cleanPassword || cleanPassword.length < 6) {
       setErrorMessage('Password must be at least 6 characters long.');
       return;
     }
-    if (regPassword !== regConfirmPassword) {
+    if (cleanPassword !== cleanConfirm) {
       setErrorMessage('Passwords do not match. Please verify.');
       return;
     }
@@ -171,7 +173,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         body: JSON.stringify({
           name: cleanName,
           email: cleanEmail,
-          password: regPassword,
+          password: cleanPassword,
           role: regRole,
           organizationName: regOrgName.trim() || undefined,
         }),
@@ -185,10 +187,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         return;
       }
 
+      localStorage.setItem('mtc_remembered_email', cleanEmail);
+      setEmail(cleanEmail);
       setSuccessMessage('Account created successfully! Launching your workstation...');
       setTimeout(() => {
         onLoginSuccess(data.user, data.organization);
-      }, 400);
+      }, 350);
     } catch (err: any) {
       setIsSubmitting(false);
       setErrorMessage('Unable to connect to authentication server. Please check your connection.');
@@ -456,6 +460,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 <button
                   type="button"
                   onClick={() => {
+                    if (regEmail.trim()) {
+                      setEmail(regEmail.trim());
+                    }
                     setActiveTab('signin');
                     setErrorMessage(null);
                     setSuccessMessage(null);
@@ -473,6 +480,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 <button
                   type="button"
                   onClick={() => {
+                    if (email.trim()) {
+                      setRegEmail(email.trim());
+                    }
                     setActiveTab('register');
                     setErrorMessage(null);
                     setSuccessMessage(null);
@@ -551,7 +561,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                             setEmail(e.target.value);
                             setErrorMessage(null);
                           }}
-                          placeholder="e.g. qc.lead@apexvalves.com"
+                          placeholder="e.g. name@company.com"
                           className="w-full pl-9 pr-3 py-2 text-xs bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
                         />
                       </div>

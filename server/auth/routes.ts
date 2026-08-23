@@ -51,6 +51,7 @@ authRouter.post('/register', authLimiter, async (req, res) => {
 
     const cleanEmail = email.trim().toLowerCase();
     const cleanName = name.trim();
+    const cleanPassword = typeof password === 'string' ? password.trim() : '';
     const existingUser = db.getUserByEmail(cleanEmail);
 
     if (existingUser) {
@@ -99,7 +100,7 @@ authRouter.post('/register', authLimiter, async (req, res) => {
     const validRoles: AuthRole[] = ['ADMIN', 'QUALITY_ENGINEER', 'REVIEWER', 'VIEWER'];
     const assignedRole: AuthRole = (role && validRoles.includes(role as AuthRole)) ? (role as AuthRole) : 'QUALITY_ENGINEER';
 
-    const passwordHash = await hashPassword(password);
+    const passwordHash = await hashPassword(cleanPassword);
     const userId = `user-${Date.now()}-${generateRandomToken(4)}`;
 
     const newUser: UserRecord = {
@@ -177,6 +178,7 @@ authRouter.post('/login', authLimiter, async (req, res) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
     const user = db.getUserByEmail(cleanEmail);
 
     if (!user) {
@@ -192,8 +194,7 @@ authRouter.post('/login', authLimiter, async (req, res) => {
         details: { reason: 'User not found' },
       });
 
-      // Generic error response to prevent user enumeration
-      return res.status(401).json({ error: 'Invalid email or password.' });
+      return res.status(401).json({ error: 'No account found with this email address. Please check your email or click "Create Account".' });
     }
 
     if (!user.is_active) {
@@ -213,7 +214,7 @@ authRouter.post('/login', authLimiter, async (req, res) => {
     }
 
     // Verify Password against scrypt hash
-    const isValidPassword = await verifyPassword(password, user.password_hash);
+    const isValidPassword = await verifyPassword(cleanPassword, user.password_hash);
     if (!isValidPassword) {
       db.addAuditEvent(user.organization_id, {
         actorId: user.id,
@@ -225,7 +226,7 @@ authRouter.post('/login', authLimiter, async (req, res) => {
         objectName: 'Failed Login Attempt',
         details: { reason: 'Invalid password' },
       });
-      return res.status(401).json({ error: 'Invalid email or password.' });
+      return res.status(401).json({ error: 'Incorrect password. Please verify your password or use "Forgot password".' });
     }
 
     const organization = db.getOrganization(user.organization_id);

@@ -604,7 +604,7 @@ export default function App() {
   if (!isAuthenticated) {
     return (
       <LoginPage
-        defaultEmail={currentUser.email || 'qc.lead@apexvalves.com'}
+        defaultEmail=""
         onLoginSuccess={(user, org) => {
           setCurrentUser(user);
           if (org) setCurrentOrg(org);
