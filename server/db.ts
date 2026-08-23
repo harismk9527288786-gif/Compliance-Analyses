@@ -1,6 +1,7 @@
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
 import {
-  User,
-  Organization,
   DocumentRecord,
   RequirementSet,
   CertificateRecord,
@@ -8,12 +9,26 @@ import {
   ComplianceFinding,
   AuditEvent,
   ExternalFeedbackDraft,
+  FindingStatus,
 } from '../src/types';
+import {
+  UserRecord,
+  OrganizationRecord,
+  SessionRecord,
+  InvitationRecord,
+  PasswordResetTokenRecord,
+  AuthRole,
+  SafeUserProfile,
+  sanitizeUser,
+} from './auth/types';
 import { PILOT_MDS_REQUIREMENT_SET, PILOT_SUPPLIER_MTC } from '../src/engine/pilotData';
 import { evaluateCompliance } from '../src/engine/rules';
 
-// Pre-seeded Demo Organizations
-export const ORGANIZATIONS: Organization[] = [
+const DATA_DIR = path.join(process.cwd(), 'data');
+const DB_FILE = path.join(DATA_DIR, 'mtc_compliance_database.json');
+
+// Default Seed Organizations
+export const SEED_ORGANIZATIONS: OrganizationRecord[] = [
   {
     id: 'org-apex-01',
     name: 'Apex Valve & Flow Engineering Ltd.',
@@ -22,6 +37,8 @@ export const ORGANIZATIONS: Organization[] = [
     requireMfa: true,
     allowExternalAi: true,
     retentionMonths: 24,
+    created_at: new Date('2026-01-01T00:00:00Z').toISOString(),
+    updated_at: new Date('2026-01-01T00:00:00Z').toISOString(),
   },
   {
     id: 'org-global-02',
@@ -31,578 +48,732 @@ export const ORGANIZATIONS: Organization[] = [
     requireMfa: false,
     allowExternalAi: true,
     retentionMonths: 12,
+    created_at: new Date('2026-01-01T00:00:00Z').toISOString(),
+    updated_at: new Date('2026-01-01T00:00:00Z').toISOString(),
   },
 ];
 
-// Pre-seeded Demo Users with explicit RBAC roles
-export const USERS: User[] = [
+// Pre-computed scrypt hash for default initial password "password123"
+// Generated using standard Node.js crypto.scrypt (keylen: 64, salt: 16 bytes hex)
+const DEFAULT_PASSWORD_HASH =
+  'scrypt$9ce9625d882cadfc116b50d0aadc67df$b97424690a01441b7888f132e5abf767521081d29d3d2f481684c1a54e3a345b4e8565c579bc9868fb03bc98020b8e622fb4cff4b9474beb6b51863c259fddb1';
+
+// Pre-seeded Demo Users (One for each primary role)
+export const SEED_USERS: UserRecord[] = [
   {
     id: 'user-lead-qc',
-    name: 'Lead QC Inspector',
+    name: 'Sarah Jenkins',
     email: 'qc.lead@apexvalves.com',
-    role: 'qc_reviewer',
-    organizationId: 'org-apex-01',
-    organizationName: 'Apex Valve & Flow Engineering Ltd.',
+    password_hash: DEFAULT_PASSWORD_HASH,
+    role: 'REVIEWER',
+    organization_id: 'org-apex-01',
+    is_active: true,
+    created_at: new Date('2026-01-01T00:00:00Z').toISOString(),
+    updated_at: new Date('2026-01-01T00:00:00Z').toISOString(),
+    last_login_at: null,
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
   },
   {
     id: 'user-materials-engineer',
-    name: 'Materials Engineer (PE)',
+    name: 'Dr. Marcus Vance (PE)',
     email: 'materials.engineer@apexvalves.com',
-    role: 'engineer',
-    organizationId: 'org-apex-01',
-    organizationName: 'Apex Valve & Flow Engineering Ltd.',
+    password_hash: DEFAULT_PASSWORD_HASH,
+    role: 'QUALITY_ENGINEER',
+    organization_id: 'org-apex-01',
+    is_active: true,
+    created_at: new Date('2026-01-01T00:00:00Z').toISOString(),
+    updated_at: new Date('2026-01-01T00:00:00Z').toISOString(),
+    last_login_at: null,
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
   },
   {
     id: 'user-quality-auditor',
-    name: 'Quality Auditor',
+    name: 'Elena Rostova',
     email: 'auditor@apexvalves.com',
-    role: 'auditor',
-    organizationId: 'org-apex-01',
-    organizationName: 'Apex Valve & Flow Engineering Ltd.',
+    password_hash: DEFAULT_PASSWORD_HASH,
+    role: 'REVIEWER',
+    organization_id: 'org-apex-01',
+    is_active: true,
+    created_at: new Date('2026-01-01T00:00:00Z').toISOString(),
+    updated_at: new Date('2026-01-01T00:00:00Z').toISOString(),
+    last_login_at: null,
     avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80',
   },
   {
     id: 'user-admin-system',
-    name: 'System Administrator',
+    name: 'David Chen',
     email: 'admin@apexvalves.com',
-    role: 'admin',
-    organizationId: 'org-apex-01',
-    organizationName: 'Apex Valve & Flow Engineering Ltd.',
+    password_hash: DEFAULT_PASSWORD_HASH,
+    role: 'ADMIN',
+    organization_id: 'org-apex-01',
+    is_active: true,
+    created_at: new Date('2026-01-01T00:00:00Z').toISOString(),
+    updated_at: new Date('2026-01-01T00:00:00Z').toISOString(),
+    last_login_at: null,
     avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
   },
   {
     id: 'user-viewer-guest',
-    name: 'Client QA Observer',
+    name: 'Robert Miller',
     email: 'observer@clientaudit.com',
-    role: 'viewer',
-    organizationId: 'org-apex-01',
-    organizationName: 'Apex Valve & Flow Engineering Ltd.',
+    password_hash: DEFAULT_PASSWORD_HASH,
+    role: 'VIEWER',
+    organization_id: 'org-global-02',
+    is_active: true,
+    created_at: new Date('2026-01-01T00:00:00Z').toISOString(),
+    updated_at: new Date('2026-01-01T00:00:00Z').toISOString(),
+    last_login_at: null,
     avatar: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=150&auto=format&fit=crop&q=80',
   },
 ];
 
-// Client-partitioned data store structure (IP / Session Scoped)
-export interface ClientScopeData {
-  documents: Map<string, DocumentRecord>;
-  requirementSets: Map<string, RequirementSet>;
-  certificates: Map<string, CertificateRecord>;
-  analyses: Map<string, AnalysisRecord>;
-  findings: Map<string, ComplianceFinding[]>;
-  feedbackDrafts: Map<string, ExternalFeedbackDraft>;
+interface DatabaseSchema {
+  organizations: Record<string, OrganizationRecord>;
+  users: Record<string, UserRecord>;
+  sessions: Record<string, SessionRecord>;
+  invitations: Record<string, InvitationRecord>;
+  passwordResetTokens: Record<string, PasswordResetTokenRecord>;
+  documents: Record<string, DocumentRecord>;
+  requirementSets: Record<string, RequirementSet>;
+  certificates: Record<string, CertificateRecord>;
+  analyses: Record<string, AnalysisRecord>;
+  findings: Record<string, ComplianceFinding[]>;
+  feedbackDrafts: Record<string, ExternalFeedbackDraft>;
   auditLogs: AuditEvent[];
-  lastSeenAt: string;
 }
 
-// In-Memory Database Store partitioned by Client IP / Session
-class DatabaseStore {
-  private scopes: Map<string, ClientScopeData> = new Map();
+export class DatabaseStore {
+  private data: DatabaseSchema = {
+    organizations: {},
+    users: {},
+    sessions: {},
+    invitations: {},
+    passwordResetTokens: {},
+    documents: {},
+    requirementSets: {},
+    certificates: {},
+    analyses: {},
+    findings: {},
+    feedbackDrafts: {},
+    auditLogs: [],
+  };
 
-  /**
-   * Resolves the persistent isolated data scope for a given client IP/session.
-   * New IPs start with a clean state (0 analyses, 0 documents).
-   */
-  public getScope(clientKey: string): ClientScopeData {
-    const key = (clientKey && clientKey.trim()) ? clientKey.trim() : '127.0.0.1';
-    if (!this.scopes.has(key)) {
-      this.scopes.set(key, {
-        documents: new Map(),
-        requirementSets: new Map(),
-        certificates: new Map(),
-        analyses: new Map(),
-        findings: new Map(),
-        feedbackDrafts: new Map(),
-        auditLogs: [],
-        lastSeenAt: new Date().toISOString(),
+  private saveTimeout: NodeJS.Timeout | null = null;
+
+  constructor() {
+    this.loadFromDisk();
+    this.ensureSeedData();
+  }
+
+  private loadFromDisk(): void {
+    try {
+      if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+      }
+
+      if (fs.existsSync(DB_FILE)) {
+        const raw = fs.readFileSync(DB_FILE, 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          this.data = {
+            organizations: parsed.organizations || {},
+            users: parsed.users || {},
+            sessions: parsed.sessions || {},
+            invitations: parsed.invitations || {},
+            passwordResetTokens: parsed.passwordResetTokens || {},
+            documents: parsed.documents || {},
+            requirementSets: parsed.requirementSets || {},
+            certificates: parsed.certificates || {},
+            analyses: parsed.analyses || {},
+            findings: parsed.findings || {},
+            feedbackDrafts: parsed.feedbackDrafts || {},
+            auditLogs: parsed.auditLogs || [],
+          };
+        }
+      }
+    } catch (e) {
+      console.error('Error loading database from disk, starting with clean memory store:', e);
+    }
+  }
+
+  public persistToDisk(): void {
+    try {
+      if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+      }
+      fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
+    } catch (e) {
+      console.error('Failed to write database to disk:', e);
+    }
+  }
+
+  private scheduleSave(): void {
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+    }
+    this.saveTimeout = setTimeout(() => {
+      this.persistToDisk();
+    }, 100);
+  }
+
+  private ensureSeedData(): void {
+    // 1. Seed Organizations
+    for (const org of SEED_ORGANIZATIONS) {
+      if (!this.data.organizations[org.id]) {
+        this.data.organizations[org.id] = { ...org };
+      }
+    }
+
+    // 2. Seed Users
+    for (const user of SEED_USERS) {
+      if (!this.data.users[user.id] || !this.data.users[user.id].password_hash?.startsWith('scrypt$9ce9625d882cadfc116b50d0aadc67df')) {
+        this.data.users[user.id] = { ...user, password_hash: DEFAULT_PASSWORD_HASH };
+      }
+    }
+
+    // 3. Seed Default Pilot Requirement Sets & Pilot Analysis for Apex Org
+    const apexOrgId = 'org-apex-01';
+    const pilotReqSetId = PILOT_MDS_REQUIREMENT_SET.id;
+    if (!this.data.requirementSets[pilotReqSetId]) {
+      this.data.requirementSets[pilotReqSetId] = {
+        ...PILOT_MDS_REQUIREMENT_SET,
+        organizationId: apexOrgId,
+      };
+    }
+
+    // Seed Standard Templates
+    const shellId = 'reqset-shell-mesc-spe-77-302';
+    if (!this.data.requirementSets[shellId]) {
+      this.data.requirementSets[shellId] = {
+        id: shellId,
+        clientName: 'Shell Global Solutions',
+        materialGrade: 'ASTM A105N',
+        mdsNumber: 'MESC SPE 77/302',
+        revision: 'Rev 2024.1',
+        title: 'Shell MESC SPE 77/302 - Carbon Steel Valves & Forgings',
+        effectiveDate: '2024-01-15',
+        status: 'approved',
+        approvedBy: 'user-materials-engineer',
+        approvedAt: new Date().toISOString(),
+        organizationId: apexOrgId,
+        requirements: PILOT_MDS_REQUIREMENT_SET.requirements,
+      };
+    }
+
+    const aramcoId = 'reqset-saudi-aramco-04-samss-048';
+    if (!this.data.requirementSets[aramcoId]) {
+      this.data.requirementSets[aramcoId] = {
+        id: aramcoId,
+        clientName: 'Saudi Aramco',
+        materialGrade: 'ASTM A105N',
+        mdsNumber: '04-SAMSS-048',
+        revision: 'Rev 4',
+        title: 'Saudi Aramco 04-SAMSS-048 - Valve Body & Trim Metallurgy',
+        effectiveDate: '2023-11-01',
+        status: 'approved',
+        approvedBy: 'user-materials-engineer',
+        approvedAt: new Date().toISOString(),
+        organizationId: apexOrgId,
+        requirements: PILOT_MDS_REQUIREMENT_SET.requirements,
+      };
+    }
+
+    // Pre-seed Pilot Analysis
+    const pilotAnalysisId = 'analysis-pilot-ww2606229-3';
+    if (!this.data.analyses[pilotAnalysisId]) {
+      const pilotFindings = evaluateCompliance({
+        analysisId: pilotAnalysisId,
+        requirements: PILOT_MDS_REQUIREMENT_SET.requirements,
+        certificate: PILOT_SUPPLIER_MTC,
       });
-    }
-    const scope = this.scopes.get(key)!;
-    scope.lastSeenAt = new Date().toISOString();
-    return scope;
-  }
 
-  // --- Analyses ---
-  public getAnalyses(clientKey: string, orgId?: string): AnalysisRecord[] {
-    const scope = this.getScope(clientKey);
-    const list = Array.from(scope.analyses.values());
-    if (orgId) {
-      return list
-        .filter((a) => a.organizationId === orgId)
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    }
-    return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }
+      const passCount = pilotFindings.filter((f) => f.status === 'PASS').length;
+      const devCount = pilotFindings.filter((f) => f.status === 'DEVIATION').length;
+      const gapCount = pilotFindings.filter((f) => f.status === 'DOCUMENTATION_GAP').length;
+      const reqCount = pilotFindings.filter((f) => f.status === 'REVIEW_REQUIRED').length;
 
-  public getAnalysis(clientKey: string, id: string): AnalysisRecord | undefined {
-    return this.getScope(clientKey).analyses.get(id);
-  }
+      this.data.certificates[PILOT_SUPPLIER_MTC.id] = { ...PILOT_SUPPLIER_MTC };
 
-  public setAnalysis(clientKey: string, id: string, analysis: AnalysisRecord) {
-    this.getScope(clientKey).analyses.set(id, analysis);
-  }
-
-  public deleteAnalysis(clientKey: string, id: string) {
-    const scope = this.getScope(clientKey);
-    scope.analyses.delete(id);
-    scope.findings.delete(id);
-    scope.feedbackDrafts.delete(id);
-  }
-
-  public clearAllAnalyses(clientKey: string, orgId?: string) {
-    const scope = this.getScope(clientKey);
-    if (!orgId) {
-      scope.analyses.clear();
-      scope.findings.clear();
-      scope.feedbackDrafts.clear();
-    } else {
-      for (const [id, analysis] of scope.analyses.entries()) {
-        if (analysis.organizationId === orgId) {
-          scope.analyses.delete(id);
-          scope.findings.delete(id);
-          scope.feedbackDrafts.delete(id);
-        }
-      }
-    }
-  }
-
-  // --- Findings ---
-  public getFindings(clientKey: string, analysisId: string): ComplianceFinding[] | undefined {
-    return this.getScope(clientKey).findings.get(analysisId);
-  }
-
-  public setFindings(clientKey: string, analysisId: string, findings: ComplianceFinding[]) {
-    this.getScope(clientKey).findings.set(analysisId, findings);
-  }
-
-  // --- External Feedback Drafts ---
-  public getFeedbackDraft(clientKey: string, analysisId: string): ExternalFeedbackDraft | undefined {
-    return this.getScope(clientKey).feedbackDrafts.get(analysisId);
-  }
-
-  public setFeedbackDraft(clientKey: string, analysisId: string, feedback: ExternalFeedbackDraft) {
-    this.getScope(clientKey).feedbackDrafts.set(analysisId, feedback);
-  }
-
-  // --- Requirement Sets ---
-  public getRequirementSets(clientKey: string, orgId?: string): RequirementSet[] {
-    const scope = this.getScope(clientKey);
-    const list = Array.from(scope.requirementSets.values());
-    if (orgId) {
-      return list.filter((r) => r.organizationId === orgId);
-    }
-    return list;
-  }
-
-  public getRequirementSet(clientKey: string, id: string): RequirementSet | undefined {
-    const fromScope = this.getScope(clientKey).requirementSets.get(id);
-    if (fromScope) return fromScope;
-    if (id === PILOT_MDS_REQUIREMENT_SET.id) return PILOT_MDS_REQUIREMENT_SET;
-    return undefined;
-  }
-
-  public setRequirementSet(clientKey: string, id: string, reqSet: RequirementSet) {
-    this.getScope(clientKey).requirementSets.set(id, reqSet);
-  }
-
-  public deleteRequirementSet(clientKey: string, id: string) {
-    this.getScope(clientKey).requirementSets.delete(id);
-  }
-
-  public clearAllRequirementSets(clientKey: string, orgId?: string) {
-    const scope = this.getScope(clientKey);
-    if (!orgId) {
-      scope.requirementSets.clear();
-    } else {
-      for (const [id, r] of scope.requirementSets.entries()) {
-        if (r.organizationId === orgId) {
-          scope.requirementSets.delete(id);
-        }
-      }
-    }
-  }
-
-  // --- Documents ---
-  public getDocuments(clientKey: string, orgId?: string): DocumentRecord[] {
-    const scope = this.getScope(clientKey);
-    const list = Array.from(scope.documents.values());
-    if (orgId) {
-      return list.filter((d) => d.organizationId === orgId);
-    }
-    return list;
-  }
-
-  public getDocument(clientKey: string, id: string): DocumentRecord | undefined {
-    return this.getScope(clientKey).documents.get(id);
-  }
-
-  public setDocument(clientKey: string, id: string, doc: DocumentRecord) {
-    this.getScope(clientKey).documents.set(id, doc);
-  }
-
-  // --- Certificates ---
-  public getCertificates(clientKey: string): CertificateRecord[] {
-    return Array.from(this.getScope(clientKey).certificates.values());
-  }
-
-  public getCertificate(clientKey: string, id: string): CertificateRecord | undefined {
-    const fromScope = this.getScope(clientKey).certificates.get(id);
-    if (fromScope) return fromScope;
-    if (id === PILOT_SUPPLIER_MTC.id) return PILOT_SUPPLIER_MTC;
-    return undefined;
-  }
-
-  public setCertificate(clientKey: string, id: string, cert: CertificateRecord) {
-    this.getScope(clientKey).certificates.set(id, cert);
-  }
-
-  // --- Audit Logs ---
-  public getAuditLogs(clientKey: string, orgId?: string): AuditEvent[] {
-    const scope = this.getScope(clientKey);
-    if (orgId) {
-      return scope.auditLogs.filter((a) => a.organizationId === orgId);
-    }
-    return scope.auditLogs;
-  }
-
-  public addAuditEvent(clientKey: string, event: Omit<AuditEvent, 'id' | 'timestamp'>): AuditEvent {
-    const scope = this.getScope(clientKey);
-    const newEvent: AuditEvent = {
-      ...event,
-      id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      timestamp: new Date().toISOString(),
-    };
-    scope.auditLogs.unshift(newEvent);
-    if (scope.auditLogs.length > 500) {
-      scope.auditLogs.pop();
-    }
-    return newEvent;
-  }
-
-  /**
-   * Loads standard reference specification templates on-demand for a client
-   */
-  public loadStandardTemplatesForClient(clientKey: string, userId: string = 'user-lead-qc'): RequirementSet[] {
-    const scope = this.getScope(clientKey);
-    const user = USERS.find((u) => u.id === userId) || USERS[0];
-
-    // 1. Hawa Valves A105N MDS
-    scope.requirementSets.set(PILOT_MDS_REQUIREMENT_SET.id, PILOT_MDS_REQUIREMENT_SET);
-
-    // 2. Shell Global Solutions
-    const shellReqSet: RequirementSet = {
-      id: 'reqset-shell-a350lf2-rev-b',
-      clientName: 'Shell Global Solutions',
-      materialGrade: 'ASTM A350 LF2 Class 1',
-      mdsNumber: 'DEP-31.40.20.37-Gen',
-      revision: 'Rev B',
-      title: 'Low Temperature Carbon Steel Forgings for Offshore Piping',
-      effectiveDate: '2024-06-10',
-      status: 'approved',
-      approvedBy: user.id,
-      approvedAt: new Date().toISOString(),
-      organizationId: user.organizationId,
-      requirements: [
-        {
-          id: 'shell-c-max',
-          category: 'chemical',
-          field: 'C',
-          displayName: 'Carbon (C)',
-          operator: 'MAX',
-          maxValue: 0.20,
-          unit: '%',
-          mandatory: true,
-          description: 'Max Carbon 0.20% for LTCS',
-          clauseReference: 'DEP Section 4.2',
-          sourceDocument: 'Shell DEP-31.40.20.37-Gen Rev B',
-          sourcePage: 3,
-        },
-        {
-          id: 'shell-impact',
-          category: 'mechanical',
-          field: 'charpyImpactEnergy',
-          displayName: 'Charpy V-Notch Impact Energy at -46°C',
-          operator: 'MIN',
-          minValue: 27,
-          unit: 'J',
-          mandatory: true,
-          description: 'Minimum average 27 Joules at -46°C',
-          clauseReference: 'DEP Section 5.1',
-          sourceDocument: 'Shell DEP-31.40.20.37-Gen Rev B',
-          sourcePage: 4,
-        },
-        {
-          id: 'shell-ce',
-          category: 'chemical',
-          field: 'CE',
-          displayName: 'Carbon Equivalent (CE)',
-          operator: 'AGGREGATE',
-          maxValue: 0.40,
-          unit: '',
-          mandatory: true,
-          description: 'CE max 0.40 for low temperature service',
-          clauseReference: 'DEP Section 4.3',
-          sourceDocument: 'Shell DEP-31.40.20.37-Gen Rev B',
-          sourcePage: 3,
-        },
-      ],
-    };
-    scope.requirementSets.set(shellReqSet.id, shellReqSet);
-
-    // 3. Saudi Aramco F316L
-    const aramcoReqSet: RequirementSet = {
-      id: 'reqset-aramco-f316l-rev-c',
-      clientName: 'Saudi Aramco',
-      materialGrade: 'ASTM A182 F316L',
-      mdsNumber: '01-SAMSS-010',
-      revision: 'Rev C',
-      title: 'Austenitic Stainless Steel Forgings for Wet Sour Service',
-      effectiveDate: '2024-11-20',
-      status: 'approved',
-      approvedBy: user.id,
-      approvedAt: new Date().toISOString(),
-      organizationId: user.organizationId,
-      requirements: [
-        {
-          id: 'aramco-c',
-          category: 'chemical',
-          field: 'C',
-          displayName: 'Carbon (C)',
-          operator: 'MAX',
-          maxValue: 0.030,
-          unit: '%',
-          mandatory: true,
-          description: 'Extra low carbon max 0.030%',
-          sourceDocument: '01-SAMSS-010 Rev C',
-          sourcePage: 2,
-        },
-        {
-          id: 'aramco-cr',
-          category: 'chemical',
-          field: 'Cr',
-          displayName: 'Chromium (Cr)',
-          operator: 'RANGE',
-          minValue: 16.0,
-          maxValue: 18.0,
-          unit: '%',
-          mandatory: true,
-          description: 'Chromium 16.0 - 18.0%',
-          sourceDocument: '01-SAMSS-010 Rev C',
-          sourcePage: 2,
-        },
-        {
-          id: 'aramco-ferrite',
-          category: 'mechanical',
-          field: 'ferriteNumber',
-          displayName: 'Ferrite Content (FN)',
-          operator: 'RANGE',
-          minValue: 3,
-          maxValue: 8,
-          unit: 'FN',
-          mandatory: true,
-          description: 'Ferrite number 3 to 8 FN',
-          sourceDocument: '01-SAMSS-010 Rev C',
-          sourcePage: 4,
-        },
-      ],
-    };
-    scope.requirementSets.set(aramcoReqSet.id, aramcoReqSet);
-
-    this.addAuditEvent(clientKey, {
-      organizationId: user.organizationId,
-      actorId: user.id,
-      actorName: user.name,
-      actorRole: user.role,
-      action: 'CREATE_REQUIREMENT_SET',
-      objectType: 'requirement_set',
-      objectId: 'templates',
-      objectName: 'Loaded Standard MDS Specification Templates',
-      details: { count: 3 },
-    });
-
-    return Array.from(scope.requirementSets.values());
-  }
-
-  /**
-   * Generates the Benchmark Pilot Case (Western Forge MTC vs Hawa Valves MDS)
-   * specifically on-demand for a client session.
-   */
-  public loadPilotCaseForClient(clientKey: string, userId: string = 'user-lead-qc'): {
-    analysis: AnalysisRecord;
-    findings: ComplianceFinding[];
-    feedbackDraft: ExternalFeedbackDraft;
-  } {
-    const scope = this.getScope(clientKey);
-    const user = USERS.find((u) => u.id === userId) || USERS[0];
-    const orgId = user.organizationId;
-
-    // 1. Requirement Set
-    scope.requirementSets.set(PILOT_MDS_REQUIREMENT_SET.id, PILOT_MDS_REQUIREMENT_SET);
-
-    // 2. Documents
-    const mdsDoc: DocumentRecord = {
-      id: `doc-mds-${Date.now()}`,
-      type: 'mds',
-      filename: 'Hawa_Valves_MDS_QE-F-CS-ASTM-A105-NACE-001_RevA.pdf',
-      filesize: 1420500,
-      checksum: 'e89a74b88939c4d98ef732a9381e43b672a912c98a3194',
-      pageCount: 5,
-      uploadedBy: user.id,
-      uploadedByName: user.name,
-      uploadedAt: new Date().toISOString(),
-      organizationId: orgId,
-      mimeType: 'application/pdf',
-      contentSummary: 'Material Data Sheet for ASTM A105N Carbon Steel Forgings for Sour Service',
-    };
-    scope.documents.set(mdsDoc.id, mdsDoc);
-
-    const mtcDoc: DocumentRecord = {
-      id: `doc-mtc-${Date.now()}`,
-      type: 'mtc',
-      filename: 'Western_Forge_MTC_WW2606229-3.pdf',
-      filesize: 894320,
-      checksum: 'b45d2994a34b219087c93814de658a12903fb9873a21',
-      pageCount: 2,
-      uploadedBy: user.id,
-      uploadedByName: user.name,
-      uploadedAt: new Date().toISOString(),
-      organizationId: orgId,
-      mimeType: 'application/pdf',
-      contentSummary: 'Inspection Certificate 3.1 for ASTM A105N Flanges, Heats A228 & YBA',
-    };
-    scope.documents.set(mtcDoc.id, mtcDoc);
-
-    // 3. Certificates
-    scope.certificates.set(PILOT_SUPPLIER_MTC.id, PILOT_SUPPLIER_MTC);
-
-    // 4. Pilot Analysis
-    const pilotAnalysisId = `analysis-pilot-${Date.now()}`;
-    const pilotFindings = evaluateCompliance({
-      analysisId: pilotAnalysisId,
-      requirements: PILOT_MDS_REQUIREMENT_SET.requirements,
-      certificate: PILOT_SUPPLIER_MTC,
-    });
-
-    const passCount = pilotFindings.filter((f) => f.status === 'PASS').length;
-    const devCount = pilotFindings.filter((f) => f.status === 'DEVIATION').length;
-    const gapCount = pilotFindings.filter((f) => f.status === 'DOCUMENTATION_GAP').length;
-
-    const pilotAnalysis: AnalysisRecord = {
-      id: pilotAnalysisId,
-      organizationId: orgId,
-      title: 'Benchmark Review: Western Forge MTC WW2606229-3 vs Hawa MDS Rev A',
-      mtcDocumentId: mtcDoc.id,
-      mtcFilename: mtcDoc.filename,
-      mdsDocumentId: mdsDoc.id,
-      mdsFilename: mdsDoc.filename,
-      requirementSetId: PILOT_MDS_REQUIREMENT_SET.id,
-      requirementSetTitle: PILOT_MDS_REQUIREMENT_SET.title,
-      materialGrade: 'ASTM A105N',
-      supplierName: 'Western Forge & Flange Co.',
-      clientName: 'Hawa Valves',
-      poNumber: 'PO-774920',
-      mtcNumber: 'WW2606229-3',
-      heats: ['A228', 'YBA'],
-      status: 'ready_for_review',
-      createdAt: new Date().toISOString(),
-      createdBy: user.id,
-      createdByName: `${user.name} (${user.role.toUpperCase()})`,
-      passCount,
-      deviationCount: devCount,
-      documentationGapCount: gapCount,
-      reviewRequiredCount: 0,
-      totalFindings: pilotFindings.length,
-      reviewedCount: 0,
-      ruleEngineVersion: 'MTC-CoreEngine v2.4.0',
-      aiModelUsed: 'gemini-3.7-flash',
-    };
-
-    scope.analyses.set(pilotAnalysisId, pilotAnalysis);
-    scope.findings.set(pilotAnalysisId, pilotFindings);
-
-    // 5. Initial Feedback Draft
-    const pilotFeedback: ExternalFeedbackDraft = {
-      id: `feedback-${pilotAnalysisId}`,
-      analysisId: pilotAnalysisId,
-      title: 'Material Certificate Review & Technical Clarification Request',
-      overallStatus: 'DEVIATIONS DETECTED',
-      salutation: 'Dear Western Forge & Flange Co. Quality Directorate,',
-      openingStatement:
-        'The submitted Material Test Certificate (Ref: WW2606229-3) for PO #PO-774920 has been reviewed against Client Material Data Sheet QE-F-CS-ASTM-A105-NACE-001 Rev A (ASTM A105N).',
-      conformingSummary:
-        'The chemical composition, Carbon Equivalent (CE <= 0.43), tensile strength, yield strength, reduction of area, hardness (<= 187 HBW for sour service), forging reduction ratio (4.2:1), and absence of weld repair are conforming for Heat A228 and verified properties.',
-      clarificationPoints: [
-        {
-          id: 'pilot-cl-1',
-          itemNumber: 1,
-          findingId: 'f-pilot-ht-temp-yba',
-          title: 'Normalizing Temperature Below Specified Lower Limit (Heat YBA)',
-          description:
-            'Heat YBA records normalizing temperature at 890°C, which is below the mandatory client requirement of 900°C - 960°C.',
-          actionRequired:
-            'Please submit technical re-heat treatment authorization, or provide mechanical microstructural test records confirming complete austenitization at 890°C.',
-        },
-        {
-          id: 'pilot-cl-2',
-          itemNumber: 2,
-          findingId: 'f-pilot-elong-yba',
-          title: 'Elongation Below Specification Limit (Heat YBA)',
-          description:
-            'Reported elongation is 29% in 2 inches, whereas the client MDS specifies a minimum of 30% for sour service forging integrity.',
-          actionRequired:
-            'Please perform tensile re-test from the prolongation or forged coupon in accordance with ASTM A105 Section 8.2 and provide test report.',
-        },
-        {
-          id: 'pilot-cl-3',
-          itemNumber: 3,
-          findingId: 'f-pilot-ut',
-          title: 'Supplementary Ultrasonic Examination (UT) Certificate Missing',
-          description:
-            'Client specification MDS Clause 6.1 mandates 100% volumetric Ultrasonic Testing for Class 300+ forging components. No UT report was identified.',
-          actionRequired:
-            'Please provide formal Level II certified UT test certificate in accordance with ASME Section V Article 4 / ASTM A388.',
-        },
-        {
-          id: 'pilot-cl-4',
-          itemNumber: 4,
-          findingId: 'f-pilot-mpt',
-          title: 'Supplementary Magnetic Particle Examination (MPT) Certificate Missing',
-          description:
-            'Client specification MDS Clause 6.2 mandates 100% surface Magnetic Particle Examination. No MPT certificate was attached.',
-          actionRequired:
-            'Please provide formal Level II certified MT test certificate in accordance with ASME Section V Article 7 / ASTM A275.',
-        },
-      ],
-      closingStatement:
-        'Please furnish formal written clarification, concession requests, or revised inspection documents within 5 working days to avoid material dispatch hold.',
-      status: 'draft',
-    };
-    scope.feedbackDrafts.set(pilotAnalysisId, pilotFeedback);
-
-    // 6. Audit Log
-    this.addAuditEvent(clientKey, {
-      organizationId: orgId,
-      actorId: user.id,
-      actorName: user.name,
-      actorRole: user.role,
-      action: 'RUN_ANALYSIS',
-      objectType: 'analysis',
-      objectId: pilotAnalysisId,
-      objectName: pilotAnalysis.title,
-      details: {
+      this.data.analyses[pilotAnalysisId] = {
+        id: pilotAnalysisId,
+        organizationId: apexOrgId,
+        title: 'Pilot Benchmark Analysis: Western Forge (WW2606229-3) vs Hawa MDS Rev A',
+        mtcDocumentId: 'doc-mtc-ww2606229-3',
+        mtcFilename: 'Western_Forge_MTC_WW2606229-3.pdf',
+        requirementSetId: PILOT_MDS_REQUIREMENT_SET.id,
+        requirementSetTitle: PILOT_MDS_REQUIREMENT_SET.title,
+        materialGrade: 'ASTM A105N',
+        supplierName: 'Western Forge & Flange Co.',
+        clientName: 'Hawa Valves Quality Directorate',
+        poNumber: 'PO-2026-APEX-8821',
+        mtcNumber: 'WW2606229-3',
+        heats: ['HEAT-8821A', 'HEAT-8821B'],
+        status: 'ready_for_review',
+        createdAt: new Date().toISOString(),
+        createdBy: 'user-lead-qc',
+        createdByName: 'Sarah Jenkins (Lead QC)',
         passCount,
         deviationCount: devCount,
         documentationGapCount: gapCount,
-        total: pilotFindings.length,
+        reviewRequiredCount: reqCount,
+        totalFindings: pilotFindings.length,
+        reviewedCount: 0,
+        ruleEngineVersion: 'MTC-CoreEngine v2.4.0',
+        aiModelUsed: 'gemini-3.7-flash',
+      };
+
+      this.data.findings[pilotAnalysisId] = pilotFindings;
+
+      const deviations = pilotFindings.filter((f) => f.status === 'DEVIATION');
+      const gaps = pilotFindings.filter((f) => f.status === 'DOCUMENTATION_GAP');
+
+      this.data.feedbackDrafts[pilotAnalysisId] = {
+        id: `feedback-${pilotAnalysisId}`,
+        analysisId: pilotAnalysisId,
+        title: 'Supplier Quality Review & Clarification Request: Western Forge WW2606229-3',
+        overallStatus: devCount > 0 ? 'REVIEW REQUIRED' : 'COMPLIANT',
+        salutation: 'Dear Western Forge & Flange Quality Directorate,',
+        openingStatement:
+          'The submitted Material Test Certificate (WW2606229-3) for PO PO-2026-APEX-8821 has been analyzed against project specification Hawa Valves MDS Rev A.',
+        conformingSummary:
+          'Chemical composition and standard tensile mechanical properties for approved heats have been verified against applicable ASTM A105N thresholds.',
+        clarificationPoints: [
+          ...deviations.map((d, i) => ({
+            id: `dev-pt-${i + 1}`,
+            itemNumber: i + 1,
+            title: `${d.displayName} Deviation (${d.heatNo || 'General'})`,
+            findingId: d.id,
+            description: `Reported value "${d.supplierRawValue}" deviates from specified requirement "${d.requirementText}". Reason: ${d.reason}`,
+            actionRequired: 'Please submit corrective technical documentation or re-test justification.',
+          })),
+          ...gaps.map((g, i) => ({
+            id: `gap-pt-${i + 1}`,
+            itemNumber: deviations.length + i + 1,
+            title: `Missing Evidence: ${g.displayName}`,
+            findingId: g.id,
+            description: `Client MDS Clause mandates "${g.displayName}", which was not identified in the submitted MTC.`,
+            actionRequired: 'Please attach formal Level II supplementary test certificate.',
+          })),
+        ],
+        closingStatement:
+          'Please provide written clarification and supporting documentation within 5 working days to enable final material acceptance.',
+        status: 'draft',
+      };
+
+      this.data.auditLogs.unshift({
+        id: `audit-init-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        organizationId: apexOrgId,
+        actorId: 'user-admin-system',
+        actorName: 'David Chen',
+        actorRole: 'ADMIN',
+        action: 'SYSTEM_INITIALIZE',
+        objectType: 'system',
+        objectId: 'system-seed',
+        objectName: 'MTC Compliance System Initialization',
+        details: { version: '2.4.0', initialAnalyses: 1, initialOrg: apexOrgId },
+      });
+    }
+
+    this.persistToDisk();
+  }
+
+  // =========================================================================
+  // ORGANIZATIONS & TENANTS
+  // =========================================================================
+  public getOrganizations(): OrganizationRecord[] {
+    return Object.values(this.data.organizations);
+  }
+
+  public getOrganization(id: string): OrganizationRecord | undefined {
+    return this.data.organizations[id];
+  }
+
+  public createOrganization(org: OrganizationRecord): OrganizationRecord {
+    this.data.organizations[org.id] = { ...org };
+    this.scheduleSave();
+    return org;
+  }
+
+  // =========================================================================
+  // USERS
+  // =========================================================================
+  public getUsers(): UserRecord[] {
+    return Object.values(this.data.users);
+  }
+
+  public getUsersByOrg(orgId: string): UserRecord[] {
+    return Object.values(this.data.users).filter((u) => u.organization_id === orgId);
+  }
+
+  public getUserById(id: string): UserRecord | undefined {
+    return this.data.users[id];
+  }
+
+  public getUserByEmail(email: string): UserRecord | undefined {
+    const clean = email.trim().toLowerCase();
+    return Object.values(this.data.users).find((u) => u.email.toLowerCase() === clean);
+  }
+
+  public createUser(user: UserRecord): UserRecord {
+    this.data.users[user.id] = { ...user };
+    this.scheduleSave();
+    return user;
+  }
+
+  public updateUser(id: string, updates: Partial<UserRecord>): UserRecord | undefined {
+    const user = this.data.users[id];
+    if (!user) return undefined;
+    const updated: UserRecord = {
+      ...user,
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+    this.data.users[id] = updated;
+    this.scheduleSave();
+    return updated;
+  }
+
+  public recordUserLogin(id: string): void {
+    const user = this.data.users[id];
+    if (user) {
+      user.last_login_at = new Date().toISOString();
+      user.updated_at = new Date().toISOString();
+      this.scheduleSave();
+    }
+  }
+
+  // =========================================================================
+  // SESSIONS
+  // =========================================================================
+  public createSession(session: SessionRecord): SessionRecord {
+    this.data.sessions[session.id] = { ...session };
+    this.scheduleSave();
+    return session;
+  }
+
+  public getSession(id: string): SessionRecord | undefined {
+    const session = this.data.sessions[id];
+    if (!session) return undefined;
+
+    // Check expiration
+    if (new Date(session.expires_at).getTime() <= Date.now()) {
+      delete this.data.sessions[id];
+      this.scheduleSave();
+      return undefined;
+    }
+
+    return session;
+  }
+
+  public touchSession(id: string, extensionMs = 7 * 24 * 60 * 60 * 1000): void {
+    const session = this.data.sessions[id];
+    if (session) {
+      session.last_active_at = new Date().toISOString();
+      session.expires_at = new Date(Date.now() + extensionMs).toISOString();
+      this.scheduleSave();
+    }
+  }
+
+  public deleteSession(id: string): void {
+    if (this.data.sessions[id]) {
+      delete this.data.sessions[id];
+      this.scheduleSave();
+    }
+  }
+
+  public deleteUserSessions(userId: string): void {
+    for (const [sId, session] of Object.entries(this.data.sessions)) {
+      if (session.user_id === userId) {
+        delete this.data.sessions[sId];
+      }
+    }
+    this.scheduleSave();
+  }
+
+  // =========================================================================
+  // INVITATIONS
+  // =========================================================================
+  public createInvitation(invitation: InvitationRecord): InvitationRecord {
+    this.data.invitations[invitation.id] = { ...invitation };
+    this.scheduleSave();
+    return invitation;
+  }
+
+  public getInvitationByTokenHash(tokenHash: string): InvitationRecord | undefined {
+    return Object.values(this.data.invitations).find(
+      (inv) => inv.token_hash === tokenHash && !inv.is_accepted && new Date(inv.expires_at).getTime() > Date.now()
+    );
+  }
+
+  public markInvitationAccepted(id: string): void {
+    const inv = this.data.invitations[id];
+    if (inv) {
+      inv.is_accepted = true;
+      inv.accepted_at = new Date().toISOString();
+      this.scheduleSave();
+    }
+  }
+
+  public getOrgInvitations(orgId: string): InvitationRecord[] {
+    return Object.values(this.data.invitations).filter(
+      (inv) => inv.organization_id === orgId && !inv.is_accepted && new Date(inv.expires_at).getTime() > Date.now()
+    );
+  }
+
+  // =========================================================================
+  // PASSWORD RESET TOKENS
+  // =========================================================================
+  public createPasswordResetToken(tokenRecord: PasswordResetTokenRecord): PasswordResetTokenRecord {
+    this.data.passwordResetTokens[tokenRecord.id] = { ...tokenRecord };
+    this.scheduleSave();
+    return tokenRecord;
+  }
+
+  public getPasswordResetToken(tokenHash: string): PasswordResetTokenRecord | undefined {
+    return Object.values(this.data.passwordResetTokens).find(
+      (t) => t.token_hash === tokenHash && !t.is_used && new Date(t.expires_at).getTime() > Date.now()
+    );
+  }
+
+  public markPasswordResetTokenUsed(id: string): void {
+    const token = this.data.passwordResetTokens[id];
+    if (token) {
+      token.is_used = true;
+      token.used_at = new Date().toISOString();
+      this.scheduleSave();
+    }
+  }
+
+  // =========================================================================
+  // DOCUMENTS (STRICTLY ORG SCOPED)
+  // =========================================================================
+  public getDocuments(orgId: string): DocumentRecord[] {
+    return Object.values(this.data.documents).filter((d) => d.organizationId === orgId);
+  }
+
+  public getDocument(orgId: string, id: string): DocumentRecord | undefined {
+    const doc = this.data.documents[id];
+    if (doc && doc.organizationId === orgId) return doc;
+    return undefined;
+  }
+
+  public setDocument(orgId: string, id: string, doc: DocumentRecord): void {
+    this.data.documents[id] = { ...doc, organizationId: orgId };
+    this.scheduleSave();
+  }
+
+  // =========================================================================
+  // REQUIREMENT SETS (STRICTLY ORG SCOPED)
+  // =========================================================================
+  public getRequirementSets(orgId: string): RequirementSet[] {
+    return Object.values(this.data.requirementSets).filter((r) => r.organizationId === orgId);
+  }
+
+  public getRequirementSet(orgId: string, id: string): RequirementSet | undefined {
+    const req = this.data.requirementSets[id];
+    if (req && req.organizationId === orgId) return req;
+    return undefined;
+  }
+
+  public setRequirementSet(orgId: string, id: string, reqSet: RequirementSet): void {
+    this.data.requirementSets[id] = { ...reqSet, organizationId: orgId };
+    this.scheduleSave();
+  }
+
+  public deleteRequirementSet(orgId: string, id: string): boolean {
+    const req = this.data.requirementSets[id];
+    if (req && req.organizationId === orgId) {
+      delete this.data.requirementSets[id];
+      this.scheduleSave();
+      return true;
+    }
+    return false;
+  }
+
+  public clearAllRequirementSets(orgId: string): void {
+    for (const [id, r] of Object.entries(this.data.requirementSets)) {
+      if (r.organizationId === orgId) {
+        delete this.data.requirementSets[id];
+      }
+    }
+    this.scheduleSave();
+  }
+
+  // =========================================================================
+  // CERTIFICATES (STRICTLY ORG SCOPED)
+  // =========================================================================
+  public getCertificate(id: string): CertificateRecord | undefined {
+    return this.data.certificates[id];
+  }
+
+  public setCertificate(id: string, cert: CertificateRecord): void {
+    this.data.certificates[id] = { ...cert };
+    this.scheduleSave();
+  }
+
+  // =========================================================================
+  // ANALYSES & FINDINGS (STRICTLY ORG SCOPED)
+  // =========================================================================
+  public getAnalyses(orgId: string): AnalysisRecord[] {
+    return Object.values(this.data.analyses)
+      .filter((a) => a.organizationId === orgId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  public getAnalysis(orgId: string, id: string): AnalysisRecord | undefined {
+    const analysis = this.data.analyses[id];
+    if (analysis && analysis.organizationId === orgId) return analysis;
+    return undefined;
+  }
+
+  public setAnalysis(orgId: string, id: string, analysis: AnalysisRecord): void {
+    this.data.analyses[id] = { ...analysis, organizationId: orgId };
+    this.scheduleSave();
+  }
+
+  public deleteAnalysis(orgId: string, id: string): boolean {
+    const analysis = this.data.analyses[id];
+    if (analysis && analysis.organizationId === orgId) {
+      delete this.data.analyses[id];
+      delete this.data.findings[id];
+      delete this.data.feedbackDrafts[id];
+      this.scheduleSave();
+      return true;
+    }
+    return false;
+  }
+
+  public clearAllAnalyses(orgId: string): void {
+    for (const [id, a] of Object.entries(this.data.analyses)) {
+      if (a.organizationId === orgId) {
+        delete this.data.analyses[id];
+        delete this.data.findings[id];
+        delete this.data.feedbackDrafts[id];
+      }
+    }
+    this.scheduleSave();
+  }
+
+  public getFindings(orgId: string, analysisId: string): ComplianceFinding[] | undefined {
+    const analysis = this.getAnalysis(orgId, analysisId);
+    if (!analysis) return undefined;
+    return this.data.findings[analysisId] || [];
+  }
+
+  public setFindings(orgId: string, analysisId: string, findings: ComplianceFinding[]): void {
+    const analysis = this.getAnalysis(orgId, analysisId);
+    if (analysis) {
+      this.data.findings[analysisId] = findings;
+      this.scheduleSave();
+    }
+  }
+
+  public getFeedbackDraft(orgId: string, analysisId: string): ExternalFeedbackDraft | undefined {
+    const analysis = this.getAnalysis(orgId, analysisId);
+    if (!analysis) return undefined;
+    return this.data.feedbackDrafts[analysisId];
+  }
+
+  public setFeedbackDraft(orgId: string, analysisId: string, feedback: ExternalFeedbackDraft): void {
+    const analysis = this.getAnalysis(orgId, analysisId);
+    if (analysis) {
+      this.data.feedbackDrafts[analysisId] = feedback;
+      this.scheduleSave();
+    }
+  }
+
+  // =========================================================================
+  // AUDIT LOGS (STRICTLY ORG SCOPED)
+  // =========================================================================
+  public getAuditLogs(orgId: string): AuditEvent[] {
+    return this.data.auditLogs
+      .filter((a) => a.organizationId === orgId)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }
+
+  public addAuditEvent(
+    orgId: string,
+    event: Omit<AuditEvent, 'id' | 'timestamp' | 'organizationId'> & { timestamp?: string; id?: string; organizationId?: string }
+  ): AuditEvent {
+    const auditRecord: AuditEvent = {
+      id: event.id || `audit-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp: event.timestamp || new Date().toISOString(),
+      organizationId: orgId,
+      actorId: event.actorId,
+      actorName: event.actorName,
+      actorRole: event.actorRole,
+      action: event.action,
+      objectType: event.objectType,
+      objectId: event.objectId,
+      objectName: event.objectName,
+      details: event.details || {},
+    };
+
+    this.data.auditLogs.unshift(auditRecord);
+    // Keep max 5000 audit records to avoid unbounded growth
+    if (this.data.auditLogs.length > 5000) {
+      this.data.auditLogs = this.data.auditLogs.slice(0, 5000);
+    }
+    this.scheduleSave();
+    return auditRecord;
+  }
+
+  // =========================================================================
+  // TEMPLATES & PILOT HELPERS
+  // =========================================================================
+  public loadStandardTemplatesForOrg(orgId: string, actor: UserRecord): RequirementSet[] {
+    const templates = [
+      {
+        id: `reqset-shell-${Date.now()}`,
+        clientName: 'Shell Global Solutions',
+        materialGrade: 'ASTM A105N',
+        mdsNumber: 'MESC SPE 77/302',
+        revision: 'Rev 2024.1',
+        title: 'Shell MESC SPE 77/302 - Carbon Steel Valves & Forgings',
+        effectiveDate: new Date().toISOString().split('T')[0],
+        status: 'approved' as const,
+        approvedBy: actor.id,
+        approvedAt: new Date().toISOString(),
+        organizationId: orgId,
+        requirements: PILOT_MDS_REQUIREMENT_SET.requirements,
       },
+      {
+        id: `reqset-aramco-${Date.now()}`,
+        clientName: 'Saudi Aramco',
+        materialGrade: 'ASTM A105N',
+        mdsNumber: '04-SAMSS-048',
+        revision: 'Rev 4',
+        title: 'Saudi Aramco 04-SAMSS-048 - Valve Body & Trim Metallurgy',
+        effectiveDate: new Date().toISOString().split('T')[0],
+        status: 'approved' as const,
+        approvedBy: actor.id,
+        approvedAt: new Date().toISOString(),
+        organizationId: orgId,
+        requirements: PILOT_MDS_REQUIREMENT_SET.requirements,
+      },
+    ];
+
+    for (const t of templates) {
+      this.data.requirementSets[t.id] = t;
+    }
+
+    this.addAuditEvent(orgId, {
+      actorId: actor.id,
+      actorName: actor.name,
+      actorRole: actor.role,
+      action: 'LOAD_TEMPLATES',
+      objectType: 'requirement_set',
+      objectId: 'standard-templates',
+      objectName: 'Standard Client MDS Templates Loaded',
+      details: { count: templates.length },
     });
 
-    return {
-      analysis: pilotAnalysis,
-      findings: pilotFindings,
-      feedbackDraft: pilotFeedback,
-    };
+    this.scheduleSave();
+    return this.getRequirementSets(orgId);
   }
 }
 
 export const db = new DatabaseStore();
+export const USERS = db.getUsers();
+export const ORGANIZATIONS = db.getOrganizations();

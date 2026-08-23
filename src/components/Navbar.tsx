@@ -14,6 +14,7 @@ import {
   Download,
   Menu,
   X,
+  Users,
 } from 'lucide-react';
 import { User, Organization } from '../types';
 
@@ -26,6 +27,7 @@ interface NavbarProps {
   currentOrg: Organization;
   onOpenNewComparison: () => void;
   onOpenTestSuite: () => void;
+  onOpenAdminUsers?: () => void;
   onLogout?: () => void;
 }
 
@@ -36,6 +38,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentOrg,
   onOpenNewComparison,
   onOpenTestSuite,
+  onOpenAdminUsers,
   onLogout,
 }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -204,6 +207,24 @@ export const Navbar: React.FC<NavbarProps> = ({
 
                     <div className="my-1 border-t border-slate-800 mx-2" />
 
+                    {onOpenAdminUsers && (currentUser.role === 'ADMIN' || currentUser.permissions?.canManageUsers) && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          onOpenAdminUsers();
+                          setShowToolsMenu(false);
+                        }}
+                        className="w-full text-left px-3.5 py-2 flex items-center gap-3 text-xs text-sky-300 hover:bg-slate-800 hover:text-sky-200 transition-colors cursor-pointer"
+                      >
+                        <Users className="w-4 h-4 text-sky-400" aria-hidden="true" />
+                        <div>
+                          <div className="font-bold">Manage Team &amp; Users</div>
+                          <div className="text-[10px] text-slate-400">Invite &amp; govern organization members</div>
+                        </div>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       role="menuitem"
@@ -285,7 +306,21 @@ export const Navbar: React.FC<NavbarProps> = ({
                     </div>
                   </div>
 
-                  <div className="p-1">
+                  <div className="p-1 space-y-0.5">
+                    {onOpenAdminUsers && (currentUser.role === 'ADMIN' || currentUser.permissions?.canManageUsers) && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setShowProfileMenu(false);
+                          onOpenAdminUsers();
+                        }}
+                        className="w-full text-left px-3 py-2 flex items-center gap-2.5 text-xs text-slate-200 hover:bg-slate-800 hover:text-white rounded-md transition-colors font-medium cursor-pointer"
+                      >
+                        <Users className="w-3.5 h-3.5 text-sky-400" aria-hidden="true" />
+                        <span>Manage Team &amp; Users</span>
+                      </button>
+                    )}
                     {onLogout && (
                       <button
                         type="button"
@@ -388,6 +423,20 @@ export const Navbar: React.FC<NavbarProps> = ({
             <ShieldCheck className="w-4 h-4 text-emerald-400" aria-hidden="true" />
             <span>Immutable Audit Trail</span>
           </button>
+
+          {onOpenAdminUsers && (currentUser.role === 'ADMIN' || currentUser.permissions?.canManageUsers) && (
+            <button
+              type="button"
+              onClick={() => {
+                onOpenAdminUsers();
+                setShowMobileMenu(false);
+              }}
+              className="w-full text-left px-3 py-2 rounded-lg text-xs font-bold text-sky-300 hover:bg-slate-800/60 hover:text-sky-200 flex items-center gap-2.5 transition-colors cursor-pointer"
+            >
+              <Users className="w-4 h-4 text-sky-400" aria-hidden="true" />
+              <span>Manage Team &amp; Users</span>
+            </button>
+          )}
 
           <button
             type="button"

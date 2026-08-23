@@ -1,4 +1,23 @@
-export type UserRole = 'admin' | 'qc_reviewer' | 'engineer' | 'viewer' | 'auditor';
+export type UserRole =
+  | 'ADMIN'
+  | 'QUALITY_ENGINEER'
+  | 'REVIEWER'
+  | 'VIEWER'
+  | 'admin'
+  | 'qc_reviewer'
+  | 'engineer'
+  | 'viewer'
+  | 'auditor';
+
+export interface UserPermissions {
+  canManageUsers: boolean;
+  canManageRequirementSets: boolean;
+  canUploadAndAnalyze: boolean;
+  canReviewAndOverride: boolean;
+  canApproveOrReject: boolean;
+  canViewAuditTrail: boolean;
+  isReadOnly: boolean;
+}
 
 export interface User {
   id: string;
@@ -8,6 +27,8 @@ export interface User {
   organizationId: string;
   organizationName: string;
   avatar?: string;
+  lastLoginAt?: string | null;
+  permissions?: UserPermissions;
 }
 
 export interface Organization {
@@ -280,7 +301,7 @@ export interface AuditEvent {
   actorName: string;
   actorRole: UserRole;
   action: string;
-  objectType: 'document' | 'analysis' | 'finding' | 'requirement_set' | 'report' | 'user';
+  objectType: 'document' | 'analysis' | 'finding' | 'requirement_set' | 'report' | 'user' | 'auth' | 'invitation' | 'system';
   objectId: string;
   objectName?: string;
   timestamp: string;

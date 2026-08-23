@@ -116,7 +116,7 @@ const STYLES = {
     return {
       font: { name: 'Segoe UI', sz: 9, bold: true, color: { rgb: text } },
       fill: { fgColor: { rgb: bg } },
-      alignment: { vertical: 'center', horizontal: 'center' },
+      alignment: { vertical: 'center', horizontal: 'center', wrapText: true },
       border: {
         top: { style: 'thin', color: { rgb: border } },
         bottom: { style: 'thin', color: { rgb: border } },

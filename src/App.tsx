@@ -14,6 +14,7 @@ import { RequirementLibrary } from './components/RequirementLibrary';
 import { AuditLogView } from './components/AuditLogView';
 import { HistoryView } from './components/HistoryView';
 import { TestSuiteModal } from './components/TestSuiteModal';
+import { AdminUsersModal } from './components/AdminUsersModal';
 import { LoginPage } from './components/LoginPage';
 import {
   User,
@@ -27,35 +28,24 @@ import {
 } from './types';
 import { apiFetch } from './utils/api';
 import { DottedGlowBackground } from './components/DottedGlowBackground';
+import { FileCheck2, RefreshCw } from 'lucide-react';
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return localStorage.getItem('mtc_auth_logged_out') !== 'true';
-  });
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [users, setUsers] = useState<User[]>([]);
-  const [currentUser, setCurrentUser] = useState<User>(() => {
-    const saved = localStorage.getItem('mtc_auth_user');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed && !parsed.email?.includes('gmail.com') && !parsed.email?.includes('zarique')) {
-          return parsed;
-        } else {
-          localStorage.removeItem('mtc_auth_user');
-        }
-      } catch (e) {}
-    }
-    return {
-      id: 'user-lead-qc',
-      name: 'Lead QC Inspector',
-      email: 'qc.inspector@apexvalves.com',
-      role: 'qc_reviewer',
-      organizationId: 'org-apex-01',
-      organizationName: 'Apex Valve & Flow Engineering Ltd.',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-    };
+
+  const [currentUser, setCurrentUser] = useState<User>({
+    id: 'user-lead-qc',
+    name: 'Sarah Jenkins',
+    email: 'qc.lead@apexvalves.com',
+    role: 'REVIEWER',
+    organizationId: 'org-apex-01',
+    organizationName: 'Apex Valve & Flow Engineering Ltd.',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
   });
+
   const [currentOrg, setCurrentOrg] = useState<Organization>({
     id: 'org-apex-01',
     name: 'Apex Valve & Flow Engineering Ltd.',
@@ -81,9 +71,46 @@ export default function App() {
   const [preselectedReqSetId, setPreselectedReqSetId] = useState<string | undefined>(undefined);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showTestSuiteModal, setShowTestSuiteModal] = useState(false);
+  const [showAdminUsersModal, setShowAdminUsersModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch initial data from backend API for this client/IP
+  // Check authenticated server session on initial mount
+  const checkAuthStatus = async () => {
+    try {
+      setIsAuthChecking(true);
+      const res = await apiFetch('/api/auth/me');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.user) {
+          setCurrentUser({
+            id: data.user.id,
+            name: data.user.name,
+            email: data.user.email,
+            role: data.user.role,
+            organizationId: data.user.organization_id,
+            organizationName: data.user.organizationName,
+            avatar: data.user.avatar,
+            lastLoginAt: data.user.last_login_at,
+            permissions: data.permissions,
+          });
+        }
+        if (data.organization) {
+          setCurrentOrg(data.organization);
+        }
+        setIsAuthenticated(true);
+        fetchInitialData();
+      } else {
+        setIsAuthenticated(false);
+      }
+    } catch (e) {
+      console.error('Session check failed:', e);
+      setIsAuthenticated(false);
+    } finally {
+      setIsAuthChecking(false);
+    }
+  };
+
+  // Fetch initial data from backend API for authenticated tenant
   const fetchInitialData = async () => {
     try {
       setIsLoading(true);
@@ -125,7 +152,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    fetchInitialData();
+    checkAuthStatus();
   }, []);
 
   // Fetch analysis details when selectedAnalysisId changes
@@ -145,6 +172,8 @@ export default function App() {
           setSelectedAnalysis(data.analysis);
           setActiveFindings(data.findings || []);
           setActiveFeedbackDraft(data.feedback);
+        } else if (res.status === 401) {
+          setIsAuthenticated(false);
         }
       } catch (e) {
         console.error('Failed to load analysis:', e);
@@ -164,23 +193,21 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // 1-Click Launch Benchmark Pilot A105N Case
+  // 1-Click Launch Benchmark Pilot Case
   const handleLoadPilotCase = async () => {
     try {
       const pilot = analyses.find((a) => a.id.includes('pilot') || a.mtcNumber === 'WW2606229-3');
       if (pilot) {
         handleSelectAnalysis(pilot.id);
       } else {
-        // Create new pilot benchmark analysis on-demand for this client/IP
         const res = await apiFetch('/api/pilot-case', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: currentUser.id }),
+          body: JSON.stringify({}),
         });
         if (res.ok) {
           const data = await res.json();
           setAnalyses((prev) => [data.analysis, ...prev]);
-          // Also update requirement sets if library was empty
           const reqRes = await apiFetch('/api/requirements');
           if (reqRes.ok) {
             const reqData = await reqRes.json();
@@ -194,18 +221,16 @@ export default function App() {
     }
   };
 
-  // Load Standard Spec Templates (Hawa, Shell, Aramco) into Library
+  // Load Standard Spec Templates into Library
   const handleLoadStandardTemplates = async () => {
     try {
       const res = await apiFetch('/api/requirements/templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentUser.id }),
       });
       if (res.ok) {
         const data = await res.json();
         setRequirementSets(data.requirementSets || []);
-        // Refresh audit logs
         const auditRes = await apiFetch('/api/audit');
         if (auditRes.ok) {
           const auditData = await auditRes.json();
@@ -235,14 +260,12 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           analysisId: selectedAnalysisId,
-          userId: currentUser.id,
           ...updates,
         }),
       });
 
       if (res.ok) {
         const data = await res.json();
-        // Update local findings state
         setActiveFindings((prev) =>
           prev.map((f) => (f.id === findingId ? data.finding : f))
         );
@@ -255,7 +278,6 @@ export default function App() {
             prev.map((a) => (a.id === data.analysis.id ? data.analysis : a))
           );
         }
-        // Refresh audit logs
         const auditRes = await apiFetch('/api/audit');
         if (auditRes.ok) {
           const auditData = await auditRes.json();
@@ -274,7 +296,6 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: currentUser.id,
           approvalNotes: notes,
         }),
       });
@@ -284,7 +305,6 @@ export default function App() {
         setAnalyses((prev) =>
           prev.map((a) => (a.id === analysisId ? data.analysis : a))
         );
-        // Refresh audit logs
         const auditRes = await apiFetch('/api/audit');
         if (auditRes.ok) {
           const auditData = await auditRes.json();
@@ -303,7 +323,6 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: currentUser.id,
           reason,
         }),
       });
@@ -313,7 +332,6 @@ export default function App() {
         setAnalyses((prev) =>
           prev.map((a) => (a.id === analysisId ? data.analysis : a))
         );
-        // Refresh audit logs
         const auditRes = await apiFetch('/api/audit');
         if (auditRes.ok) {
           const auditData = await auditRes.json();
@@ -328,7 +346,7 @@ export default function App() {
   // Delete single analysis
   const handleDeleteAnalysis = async (id: string) => {
     try {
-      const res = await apiFetch(`/api/analyses/${id}?userId=${currentUser.id}`, {
+      const res = await apiFetch(`/api/analyses/${id}`, {
         method: 'DELETE',
       });
       if (res.ok) {
@@ -338,7 +356,6 @@ export default function App() {
           setSelectedAnalysis(null);
           setActiveTab('dashboard');
         }
-        // Refresh audit logs
         const auditRes = await apiFetch('/api/audit');
         if (auditRes.ok) {
           const auditData = await auditRes.json();
@@ -356,10 +373,6 @@ export default function App() {
       const res = await apiFetch('/api/analyses/clear', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: currentUser.id,
-          orgId: currentOrg.id,
-        }),
       });
       if (res.ok) {
         setAnalyses([]);
@@ -367,7 +380,6 @@ export default function App() {
         setSelectedAnalysis(null);
         setActiveFindings([]);
         setActiveFeedbackDraft(undefined);
-        // Refresh audit logs
         const auditRes = await apiFetch('/api/audit');
         if (auditRes.ok) {
           const auditData = await auditRes.json();
@@ -388,7 +400,6 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           feedback: draft,
-          userId: currentUser.id,
         }),
       });
       if (res.ok) {
@@ -406,10 +417,7 @@ export default function App() {
       const res = await apiFetch('/api/requirements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...newSetData,
-          userId: currentUser.id,
-        }),
+        body: JSON.stringify(newSetData),
       });
       if (res.ok) {
         const data = await res.json();
@@ -423,12 +431,11 @@ export default function App() {
   // Delete single requirement set
   const handleDeleteRequirementSet = async (id: string) => {
     try {
-      const res = await apiFetch(`/api/requirements/${id}?userId=${currentUser.id}`, {
+      const res = await apiFetch(`/api/requirements/${id}`, {
         method: 'DELETE',
       });
       if (res.ok) {
         setRequirementSets((prev) => prev.filter((r) => r.id !== id));
-        // Refresh audit logs
         const auditRes = await apiFetch('/api/audit');
         if (auditRes.ok) {
           const auditData = await auditRes.json();
@@ -446,14 +453,9 @@ export default function App() {
       const res = await apiFetch('/api/requirements/clear', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: currentUser.id,
-          orgId: currentOrg.id,
-        }),
       });
       if (res.ok) {
         setRequirementSets([]);
-        // Refresh audit logs
         const auditRes = await apiFetch('/api/audit');
         if (auditRes.ok) {
           const auditData = await auditRes.json();
@@ -465,14 +467,43 @@ export default function App() {
     }
   };
 
+  // Real Server Logout
+  const handleLogout = async () => {
+    try {
+      await apiFetch('/api/auth/logout', { method: 'POST' });
+    } catch (e) {}
+    setIsAuthenticated(false);
+    setSelectedAnalysisId(null);
+    setSelectedAnalysis(null);
+    setActiveFindings([]);
+    setActiveFeedbackDraft(undefined);
+  };
+
+  // Initial Auth Loading Screen
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-100 space-y-3 antialiased">
+        <div className="w-12 h-12 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-lg border border-emerald-400/40 animate-pulse">
+          <FileCheck2 className="w-7 h-7 stroke-[2.5]" />
+        </div>
+        <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
+          <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+          <span>Authenticating workstation session...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Render Login Page when unauthenticated
   if (!isAuthenticated) {
     return (
       <LoginPage
-        defaultEmail={currentUser.email || 'user@mtc-compliance.local'}
-        onLoginSuccess={(user) => {
+        defaultEmail={currentUser.email || 'qc.lead@apexvalves.com'}
+        onLoginSuccess={(user, org) => {
           setCurrentUser(user);
+          if (org) setCurrentOrg(org);
           setIsAuthenticated(true);
-          localStorage.removeItem('mtc_auth_logged_out');
+          fetchInitialData();
         }}
       />
     );
@@ -494,10 +525,8 @@ export default function App() {
           setShowNewComparison(true);
         }}
         onOpenTestSuite={() => setShowTestSuiteModal(true)}
-        onLogout={() => {
-          localStorage.setItem('mtc_auth_logged_out', 'true');
-          setIsAuthenticated(false);
-        }}
+        onOpenAdminUsers={() => setShowAdminUsersModal(true)}
+        onLogout={handleLogout}
       />
 
       {/* Main Page Container */}
@@ -608,6 +637,14 @@ export default function App() {
       {/* Automated Verification Suite Modal */}
       {showTestSuiteModal && (
         <TestSuiteModal onClose={() => setShowTestSuiteModal(false)} />
+      )}
+
+      {/* Admin User Management & Invitations Modal */}
+      {showAdminUsersModal && (
+        <AdminUsersModal
+          currentUser={currentUser}
+          onClose={() => setShowAdminUsersModal(false)}
+        />
       )}
     </DottedGlowBackground>
   );
