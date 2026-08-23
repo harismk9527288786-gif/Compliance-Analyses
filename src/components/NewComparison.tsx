@@ -11,6 +11,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { RequirementSet, User } from '../types';
+import { apiFetch } from '../utils/api';
 
 interface NewComparisonProps {
   requirementSets: RequirementSet[];
@@ -83,7 +84,7 @@ export const NewComparison: React.FC<NewComparisonProps> = ({
         formData.append('type', 'mtc');
         formData.append('userId', currentUser.id);
 
-        const uploadRes = await fetch('/api/documents', {
+        const uploadRes = await apiFetch('/api/documents', {
           method: 'POST',
           body: formData,
         });
@@ -101,7 +102,7 @@ export const NewComparison: React.FC<NewComparisonProps> = ({
         formData.append('type', 'mds');
         formData.append('userId', currentUser.id);
 
-        const uploadRes = await fetch('/api/documents', {
+        const uploadRes = await apiFetch('/api/documents', {
           method: 'POST',
           body: formData,
         });
@@ -129,7 +130,7 @@ export const NewComparison: React.FC<NewComparisonProps> = ({
         }
       }
 
-      const analysisRes = await fetch('/api/analyses', {
+      const analysisRes = await apiFetch('/api/analyses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

@@ -4,8 +4,8 @@ import path from 'path';
 import multer from 'multer';
 import { createServer as createViteServer } from 'vite';
 import { db, USERS, ORGANIZATIONS } from './server/db';
-import { validateUploadedDocument, parseDocumentContent, calculateChecksum } from './server/pdfService';
-import { extractRequirementsWithAI, extractSupplierEvidenceWithAI, draftSupplierClarificationWithAI } from './server/gemini';
+import { validateUploadedDocument, parseDocumentContent } from './server/pdfService';
+import { extractRequirementsWithAI, extractSupplierEvidenceWithAI } from './server/gemini';
 import { evaluateCompliance } from './src/engine/rules';
 import { PILOT_MDS_REQUIREMENT_SET, PILOT_SUPPLIER_MTC } from './src/engine/pilotData';
 import { runAllTestCases } from './src/engine/testSuite';
@@ -23,6 +23,42 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024 },
 });
+
+/**
+ * Extracts a persistent client scope key based on IP address and optional device session token.
+ * Enables:
+ * 1. Clean default state for any new device / IP.
+ * 2. Automatic history preservation for returning users on the same IP / device session.
+ */
+export function getClientKey(req: express.Request): string {
+  // 1. Check custom session token header or query (allows persistent scoping across devices/networks if set)
+  const sessionHeader =
+    (req.headers['x-client-session'] as string) ||
+    (req.headers['x-client-ip'] as string) ||
+    (req.query.sessionId as string);
+
+  // 2. Resolve client IP
+  const forwarded = req.headers['x-forwarded-for'];
+  let rawIp = '';
+  if (typeof forwarded === 'string') {
+    rawIp = forwarded.split(',')[0].trim();
+  } else if (Array.isArray(forwarded) && forwarded.length > 0) {
+    rawIp = forwarded[0].trim();
+  } else {
+    rawIp = req.socket.remoteAddress || req.ip || '127.0.0.1';
+  }
+
+  // Normalize local loopback addresses
+  if (rawIp === '::1' || rawIp === '::ffff:127.0.0.1') {
+    rawIp = '127.0.0.1';
+  }
+
+  // If a custom session token is supplied, partition by session; otherwise partition by client IP
+  if (sessionHeader && sessionHeader.trim().length > 0) {
+    return sessionHeader.trim();
+  }
+  return `ip_${rawIp}`;
+}
 
 async function startServer() {
   const app = express();
@@ -47,6 +83,7 @@ async function startServer() {
       status: 'ok',
       service: 'MTC Compliance Checker API',
       version: '2.4.0',
+      clientKey: getClientKey(req),
       timestamp: new Date().toISOString(),
     });
   });
@@ -63,6 +100,7 @@ async function startServer() {
         return res.status(400).json({ error: 'No file uploaded.' });
       }
 
+      const clientKey = getClientKey(req);
       const docType = (req.body.type as 'mtc' | 'mds') || 'mtc';
       const userId = (req.body.userId as string) || 'user-lead-qc';
       const user = USERS.find((u) => u.id === userId) || USERS[0];
@@ -93,9 +131,9 @@ async function startServer() {
         isScanned: parsed.isScanned,
       };
 
-      db.documents.set(docId, docRecord);
+      db.setDocument(clientKey, docId, docRecord);
 
-      db.addAuditEvent({
+      db.addAuditEvent(clientKey, {
         organizationId: orgId,
         actorId: user.id,
         actorName: user.name,
@@ -115,29 +153,41 @@ async function startServer() {
   });
 
   app.get('/api/documents', (req, res) => {
+    const clientKey = getClientKey(req);
     const orgId = (req.query.orgId as string) || 'org-apex-01';
-    const docs = Array.from(db.documents.values()).filter((d) => d.organizationId === orgId);
+    const docs = db.getDocuments(clientKey, orgId);
     res.json({ documents: docs });
   });
 
   app.get('/api/documents/:id', (req, res) => {
-    const doc = db.documents.get(req.params.id);
+    const clientKey = getClientKey(req);
+    const doc = db.getDocument(clientKey, req.params.id);
     if (!doc) return res.status(404).json({ error: 'Document not found.' });
     res.json({ document: doc });
   });
 
   // Requirement Sets & Library
   app.get('/api/requirements', (req, res) => {
+    const clientKey = getClientKey(req);
     const orgId = (req.query.orgId as string) || 'org-apex-01';
-    const sets = Array.from(db.requirementSets.values()).filter((r) => r.organizationId === orgId);
+    const sets = db.getRequirementSets(clientKey, orgId);
     res.json({ requirementSets: sets });
   });
 
-  // Clear all requirement sets for organization
+  // Load Standard Spec Templates (Hawa, Shell, Aramco) on-demand for client
+  app.post('/api/requirements/templates', (req, res) => {
+    const clientKey = getClientKey(req);
+    const userId = (req.body.userId as string) || 'user-lead-qc';
+    const sets = db.loadStandardTemplatesForClient(clientKey, userId);
+    res.json({ requirementSets: sets, message: 'Standard MDS templates loaded into client library.' });
+  });
+
+  // Clear all requirement sets for client
   app.post('/api/requirements/clear', (req, res) => {
+    const clientKey = getClientKey(req);
     const orgId = (req.body.orgId as string) || 'org-apex-01';
-    db.clearAllRequirementSets(orgId);
-    db.addAuditEvent({
+    db.clearAllRequirementSets(clientKey, orgId);
+    db.addAuditEvent(clientKey, {
       organizationId: orgId,
       actorId: (req.body.userId as string) || 'user-admin-system',
       actorName: 'System Reviewer',
@@ -153,11 +203,12 @@ async function startServer() {
 
   // Delete single requirement set
   app.delete('/api/requirements/:id', (req, res) => {
-    const reqSet = db.requirementSets.get(req.params.id);
+    const clientKey = getClientKey(req);
+    const reqSet = db.getRequirementSet(clientKey, req.params.id);
     if (!reqSet) return res.status(404).json({ error: 'Requirement set not found.' });
 
-    db.deleteRequirementSet(req.params.id);
-    db.addAuditEvent({
+    db.deleteRequirementSet(clientKey, req.params.id);
+    db.addAuditEvent(clientKey, {
       organizationId: reqSet.organizationId,
       actorId: (req.query.userId as string) || 'user-admin-system',
       actorName: 'System Reviewer',
@@ -172,13 +223,15 @@ async function startServer() {
   });
 
   app.get('/api/requirements/:id', (req, res) => {
-    const reqSet = db.requirementSets.get(req.params.id);
+    const clientKey = getClientKey(req);
+    const reqSet = db.getRequirementSet(clientKey, req.params.id);
     if (!reqSet) return res.status(404).json({ error: 'Requirement set not found.' });
     res.json({ requirementSet: reqSet });
   });
 
   app.post('/api/requirements', (req, res) => {
     try {
+      const clientKey = getClientKey(req);
       const {
         clientName,
         materialGrade,
@@ -207,9 +260,9 @@ async function startServer() {
         requirements: requirements || [],
       };
 
-      db.requirementSets.set(newId, newSet);
+      db.setRequirementSet(clientKey, newId, newSet);
 
-      db.addAuditEvent({
+      db.addAuditEvent(clientKey, {
         organizationId: user.organizationId,
         actorId: user.id,
         actorName: user.name,
@@ -227,9 +280,23 @@ async function startServer() {
     }
   });
 
+  // 1-Click Pilot Benchmark Case Loader for Client
+  app.post('/api/pilot-case', (req, res) => {
+    try {
+      const clientKey = getClientKey(req);
+      const userId = (req.body.userId as string) || 'user-lead-qc';
+      const result = db.loadPilotCaseForClient(clientKey, userId);
+      res.status(201).json(result);
+    } catch (e: any) {
+      console.error('Pilot case load error:', e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // Start Comparison Analysis
   app.post('/api/analyses', async (req, res) => {
     try {
+      const clientKey = getClientKey(req);
       const {
         mtcDocumentId,
         mdsDocumentId,
@@ -247,14 +314,19 @@ async function startServer() {
       const user = USERS.find((u) => u.id === userId) || USERS[0];
       const orgId = user.organizationId;
 
+      // Special check: If pilot comparison is requested
+      if (requirementSetId === PILOT_MDS_REQUIREMENT_SET.id && !mtcDocumentId && !mdsDocumentId) {
+        const result = db.loadPilotCaseForClient(clientKey, user.id);
+        return res.status(201).json(result);
+      }
+
       // 1. Resolve Requirement Set
       let reqSet: RequirementSet | undefined;
       if (requirementSetId) {
-        reqSet = db.requirementSets.get(requirementSetId);
+        reqSet = db.getRequirementSet(clientKey, requirementSetId);
       } else if (mdsDocumentId) {
-        const mdsDoc = db.documents.get(mdsDocumentId);
+        const mdsDoc = db.getDocument(clientKey, mdsDocumentId);
         if (mdsDoc) {
-          // If we have text, extract requirements with AI assistance + fallback
           const extractedReqs = await extractRequirementsWithAI(
             mdsDoc.rawText || mdsDoc.contentSummary || '',
             mdsDoc.filename
@@ -274,7 +346,7 @@ async function startServer() {
               : PILOT_MDS_REQUIREMENT_SET.requirements) as any,
             sourceDocumentId: mdsDoc.id,
           };
-          db.requirementSets.set(reqSet.id, reqSet);
+          db.setRequirementSet(clientKey, reqSet.id, reqSet);
         }
       }
 
@@ -284,7 +356,7 @@ async function startServer() {
 
       // 2. Resolve Certificate Evidence
       let certRecord: CertificateRecord | undefined;
-      const mtcDoc = mtcDocumentId ? db.documents.get(mtcDocumentId) : undefined;
+      const mtcDoc = mtcDocumentId ? db.getDocument(clientKey, mtcDocumentId) : undefined;
 
       if (mtcDoc && mtcDoc.rawText && !mtcDoc.filename.includes('WW2606229-3')) {
         const extracted = await extractSupplierEvidenceWithAI(mtcDoc.rawText, mtcDoc.filename);
@@ -301,7 +373,7 @@ async function startServer() {
           heats: heats || extracted.certificateMetadata?.heats || ['HEAT-01'],
           evidenceItems: extracted.evidence as any,
         };
-        db.certificates.set(certRecord.id, certRecord);
+        db.setCertificate(clientKey, certRecord.id, certRecord);
       } else {
         certRecord = PILOT_SUPPLIER_MTC;
       }
@@ -329,7 +401,7 @@ async function startServer() {
         mtcFilename: mtcDoc ? mtcDoc.filename : 'Western_Forge_MTC_WW2606229-3.pdf',
         mdsDocumentId: mdsDocumentId,
         mdsFilename: reqSet.sourceDocumentId
-          ? db.documents.get(reqSet.sourceDocumentId)?.filename
+          ? db.getDocument(clientKey, reqSet.sourceDocumentId)?.filename
           : 'Hawa_Valves_MDS_RevA.pdf',
         requirementSetId: reqSet.id,
         requirementSetTitle: reqSet.title,
@@ -353,8 +425,8 @@ async function startServer() {
         aiModelUsed: 'gemini-3.7-flash',
       };
 
-      db.analyses.set(analysisId, analysis);
-      db.findings.set(analysisId, findings);
+      db.setAnalysis(clientKey, analysisId, analysis);
+      db.setFindings(clientKey, analysisId, findings);
 
       // 4. Generate Initial Supplier Clarification Feedback Draft
       const deviations = findings.filter((f) => f.status === 'DEVIATION');
@@ -390,10 +462,10 @@ async function startServer() {
           'Please provide written clarification and supporting documentation for the above points to enable final material acceptance.',
         status: 'draft',
       };
-      db.feedbackDrafts.set(analysisId, feedbackDraft);
+      db.setFeedbackDraft(clientKey, analysisId, feedbackDraft);
 
       // Audit Event
-      db.addAuditEvent({
+      db.addAuditEvent(clientKey, {
         organizationId: orgId,
         actorId: user.id,
         actorName: user.name,
@@ -422,18 +494,18 @@ async function startServer() {
   });
 
   app.get('/api/analyses', (req, res) => {
+    const clientKey = getClientKey(req);
     const orgId = (req.query.orgId as string) || 'org-apex-01';
-    const list = Array.from(db.analyses.values())
-      .filter((a) => a.organizationId === orgId)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const list = db.getAnalyses(clientKey, orgId);
     res.json({ analyses: list });
   });
 
-  // Clear all analyses for organization
+  // Clear all analyses for client
   app.post('/api/analyses/clear', (req, res) => {
+    const clientKey = getClientKey(req);
     const orgId = (req.body.orgId as string) || 'org-apex-01';
-    db.clearAllAnalyses(orgId);
-    db.addAuditEvent({
+    db.clearAllAnalyses(clientKey, orgId);
+    db.addAuditEvent(clientKey, {
       organizationId: orgId,
       actorId: (req.body.userId as string) || 'user-admin-system',
       actorName: 'System Reviewer',
@@ -449,11 +521,12 @@ async function startServer() {
 
   // Delete single analysis
   app.delete('/api/analyses/:id', (req, res) => {
-    const analysis = db.analyses.get(req.params.id);
+    const clientKey = getClientKey(req);
+    const analysis = db.getAnalysis(clientKey, req.params.id);
     if (!analysis) return res.status(404).json({ error: 'Analysis not found.' });
-    
-    db.deleteAnalysis(req.params.id);
-    db.addAuditEvent({
+
+    db.deleteAnalysis(clientKey, req.params.id);
+    db.addAuditEvent(clientKey, {
       organizationId: analysis.organizationId,
       actorId: (req.query.userId as string) || 'user-admin-system',
       actorName: 'System Reviewer',
@@ -468,15 +541,17 @@ async function startServer() {
   });
 
   app.get('/api/analyses/:id', (req, res) => {
-    const analysis = db.analyses.get(req.params.id);
+    const clientKey = getClientKey(req);
+    const analysis = db.getAnalysis(clientKey, req.params.id);
     if (!analysis) return res.status(404).json({ error: 'Analysis not found.' });
-    const findings = db.findings.get(req.params.id) || [];
-    const feedback = db.feedbackDrafts.get(req.params.id);
+    const findings = db.getFindings(clientKey, req.params.id) || [];
+    const feedback = db.getFeedbackDraft(clientKey, req.params.id);
     res.json({ analysis, findings, feedback });
   });
 
   app.get('/api/analyses/:id/findings', (req, res) => {
-    const findings = db.findings.get(req.params.id);
+    const clientKey = getClientKey(req);
+    const findings = db.getFindings(clientKey, req.params.id);
     if (!findings) return res.status(404).json({ error: 'Findings not found for analysis.' });
     res.json({ findings });
   });
@@ -484,6 +559,7 @@ async function startServer() {
   // Human Reviewer Action: Confirm, Override, Comment on Finding
   app.patch('/api/findings/:id', (req, res) => {
     try {
+      const clientKey = getClientKey(req);
       const findingId = req.params.id;
       const {
         analysisId,
@@ -495,7 +571,7 @@ async function startServer() {
       } = req.body;
 
       const user = USERS.find((u) => u.id === userId) || USERS[0];
-      const findingsList = db.findings.get(analysisId);
+      const findingsList = db.getFindings(clientKey, analysisId);
       if (!findingsList) return res.status(404).json({ error: 'Analysis findings not found.' });
 
       const findingIndex = findingsList.findIndex((f) => f.id === findingId);
@@ -532,10 +608,10 @@ async function startServer() {
       };
 
       findingsList[findingIndex] = updatedFinding;
-      db.findings.set(analysisId, findingsList);
+      db.setFindings(clientKey, analysisId, findingsList);
 
       // Re-aggregate counts on analysis record
-      const analysis = db.analyses.get(analysisId);
+      const analysis = db.getAnalysis(clientKey, analysisId);
       if (analysis) {
         analysis.passCount = findingsList.filter((f) => f.status === 'PASS').length;
         analysis.deviationCount = findingsList.filter((f) => f.status === 'DEVIATION').length;
@@ -543,11 +619,11 @@ async function startServer() {
         analysis.reviewRequiredCount = findingsList.filter((f) => f.status === 'REVIEW_REQUIRED').length;
         analysis.reviewedCount = findingsList.filter((f) => f.isReviewed).length;
         analysis.status = 'review_in_progress';
-        db.analyses.set(analysisId, analysis);
+        db.setAnalysis(clientKey, analysisId, analysis);
       }
 
       // Add to main audit log
-      db.addAuditEvent({
+      db.addAuditEvent(clientKey, {
         organizationId: user.organizationId,
         actorId: user.id,
         actorName: user.name,
@@ -567,10 +643,11 @@ async function startServer() {
 
   // Final Technical Approval / Rejection Gate
   app.post('/api/analyses/:id/approve', (req, res) => {
+    const clientKey = getClientKey(req);
     const { userId, approvalNotes, finalStatus } = req.body;
-    const user = USERS.find((u) => u.id === userId) || USERS[1]; // Default Marcus Vance (Engineer)
+    const user = USERS.find((u) => u.id === userId) || USERS[1];
 
-    const analysis = db.analyses.get(req.params.id);
+    const analysis = db.getAnalysis(clientKey, req.params.id);
     if (!analysis) return res.status(404).json({ error: 'Analysis not found.' });
 
     analysis.status = 'approved';
@@ -579,9 +656,9 @@ async function startServer() {
     analysis.approvedByName = `${user.name} (${user.role.toUpperCase()})`;
     analysis.approvedAt = new Date().toISOString();
     analysis.approvalNotes = approvalNotes || 'Reviewed and digitally signed in accordance with QA standards.';
-    db.analyses.set(analysis.id, analysis);
+    db.setAnalysis(clientKey, analysis.id, analysis);
 
-    db.addAuditEvent({
+    db.addAuditEvent(clientKey, {
       organizationId: user.organizationId,
       actorId: user.id,
       actorName: user.name,
@@ -597,10 +674,11 @@ async function startServer() {
   });
 
   app.post('/api/analyses/:id/reject', (req, res) => {
+    const clientKey = getClientKey(req);
     const { userId, reason } = req.body;
     const user = USERS.find((u) => u.id === userId) || USERS[1];
 
-    const analysis = db.analyses.get(req.params.id);
+    const analysis = db.getAnalysis(clientKey, req.params.id);
     if (!analysis) return res.status(404).json({ error: 'Analysis not found.' });
 
     analysis.status = 'rejected';
@@ -609,9 +687,9 @@ async function startServer() {
     analysis.approvedByName = `${user.name} (${user.role.toUpperCase()})`;
     analysis.approvedAt = new Date().toISOString();
     analysis.approvalNotes = reason || 'Rejected due to unresolved critical metallurgical deviations.';
-    db.analyses.set(analysis.id, analysis);
+    db.setAnalysis(clientKey, analysis.id, analysis);
 
-    db.addAuditEvent({
+    db.addAuditEvent(clientKey, {
       organizationId: user.organizationId,
       actorId: user.id,
       actorName: user.name,
@@ -628,12 +706,14 @@ async function startServer() {
 
   // External Feedback Draft API
   app.get('/api/feedback/:analysisId', (req, res) => {
-    const draft = db.feedbackDrafts.get(req.params.analysisId);
+    const clientKey = getClientKey(req);
+    const draft = db.getFeedbackDraft(clientKey, req.params.analysisId);
     if (!draft) return res.status(404).json({ error: 'Feedback draft not found.' });
     res.json({ feedback: draft });
   });
 
   app.put('/api/feedback/:analysisId', (req, res) => {
+    const clientKey = getClientKey(req);
     const { feedback, userId } = req.body;
     const user = USERS.find((u) => u.id === userId) || USERS[0];
     const updated = {
@@ -641,9 +721,9 @@ async function startServer() {
       lastEditedBy: user.name,
       lastEditedAt: new Date().toISOString(),
     };
-    db.feedbackDrafts.set(req.params.analysisId, updated);
+    db.setFeedbackDraft(clientKey, req.params.analysisId, updated);
 
-    db.addAuditEvent({
+    db.addAuditEvent(clientKey, {
       organizationId: user.organizationId,
       actorId: user.id,
       actorName: user.name,
@@ -659,13 +739,15 @@ async function startServer() {
 
   // Audit Log Endpoint
   app.get('/api/audit', (req, res) => {
+    const clientKey = getClientKey(req);
     const orgId = (req.query.orgId as string) || 'org-apex-01';
-    const logs = db.auditLogs.filter((a) => a.organizationId === orgId);
+    const logs = db.getAuditLogs(clientKey, orgId);
     res.json({ auditLogs: logs });
   });
 
   app.get('/api/audit/:objectId', (req, res) => {
-    const logs = db.auditLogs.filter((a) => a.objectId === req.params.objectId);
+    const clientKey = getClientKey(req);
+    const logs = db.getAuditLogs(clientKey).filter((a) => a.objectId === req.params.objectId);
     res.json({ auditLogs: logs });
   });
 

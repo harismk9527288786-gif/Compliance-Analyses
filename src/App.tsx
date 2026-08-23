@@ -25,7 +25,7 @@ import {
   AuditEvent,
   FindingStatus,
 } from './types';
-import { PILOT_MDS_REQUIREMENT_SET } from './engine/pilotData';
+import { apiFetch } from './utils/api';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -66,7 +66,7 @@ export default function App() {
   });
 
   const [analyses, setAnalyses] = useState<AnalysisRecord[]>([]);
-  const [requirementSets, setRequirementSets] = useState<RequirementSet[]>([PILOT_MDS_REQUIREMENT_SET]);
+  const [requirementSets, setRequirementSets] = useState<RequirementSet[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditEvent[]>([]);
 
   // Selected state for active analysis & modals
@@ -82,12 +82,12 @@ export default function App() {
   const [showTestSuiteModal, setShowTestSuiteModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch initial data from backend API
+  // Fetch initial data from backend API for this client/IP
   const fetchInitialData = async () => {
     try {
       setIsLoading(true);
       // Fetch users
-      const usersRes = await fetch('/api/users');
+      const usersRes = await apiFetch('/api/users');
       if (usersRes.ok) {
         const data = await usersRes.json();
         setUsers(data.users || []);
@@ -97,23 +97,21 @@ export default function App() {
       }
 
       // Fetch analyses
-      const analysesRes = await fetch('/api/analyses');
+      const analysesRes = await apiFetch('/api/analyses');
       if (analysesRes.ok) {
         const data = await analysesRes.json();
         setAnalyses(data.analyses || []);
       }
 
       // Fetch requirement sets
-      const reqRes = await fetch('/api/requirements');
+      const reqRes = await apiFetch('/api/requirements');
       if (reqRes.ok) {
         const data = await reqRes.json();
-        if (data.requirementSets && data.requirementSets.length > 0) {
-          setRequirementSets(data.requirementSets);
-        }
+        setRequirementSets(data.requirementSets || []);
       }
 
       // Fetch audit logs
-      const auditRes = await fetch('/api/audit');
+      const auditRes = await apiFetch('/api/audit');
       if (auditRes.ok) {
         const data = await auditRes.json();
         setAuditLogs(data.auditLogs || []);
@@ -140,7 +138,7 @@ export default function App() {
 
     const loadAnalysis = async () => {
       try {
-        const res = await fetch(`/api/analyses/${selectedAnalysisId}`);
+        const res = await apiFetch(`/api/analyses/${selectedAnalysisId}`);
         if (res.ok) {
           const data = await res.json();
           setSelectedAnalysis(data.analysis);
@@ -165,31 +163,56 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // 1-Click Launch Pilot A105N Case
+  // 1-Click Launch Benchmark Pilot A105N Case
   const handleLoadPilotCase = async () => {
     try {
       const pilot = analyses.find((a) => a.id.includes('pilot') || a.mtcNumber === 'WW2606229-3');
       if (pilot) {
         handleSelectAnalysis(pilot.id);
       } else {
-        // Create new pilot analysis
-        const res = await fetch('/api/analyses', {
+        // Create new pilot benchmark analysis on-demand for this client/IP
+        const res = await apiFetch('/api/pilot-case', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            requirementSetId: PILOT_MDS_REQUIREMENT_SET.id,
-            userId: currentUser.id,
-            title: 'Pilot Verification: Western Forge MTC WW2606229-3 vs Hawa Valves MDS Rev A',
-          }),
+          body: JSON.stringify({ userId: currentUser.id }),
         });
         if (res.ok) {
           const data = await res.json();
           setAnalyses((prev) => [data.analysis, ...prev]);
+          // Also update requirement sets if library was empty
+          const reqRes = await apiFetch('/api/requirements');
+          if (reqRes.ok) {
+            const reqData = await reqRes.json();
+            setRequirementSets(reqData.requirementSets || []);
+          }
           handleSelectAnalysis(data.analysis.id);
         }
       }
     } catch (e) {
       console.error('Failed to load pilot test case:', e);
+    }
+  };
+
+  // Load Standard Spec Templates (Hawa, Shell, Aramco) into Library
+  const handleLoadStandardTemplates = async () => {
+    try {
+      const res = await apiFetch('/api/requirements/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.id }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRequirementSets(data.requirementSets || []);
+        // Refresh audit logs
+        const auditRes = await apiFetch('/api/audit');
+        if (auditRes.ok) {
+          const auditData = await auditRes.json();
+          setAuditLogs(auditData.auditLogs || []);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load standard templates:', e);
     }
   };
 
@@ -206,7 +229,7 @@ export default function App() {
     if (!selectedAnalysisId) return;
 
     try {
-      const res = await fetch(`/api/findings/${findingId}`, {
+      const res = await apiFetch(`/api/findings/${findingId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -232,7 +255,7 @@ export default function App() {
           );
         }
         // Refresh audit logs
-        const auditRes = await fetch('/api/audit');
+        const auditRes = await apiFetch('/api/audit');
         if (auditRes.ok) {
           const auditData = await auditRes.json();
           setAuditLogs(auditData.auditLogs || []);
@@ -246,7 +269,7 @@ export default function App() {
   // Approve Analysis Gate
   const handleApproveAnalysis = async (analysisId: string, notes: string) => {
     try {
-      const res = await fetch(`/api/analyses/${analysisId}/approve`, {
+      const res = await apiFetch(`/api/analyses/${analysisId}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -261,7 +284,7 @@ export default function App() {
           prev.map((a) => (a.id === analysisId ? data.analysis : a))
         );
         // Refresh audit logs
-        const auditRes = await fetch('/api/audit');
+        const auditRes = await apiFetch('/api/audit');
         if (auditRes.ok) {
           const auditData = await auditRes.json();
           setAuditLogs(auditData.auditLogs || []);
@@ -275,7 +298,7 @@ export default function App() {
   // Reject Analysis Gate
   const handleRejectAnalysis = async (analysisId: string, reason: string) => {
     try {
-      const res = await fetch(`/api/analyses/${analysisId}/reject`, {
+      const res = await apiFetch(`/api/analyses/${analysisId}/reject`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -290,7 +313,7 @@ export default function App() {
           prev.map((a) => (a.id === analysisId ? data.analysis : a))
         );
         // Refresh audit logs
-        const auditRes = await fetch('/api/audit');
+        const auditRes = await apiFetch('/api/audit');
         if (auditRes.ok) {
           const auditData = await auditRes.json();
           setAuditLogs(auditData.auditLogs || []);
@@ -304,7 +327,7 @@ export default function App() {
   // Delete single analysis
   const handleDeleteAnalysis = async (id: string) => {
     try {
-      const res = await fetch(`/api/analyses/${id}?userId=${currentUser.id}`, {
+      const res = await apiFetch(`/api/analyses/${id}?userId=${currentUser.id}`, {
         method: 'DELETE',
       });
       if (res.ok) {
@@ -315,7 +338,7 @@ export default function App() {
           setActiveTab('dashboard');
         }
         // Refresh audit logs
-        const auditRes = await fetch('/api/audit');
+        const auditRes = await apiFetch('/api/audit');
         if (auditRes.ok) {
           const auditData = await auditRes.json();
           setAuditLogs(auditData.auditLogs || []);
@@ -329,7 +352,7 @@ export default function App() {
   // Clear all analyses
   const handleClearAllAnalyses = async () => {
     try {
-      const res = await fetch('/api/analyses/clear', {
+      const res = await apiFetch('/api/analyses/clear', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -344,7 +367,7 @@ export default function App() {
         setActiveFindings([]);
         setActiveFeedbackDraft(undefined);
         // Refresh audit logs
-        const auditRes = await fetch('/api/audit');
+        const auditRes = await apiFetch('/api/audit');
         if (auditRes.ok) {
           const auditData = await auditRes.json();
           setAuditLogs(auditData.auditLogs || []);
@@ -359,7 +382,7 @@ export default function App() {
   const handleSaveFeedbackDraft = async (draft: ExternalFeedbackDraft) => {
     if (!selectedAnalysisId) return;
     try {
-      const res = await fetch(`/api/feedback/${selectedAnalysisId}`, {
+      const res = await apiFetch(`/api/feedback/${selectedAnalysisId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -379,7 +402,7 @@ export default function App() {
   // Create Requirement Set
   const handleCreateRequirementSet = async (newSetData: Partial<RequirementSet>) => {
     try {
-      const res = await fetch('/api/requirements', {
+      const res = await apiFetch('/api/requirements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -399,13 +422,13 @@ export default function App() {
   // Delete single requirement set
   const handleDeleteRequirementSet = async (id: string) => {
     try {
-      const res = await fetch(`/api/requirements/${id}?userId=${currentUser.id}`, {
+      const res = await apiFetch(`/api/requirements/${id}?userId=${currentUser.id}`, {
         method: 'DELETE',
       });
       if (res.ok) {
         setRequirementSets((prev) => prev.filter((r) => r.id !== id));
         // Refresh audit logs
-        const auditRes = await fetch('/api/audit');
+        const auditRes = await apiFetch('/api/audit');
         if (auditRes.ok) {
           const auditData = await auditRes.json();
           setAuditLogs(auditData.auditLogs || []);
@@ -419,7 +442,7 @@ export default function App() {
   // Clear all requirement sets
   const handleClearAllRequirementSets = async () => {
     try {
-      const res = await fetch('/api/requirements/clear', {
+      const res = await apiFetch('/api/requirements/clear', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -430,7 +453,7 @@ export default function App() {
       if (res.ok) {
         setRequirementSets([]);
         // Refresh audit logs
-        const auditRes = await fetch('/api/audit');
+        const auditRes = await apiFetch('/api/audit');
         if (auditRes.ok) {
           const auditData = await auditRes.json();
           setAuditLogs(auditData.auditLogs || []);
@@ -522,6 +545,7 @@ export default function App() {
             onCreateRequirementSet={handleCreateRequirementSet}
             onDeleteRequirementSet={handleDeleteRequirementSet}
             onClearAllRequirementSets={handleClearAllRequirementSets}
+            onLoadStandardTemplates={handleLoadStandardTemplates}
           />
         ) : activeTab === 'audit' ? (
           <AuditLogView auditLogs={auditLogs} />

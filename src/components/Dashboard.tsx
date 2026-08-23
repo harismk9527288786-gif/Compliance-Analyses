@@ -206,7 +206,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
 
             <div className="space-y-2">
-              {totalDeviations > 0 ? (
+              {totalReviews === 0 ? (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-900 text-slate-300 border border-slate-700 text-xs font-bold font-mono">
+                  <Cpu className="w-4 h-4 stroke-[2.5] text-emerald-400 shrink-0" aria-hidden="true" />
+                  <span>READY FOR VERIFICATION</span>
+                </div>
+              ) : totalDeviations > 0 ? (
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-rose-950/80 text-rose-300 border border-rose-700 text-xs font-bold font-mono">
                   <AlertTriangle className="w-4 h-4 stroke-[2.5] text-rose-400 shrink-0" aria-hidden="true" />
                   <span>ACTION REQUIRED: {totalDeviations} DEVIATION{totalDeviations > 1 ? 'S' : ''}</span>

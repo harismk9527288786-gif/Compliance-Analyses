@@ -18,6 +18,7 @@ interface RequirementLibraryProps {
   onCreateRequirementSet?: (set: Partial<RequirementSet>) => Promise<void>;
   onDeleteRequirementSet?: (setId: string) => Promise<void>;
   onClearAllRequirementSets?: () => Promise<void>;
+  onLoadStandardTemplates?: () => Promise<void>;
 }
 
 export const RequirementLibrary: React.FC<RequirementLibraryProps> = ({
@@ -26,6 +27,7 @@ export const RequirementLibrary: React.FC<RequirementLibraryProps> = ({
   onCreateRequirementSet,
   onDeleteRequirementSet,
   onClearAllRequirementSets,
+  onLoadStandardTemplates,
 }) => {
   const [selectedSetId, setSelectedSetId] = useState<string>(requirementSets[0]?.id || '');
   const [searchQuery, setSearchQuery] = useState('');
@@ -117,6 +119,17 @@ export const RequirementLibrary: React.FC<RequirementLibraryProps> = ({
               <span>Clear Library ({requirementSets.length})</span>
             </button>
           )}
+          {onLoadStandardTemplates && (
+            <button
+              type="button"
+              onClick={onLoadStandardTemplates}
+              className="px-3.5 py-2 text-xs font-bold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+              title="Load industry benchmark specifications (ASTM A105N, Shell, Aramco)"
+            >
+              <Cpu className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
+              <span>Load Benchmark Specs</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setShowCreateModal(true)}
@@ -130,20 +143,34 @@ export const RequirementLibrary: React.FC<RequirementLibraryProps> = ({
 
       {/* Grid: Left spec list, Right requirements matrix */}
       {requirementSets.length === 0 ? (
-        <div className="bg-white rounded-xl border border-slate-300 shadow-xs p-12 text-center space-y-3">
+        <div className="bg-white rounded-xl border border-slate-300 shadow-xs p-12 text-center space-y-4">
           <BookOpen className="w-10 h-10 text-slate-400 mx-auto" aria-hidden="true" />
-          <h3 className="text-base font-bold text-slate-900">Specification Library is Empty</h3>
-          <p className="text-xs text-slate-600 max-w-md mx-auto">
-            No Material Data Sheet (MDS) specifications found. Create a new specification to populate the library.
-          </p>
-          <button
-            type="button"
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-colors cursor-pointer border border-emerald-400/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
-          >
-            <Plus className="w-4 h-4 stroke-[2.5]" aria-hidden="true" />
-            <span>Create New Specification</span>
-          </button>
+          <div className="space-y-1">
+            <h3 className="text-base font-bold text-slate-900">Specification Library is Empty</h3>
+            <p className="text-xs text-slate-600 max-w-md mx-auto">
+              No Material Data Sheet (MDS) specifications loaded. Create a custom specification or load the industry benchmark specifications.
+            </p>
+          </div>
+          <div className="flex items-center justify-center gap-3 pt-2 flex-wrap">
+            {onLoadStandardTemplates && (
+              <button
+                type="button"
+                onClick={onLoadStandardTemplates}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg bg-slate-900 hover:bg-slate-800 text-emerald-400 shadow-xs transition-colors cursor-pointer border border-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+              >
+                <Cpu className="w-4 h-4 stroke-[2.5] text-emerald-400" aria-hidden="true" />
+                <span>Load Benchmark Specs (A105N, Shell, Aramco)</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-colors cursor-pointer border border-emerald-400/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" aria-hidden="true" />
+              <span>Create New Specification</span>
+            </button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
