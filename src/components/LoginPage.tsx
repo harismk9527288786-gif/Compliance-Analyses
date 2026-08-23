@@ -516,13 +516,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 </button>
               </div>
 
-              {/* 30-Day Retention Notice on Login Card */}
-              <div className="mx-6 mt-4 p-2.5 rounded-lg bg-slate-950/70 border border-slate-800 text-[11px] text-slate-300 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Clock className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                  <span><strong>30-Day Retention Policy:</strong> Account &amp; MTC verification data saved for 30 days.</span>
-                </div>
-              </div>
+
 
               {/* Error Banner */}
               {errorMessage && (

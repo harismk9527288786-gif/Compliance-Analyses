@@ -250,40 +250,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </section>
 
-      {/* 30-DAY DATA RETENTION & CLOUD STORAGE STATUS BANNER */}
-      <section
-        aria-label="30-Day Cloud Data Retention Notice"
-        className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 sm:p-4 text-xs text-slate-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs"
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-emerald-950/80 border border-emerald-700/60 flex items-center justify-center text-emerald-400 shrink-0">
-            <Clock className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-white flex items-center gap-2 flex-wrap">
-              <span>30-Day Guaranteed Cloud Data Retention</span>
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-emerald-300 border border-slate-700">
-                Active Policy
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              All MTC verification records, metallurgical analysis findings, and audit trails are stored for 30 days from creation under Render Cloud Storage.
-            </p>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          {onOpenRetentionPolicy && (
-            <button
-              type="button"
-              onClick={onOpenRetentionPolicy}
-              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 transition-colors cursor-pointer"
-            >
-              View Policy &amp; Terms
-            </button>
-          )}
-        </div>
-      </section>
 
       {/* 2. HIGH-DENSITY METRIC CARDS (Clear meaning, high contrast, no meaningless gradients) */}
       <section aria-label="Key Performance Indicators" className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -704,15 +671,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           <span className="text-[11px] text-slate-500 font-medium">
                             Pending Human Review
                           </span>
-                        )}
-                        {analysis.retentionDaysRemaining !== undefined && (
-                          <div
-                            className="mt-1 inline-flex items-center gap-1 text-[10px] text-slate-500 font-mono"
-                            title={`30-Day Cloud Retention: Guaranteed until ${analysis.expiresAt ? new Date(analysis.expiresAt).toLocaleDateString() : 'in 30 days'}`}
-                          >
-                            <Clock className="w-3 h-3 text-slate-400" />
-                            <span>{analysis.retentionDaysRemaining}d remaining</span>
-                          </div>
                         )}
                       </td>
 
