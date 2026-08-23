@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import pg from 'pg';
 import {
   DocumentRecord,
   RequirementSet,
@@ -10,6 +11,7 @@ import {
   AuditEvent,
   ExternalFeedbackDraft,
   FindingStatus,
+  RetentionPolicyInfo,
 } from '../src/types';
 import {
   UserRecord,
@@ -27,7 +29,7 @@ import { evaluateCompliance } from '../src/engine/rules';
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'mtc_compliance_database.json');
 
-// Default Seed Organizations
+// Default Seed Organizations with 30-Day Retention Policy
 export const SEED_ORGANIZATIONS: OrganizationRecord[] = [
   {
     id: 'org-apex-01',
@@ -36,7 +38,9 @@ export const SEED_ORGANIZATIONS: OrganizationRecord[] = [
     tier: 'Enterprise Quality Suite',
     requireMfa: true,
     allowExternalAi: true,
-    retentionMonths: 24,
+    retentionMonths: 1,
+    retentionDays: 30,
+    retentionPolicy: '30-Day Guaranteed Cloud Retention Policy',
     created_at: new Date('2026-01-01T00:00:00Z').toISOString(),
     updated_at: new Date('2026-01-01T00:00:00Z').toISOString(),
   },
@@ -47,7 +51,9 @@ export const SEED_ORGANIZATIONS: OrganizationRecord[] = [
     tier: 'Professional QC',
     requireMfa: false,
     allowExternalAi: true,
-    retentionMonths: 12,
+    retentionMonths: 1,
+    retentionDays: 30,
+    retentionPolicy: '30-Day Guaranteed Cloud Retention Policy',
     created_at: new Date('2026-01-01T00:00:00Z').toISOString(),
     updated_at: new Date('2026-01-01T00:00:00Z').toISOString(),
   },
@@ -159,10 +165,79 @@ export class DatabaseStore {
   };
 
   private saveTimeout: NodeJS.Timeout | null = null;
+  private pgPool: pg.Pool | null = null;
+  public isPostgresConnected = false;
 
   constructor() {
     this.loadFromDisk();
     this.ensureSeedData();
+    this.initPostgres().catch((err) => {
+      console.warn('Optional PostgreSQL initialization notice:', err.message);
+    });
+
+    // Run 30-day retention maintenance check every 60 minutes
+    setInterval(() => {
+      this.enforce30DayRetention();
+    }, 60 * 60 * 1000);
+  }
+
+  private async initPostgres(): Promise<void> {
+    const dbUrl = process.env.DATABASE_URL;
+    if (!dbUrl) return;
+
+    try {
+      this.pgPool = new pg.Pool({
+        connectionString: dbUrl,
+        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
+      });
+
+      await this.pgPool.query(`
+        CREATE TABLE IF NOT EXISTS mtc_database_store (
+          id VARCHAR(50) PRIMARY KEY,
+          data JSONB NOT NULL,
+          updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      const res = await this.pgPool.query('SELECT data FROM mtc_database_store WHERE id = $1', ['main_store']);
+      if (res.rows.length > 0 && res.rows[0].data) {
+        const parsed = res.rows[0].data;
+        this.data = {
+          organizations: parsed.organizations || {},
+          users: parsed.users || {},
+          sessions: parsed.sessions || {},
+          invitations: parsed.invitations || {},
+          passwordResetTokens: parsed.passwordResetTokens || {},
+          documents: parsed.documents || {},
+          requirementSets: parsed.requirementSets || {},
+          certificates: parsed.certificates || {},
+          analyses: parsed.analyses || {},
+          findings: parsed.findings || {},
+          feedbackDrafts: parsed.feedbackDrafts || {},
+          auditLogs: parsed.auditLogs || [],
+        };
+      } else {
+        await this.persistToPostgres();
+      }
+      this.isPostgresConnected = true;
+      console.log('Successfully connected to Render PostgreSQL Database.');
+    } catch (err: any) {
+      console.warn('PostgreSQL connection fallback to local persistent disk store:', err.message);
+    }
+  }
+
+  private async persistToPostgres(): Promise<void> {
+    if (!this.pgPool) return;
+    try {
+      await this.pgPool.query(
+        `INSERT INTO mtc_database_store (id, data, updated_at)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
+        ['main_store', JSON.stringify(this.data)]
+      );
+    } catch (err: any) {
+      console.error('Failed to sync data with PostgreSQL:', err.message);
+    }
   }
 
   private loadFromDisk(): void {
@@ -204,6 +279,9 @@ export class DatabaseStore {
       fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
     } catch (e) {
       console.error('Failed to write database to disk:', e);
+    }
+    if (this.pgPool) {
+      this.persistToPostgres().catch(() => {});
     }
   }
 
@@ -613,22 +691,51 @@ export class DatabaseStore {
   }
 
   // =========================================================================
-  // ANALYSES & FINDINGS (STRICTLY ORG SCOPED)
+  // ANALYSES & FINDINGS (STRICTLY ORG SCOPED WITH 30-DAY RETENTION)
   // =========================================================================
   public getAnalyses(orgId: string): AnalysisRecord[] {
+    this.enforce30DayRetention(orgId);
     return Object.values(this.data.analyses)
       .filter((a) => a.organizationId === orgId)
+      .map((a) => {
+        const createdTime = new Date(a.createdAt).getTime();
+        const expiresTime = a.expiresAt ? new Date(a.expiresAt).getTime() : createdTime + (30 * 24 * 60 * 60 * 1000);
+        const daysRemaining = Math.max(0, Math.ceil((expiresTime - Date.now()) / (1000 * 60 * 60 * 24)));
+        return {
+          ...a,
+          expiresAt: a.expiresAt || new Date(expiresTime).toISOString(),
+          retentionDaysRemaining: daysRemaining,
+        };
+      })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   public getAnalysis(orgId: string, id: string): AnalysisRecord | undefined {
     const analysis = this.data.analyses[id];
-    if (analysis && analysis.organizationId === orgId) return analysis;
+    if (analysis && analysis.organizationId === orgId) {
+      const createdTime = new Date(analysis.createdAt).getTime();
+      const expiresTime = analysis.expiresAt ? new Date(analysis.expiresAt).getTime() : createdTime + (30 * 24 * 60 * 60 * 1000);
+      const daysRemaining = Math.max(0, Math.ceil((expiresTime - Date.now()) / (1000 * 60 * 60 * 24)));
+      return {
+        ...analysis,
+        expiresAt: analysis.expiresAt || new Date(expiresTime).toISOString(),
+        retentionDaysRemaining: daysRemaining,
+      };
+    }
     return undefined;
   }
 
   public setAnalysis(orgId: string, id: string, analysis: AnalysisRecord): void {
-    this.data.analyses[id] = { ...analysis, organizationId: orgId };
+    const createdTime = analysis.createdAt ? new Date(analysis.createdAt).getTime() : Date.now();
+    const expiresAt = analysis.expiresAt || new Date(createdTime + (30 * 24 * 60 * 60 * 1000)).toISOString();
+    const daysRemaining = Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+
+    this.data.analyses[id] = {
+      ...analysis,
+      organizationId: orgId,
+      expiresAt,
+      retentionDaysRemaining: daysRemaining,
+    };
     this.scheduleSave();
   }
 
@@ -653,6 +760,44 @@ export class DatabaseStore {
       }
     }
     this.scheduleSave();
+  }
+
+  public enforce30DayRetention(orgId?: string): { purgedCount: number } {
+    const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    let purgedCount = 0;
+
+    for (const [id, a] of Object.entries(this.data.analyses)) {
+      if (orgId && a.organizationId !== orgId) continue;
+      const createdTime = new Date(a.createdAt).getTime();
+      const expiresTime = a.expiresAt ? new Date(a.expiresAt).getTime() : createdTime + RETENTION_MS;
+
+      if (now > expiresTime) {
+        delete this.data.analyses[id];
+        delete this.data.findings[id];
+        delete this.data.feedbackDrafts[id];
+        purgedCount++;
+      }
+    }
+
+    if (purgedCount > 0) {
+      this.scheduleSave();
+    }
+    return { purgedCount };
+  }
+
+  public getRetentionPolicyInfo(orgId: string): RetentionPolicyInfo {
+    const org = this.getOrganization(orgId);
+    const analyses = this.getAnalyses(orgId);
+    return {
+      policyName: '30-Day Guaranteed Cloud Retention Policy',
+      retentionDays: 30,
+      guaranteedUntilNotice: 'All verification records, MTC findings, audit logs, and account files are retained for 30 days from creation.',
+      totalActiveRecords: analyses.length,
+      storageTier: org?.tier || 'Render Cloud Free Storage (30-Day Policy)',
+      lastPurgeCheckAt: new Date().toISOString(),
+      disclaimer: 'In accordance with ISO 9001 quality standards and cloud hosting capacity terms, verify and export your final compliance reports (PDF & Excel) within 30 days of generation.',
+    };
   }
 
   public getFindings(orgId: string, analysisId: string): ComplianceFinding[] | undefined {

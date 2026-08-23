@@ -39,6 +39,18 @@ export interface Organization {
   requireMfa: boolean;
   allowExternalAi: boolean;
   retentionMonths: number;
+  retentionDays?: number;
+  retentionPolicy?: string;
+}
+
+export interface RetentionPolicyInfo {
+  policyName: string;
+  retentionDays: number;
+  guaranteedUntilNotice: string;
+  totalActiveRecords: number;
+  storageTier: string;
+  lastPurgeCheckAt: string;
+  disclaimer: string;
 }
 
 export type DocumentType = 'mtc' | 'mds';
@@ -270,6 +282,9 @@ export interface AnalysisRecord {
 
   aiModelUsed?: string;
   ruleEngineVersion: string;
+
+  expiresAt?: string;
+  retentionDaysRemaining?: number;
 }
 
 export interface ExternalFeedbackDraft {

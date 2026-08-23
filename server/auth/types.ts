@@ -22,6 +22,8 @@ export interface OrganizationRecord {
   requireMfa: boolean;
   allowExternalAi: boolean;
   retentionMonths: number;
+  retentionDays?: number;
+  retentionPolicy?: string;
   created_at: string;
   updated_at: string;
 }

@@ -28,6 +28,7 @@ interface NavbarProps {
   onOpenNewComparison: () => void;
   onOpenTestSuite: () => void;
   onOpenAdminUsers?: () => void;
+  onOpenRetentionPolicy?: () => void;
   onLogout?: () => void;
 }
 
@@ -39,6 +40,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenNewComparison,
   onOpenTestSuite,
   onOpenAdminUsers,
+  onOpenRetentionPolicy,
   onLogout,
 }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -240,6 +242,24 @@ export const Navbar: React.FC<NavbarProps> = ({
                         <div className="text-[10px] text-slate-400">Deterministic test cases runner</div>
                       </div>
                     </button>
+
+                    {onOpenRetentionPolicy && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          onOpenRetentionPolicy();
+                          setShowToolsMenu(false);
+                        }}
+                        className="w-full text-left px-3.5 py-2 flex items-center gap-3 text-xs text-emerald-300 hover:bg-slate-800 hover:text-emerald-200 transition-colors cursor-pointer"
+                      >
+                        <ShieldCheck className="w-4 h-4 text-emerald-400" aria-hidden="true" />
+                        <div>
+                          <div className="font-bold">30-Day Data Retention Policy</div>
+                          <div className="text-[10px] text-slate-400">Cloud database &amp; retention guarantee</div>
+                        </div>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -248,6 +268,19 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Right Action: Verify Button, Profile & Mobile Menu Toggle */}
           <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
+            {/* 30-Day Policy Header Button */}
+            {onOpenRetentionPolicy && (
+              <button
+                type="button"
+                onClick={onOpenRetentionPolicy}
+                className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors cursor-pointer shadow-xs"
+                title="View 30-Day Data Retention Policy"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
+                <span>30-Day Data Policy</span>
+              </button>
+            )}
+
             {/* Install Desktop App Button (when available) */}
             {deferredPrompt && (
               <button
@@ -319,6 +352,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                       >
                         <Users className="w-3.5 h-3.5 text-sky-400" aria-hidden="true" />
                         <span>Manage Team &amp; Users</span>
+                      </button>
+                    )}
+                    {onOpenRetentionPolicy && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setShowProfileMenu(false);
+                          onOpenRetentionPolicy();
+                        }}
+                        className="w-full text-left px-3 py-2 flex items-center gap-2.5 text-xs text-emerald-300 hover:bg-slate-800 hover:text-white rounded-md transition-colors font-medium cursor-pointer"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
+                        <span>30-Day Data Policy</span>
                       </button>
                     )}
                     {onLogout && (

@@ -593,6 +593,13 @@ async function startServer() {
     res.json({ success: true, message: 'Analysis deleted successfully.' });
   });
 
+  // 30-Day Data Retention Policy Information & Enforcement
+  app.get('/api/retention-policy', requireAuth, (req, res) => {
+    const orgId = req.user!.organization_id;
+    const policy = db.getRetentionPolicyInfo(orgId);
+    res.json({ policy });
+  });
+
   app.get('/api/analyses/:id', requireAuth, (req, res) => {
     const orgId = req.user!.organization_id;
     const analysis = db.getAnalysis(orgId, req.params.id);

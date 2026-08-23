@@ -15,6 +15,7 @@ import { AuditLogView } from './components/AuditLogView';
 import { HistoryView } from './components/HistoryView';
 import { TestSuiteModal } from './components/TestSuiteModal';
 import { AdminUsersModal } from './components/AdminUsersModal';
+import { DataRetentionModal } from './components/DataRetentionModal';
 import { LoginPage } from './components/LoginPage';
 import { FramerToast, ToastMessage } from './components/framer/FramerToast';
 import {
@@ -85,6 +86,7 @@ export default function App() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [showTestSuiteModal, setShowTestSuiteModal] = useState(false);
   const [showAdminUsersModal, setShowAdminUsersModal] = useState(false);
+  const [showRetentionModal, setShowRetentionModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Check authenticated server session on initial mount
@@ -632,6 +634,7 @@ export default function App() {
         }}
         onOpenTestSuite={() => setShowTestSuiteModal(true)}
         onOpenAdminUsers={() => setShowAdminUsersModal(true)}
+        onOpenRetentionPolicy={() => setShowRetentionModal(true)}
         onLogout={handleLogout}
       />
 
@@ -712,6 +715,7 @@ export default function App() {
             onLoadPilotCase={handleLoadPilotCase}
             onOpenTestSuite={() => setShowTestSuiteModal(true)}
             onOpenLibrary={() => setActiveTab('library')}
+            onOpenRetentionPolicy={() => setShowRetentionModal(true)}
             onClearAllAnalyses={handleClearAllAnalyses}
             onDeleteAnalysis={handleDeleteAnalysis}
           />
@@ -750,6 +754,15 @@ export default function App() {
         <AdminUsersModal
           currentUser={currentUser}
           onClose={() => setShowAdminUsersModal(false)}
+        />
+      )}
+
+      {/* 30-Day Data Retention Policy Modal */}
+      {showRetentionModal && (
+        <DataRetentionModal
+          currentOrg={currentOrg}
+          totalAnalysesCount={analyses.length}
+          onClose={() => setShowRetentionModal(false)}
         />
       )}
 
