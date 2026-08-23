@@ -11,8 +11,6 @@ import {
   EyeOff,
   Building2,
   KeyRound,
-  Zap,
-  Sparkles,
   LogIn,
   UserPlus,
   AlertCircle,
@@ -33,75 +31,11 @@ interface LoginPageProps {
   defaultEmail?: string;
 }
 
-// Pre-configured Verified Personas for 1-Click Access and Testing
-const DEMO_PERSONAS = [
-  {
-    id: 'user-lead-qc',
-    name: 'Sarah Jenkins',
-    email: 'qc.lead@apexvalves.com',
-    role: 'REVIEWER',
-    roleTitle: 'Lead QC Inspector',
-    description: 'Full inspection authority, discrepancy overrides, and final release sign-off.',
-    orgName: 'Apex Valve & Flow Engineering Ltd.',
-    badgeColor: 'bg-emerald-950 text-emerald-300 border-emerald-700/60',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    password: 'password123',
-  },
-  {
-    id: 'user-materials-engineer',
-    name: 'Dr. Marcus Vance (PE)',
-    email: 'materials.engineer@apexvalves.com',
-    role: 'QUALITY_ENGINEER',
-    roleTitle: 'Materials Engineer (PE)',
-    description: 'Author client MDS specs, tune chemical & mechanical tolerances, and review test results.',
-    orgName: 'Apex Valve & Flow Engineering Ltd.',
-    badgeColor: 'bg-sky-950 text-sky-300 border-sky-700/60',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-    password: 'password123',
-  },
-  {
-    id: 'user-quality-auditor',
-    name: 'Elena Rostova',
-    email: 'auditor@apexvalves.com',
-    role: 'REVIEWER',
-    roleTitle: 'Quality Auditor',
-    description: 'Review immutable audit trails, ISO 9001 compliance logs, and export sign-off reports.',
-    orgName: 'Apex Valve & Flow Engineering Ltd.',
-    badgeColor: 'bg-purple-950 text-purple-300 border-purple-700/60',
-    avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80',
-    password: 'password123',
-  },
-  {
-    id: 'user-admin-system',
-    name: 'David Chen',
-    email: 'admin@apexvalves.com',
-    role: 'ADMIN',
-    roleTitle: 'System Administrator',
-    description: 'Manage organization settings, security policies, and team member invitations.',
-    orgName: 'Apex Valve & Flow Engineering Ltd.',
-    badgeColor: 'bg-amber-950 text-amber-300 border-amber-700/60',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-    password: 'password123',
-  },
-  {
-    id: 'user-viewer-guest',
-    name: 'Robert Miller',
-    email: 'observer@clientaudit.com',
-    role: 'VIEWER',
-    roleTitle: 'Client QA Observer (Org B)',
-    description: 'Isolated Organization B viewer. Cannot access Org A data (multi-tenant test).',
-    orgName: 'Global Metallurgy & Inspection Corp',
-    badgeColor: 'bg-slate-800 text-slate-300 border-slate-700',
-    avatar: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=150&auto=format&fit=crop&q=80',
-    password: 'password123',
-  },
-];
-
 export const LoginPage: React.FC<LoginPageProps> = ({
   onLoginSuccess,
   defaultEmail = 'qc.lead@apexvalves.com',
 }) => {
-  const [activeTab, setActiveTab] = useState<'signin' | 'register' | 'quick_roles' | 'accept_invite'>('signin');
+  const [activeTab, setActiveTab] = useState<'signin' | 'register' | 'accept_invite'>('signin');
 
   // Sign-in Form State
   const [email, setEmail] = useState(() => {
@@ -199,35 +133,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     } catch (err: any) {
       setIsSubmitting(false);
       setErrorMessage('Unable to connect to the authentication server. Please check your network connection.');
-    }
-  };
-
-  // Handle 1-Click Demo Persona Sign-In via Real Backend API
-  const handleSelectPersona = async (persona: typeof DEMO_PERSONAS[0]) => {
-    setIsSubmitting(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-
-    try {
-      const res = await apiFetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: persona.email, password: persona.password }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setIsSubmitting(false);
-        setErrorMessage(data.error || 'Failed to authenticate demo profile.');
-        return;
-      }
-
-      localStorage.setItem('mtc_remembered_email', persona.email);
-      onLoginSuccess(data.user, data.organization);
-    } catch (err: any) {
-      setIsSubmitting(false);
-      setErrorMessage('Failed to connect to authentication server.');
     }
   };
 
@@ -465,15 +370,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               <BookOpen className="w-3.5 h-3.5 text-blue-400" aria-hidden="true" />
               <span>Standards Spec</span>
             </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('quick_roles')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:text-white bg-emerald-950/70 hover:bg-emerald-900 rounded-lg transition-colors cursor-pointer border border-emerald-700/60 shadow-xs"
-            >
-              <Zap className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
-              <span>1-Click Demo Profiles</span>
-            </button>
           </div>
         </div>
       </header>
@@ -589,23 +485,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 >
                   <UserPlus className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
                   <span className="truncate">Create Account</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTab('quick_roles');
-                    setErrorMessage(null);
-                    setSuccessMessage(null);
-                  }}
-                  className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    activeTab === 'quick_roles'
-                      ? 'bg-slate-800 text-white shadow-xs border border-slate-700'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-                  }`}
-                >
-                  <Zap className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
-                  <span className="truncate">Demo Roles</span>
                 </button>
 
                 <button
@@ -764,41 +643,22 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     </button>
                   </form>
 
-                  {/* Direct Registration & 1-Click Demo Profiles Banner */}
-                  <div className="space-y-2.5">
-                    <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2.5 text-slate-300">
-                        <UserPlus className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />
-                        <span>Don't have an account or invitation token?</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveTab('register');
-                          setErrorMessage(null);
-                        }}
-                        className="text-emerald-400 hover:text-emerald-300 font-bold underline cursor-pointer text-xs shrink-0"
-                      >
-                        Create Account &rarr;
-                      </button>
+                  {/* Direct Registration Link */}
+                  <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2.5 text-slate-300">
+                      <UserPlus className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />
+                      <span>Don't have an account or invitation token?</span>
                     </div>
-
-                    <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2.5 text-slate-300">
-                        <Sparkles className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
-                        <span>Testing roles or evaluating the platform?</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveTab('quick_roles');
-                          setErrorMessage(null);
-                        }}
-                        className="text-amber-400 hover:text-amber-300 font-bold underline cursor-pointer text-xs shrink-0"
-                      >
-                        1-Click Roles &rarr;
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('register');
+                        setErrorMessage(null);
+                      }}
+                      className="text-emerald-400 hover:text-emerald-300 font-bold underline cursor-pointer text-xs shrink-0"
+                    >
+                      Create Account &rarr;
+                    </button>
                   </div>
                 </div>
               )}
@@ -1009,83 +869,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                       </button>
                     </div>
                   </form>
-                </div>
-              )}
-
-              {/* TAB 2: QUICK DEMO ROLES (REAL BACKEND AUTHENTICATION) */}
-              {activeTab === 'quick_roles' && (
-                <div className="p-6 sm:p-8 space-y-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
-                        <Zap className="w-4 h-4 text-amber-400" aria-hidden="true" />
-                        <span>1-Click Authenticated Personas</span>
-                      </h2>
-                      <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950/70 border border-emerald-800 px-2 py-0.5 rounded">
-                        Real Backend Session
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-400">
-                      Select any predefined enterprise persona to authenticate via real backend session and evaluate role-based permissions.
-                    </p>
-                  </div>
-
-                  {/* Persona Cards */}
-                  <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
-                    {DEMO_PERSONAS.map((persona) => (
-                      <div
-                        key={persona.id}
-                        className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 hover:border-slate-700 hover:bg-slate-900/90 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
-                      >
-                        <div className="flex items-start gap-3 min-w-0">
-                          <img
-                            src={persona.avatar}
-                            alt={persona.name}
-                            className="w-10 h-10 rounded-full object-cover border border-slate-700 shrink-0 mt-0.5"
-                          />
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs font-bold text-white group-hover:text-emerald-300 transition-colors">
-                                {persona.name}
-                              </span>
-                              <span
-                                className={`text-[10px] font-mono font-bold px-2 py-0.2 rounded border ${persona.badgeColor}`}
-                              >
-                                {persona.roleTitle}
-                              </span>
-                            </div>
-                            <div className="text-[11px] text-slate-400 font-mono mt-0.5 truncate">
-                              {persona.email} &bull; <span className="text-slate-400">{persona.orgName}</span>
-                            </div>
-                            <p className="text-[11px] text-slate-400 mt-1 leading-snug">
-                              {persona.description}
-                            </p>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          disabled={isSubmitting}
-                          onClick={() => handleSelectPersona(persona)}
-                          className="shrink-0 self-end sm:self-center px-3.5 py-2 text-xs font-bold text-slate-200 bg-slate-800 hover:bg-emerald-600 hover:text-white border border-slate-700 hover:border-emerald-500 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
-                        >
-                          <span>Sign in as {persona.roleTitle.split(' ')[0]}</span>
-                          <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="pt-2 flex items-center justify-between text-xs text-slate-500 font-mono border-t border-slate-800">
-                    <span>Multi-Tenant &amp; RBAC Active</span>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('signin')}
-                      className="text-slate-400 hover:text-slate-200 cursor-pointer underline"
-                    >
-                      Return to password login
-                    </button>
-                  </div>
                 </div>
               )}
 
