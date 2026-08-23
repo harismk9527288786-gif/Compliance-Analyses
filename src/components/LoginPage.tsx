@@ -638,7 +638,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                         <span>Remember email on this device</span>
                       </label>
                       <span className="text-[11px] text-slate-400 font-mono">
-                        Secured with HttpOnly Cookie
+                        Secured by MTC Compliance Checker
                       </span>
                     </div>
 
