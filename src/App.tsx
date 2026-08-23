@@ -16,6 +16,7 @@ import { HistoryView } from './components/HistoryView';
 import { TestSuiteModal } from './components/TestSuiteModal';
 import { AdminUsersModal } from './components/AdminUsersModal';
 import { LoginPage } from './components/LoginPage';
+import { FramerToast, ToastMessage } from './components/framer/FramerToast';
 import {
   User,
   Organization,
@@ -35,6 +36,18 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [users, setUsers] = useState<User[]>([]);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const addToast = (toast: ToastMessage) => {
+    setToasts((prev) => [...prev, toast]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== toast.id));
+    }, 4500);
+  };
+
+  const handleDismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
 
   const [currentUser, setCurrentUser] = useState<User>({
     id: 'user-lead-qc',
@@ -354,16 +367,38 @@ export default function App() {
         if (selectedAnalysisId === id) {
           setSelectedAnalysisId(null);
           setSelectedAnalysis(null);
+          setActiveFindings([]);
+          setActiveFeedbackDraft(undefined);
           setActiveTab('dashboard');
         }
+        addToast({
+          id: `toast-${Date.now()}`,
+          type: 'success',
+          title: 'Verification Record Deleted',
+          description: 'The MTC analysis record was permanently removed.',
+        });
         const auditRes = await apiFetch('/api/audit');
         if (auditRes.ok) {
           const auditData = await auditRes.json();
           setAuditLogs(auditData.auditLogs || []);
         }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        addToast({
+          id: `toast-${Date.now()}`,
+          type: 'error',
+          title: 'Failed to Delete Record',
+          description: errData.error || 'Server rejected the deletion request.',
+        });
       }
     } catch (e) {
       console.error('Failed to delete analysis:', e);
+      addToast({
+        id: `toast-${Date.now()}`,
+        type: 'error',
+        title: 'Connection Error',
+        description: 'Failed to communicate with the server.',
+      });
     }
   };
 
@@ -380,14 +415,37 @@ export default function App() {
         setSelectedAnalysis(null);
         setActiveFindings([]);
         setActiveFeedbackDraft(undefined);
+        if (activeTab === 'analysis_detail') {
+          setActiveTab('dashboard');
+        }
+        addToast({
+          id: `toast-${Date.now()}`,
+          type: 'success',
+          title: 'All Analyses Cleared',
+          description: 'All compliance records have been cleared from this organization.',
+        });
         const auditRes = await apiFetch('/api/audit');
         if (auditRes.ok) {
           const auditData = await auditRes.json();
           setAuditLogs(auditData.auditLogs || []);
         }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        addToast({
+          id: `toast-${Date.now()}`,
+          type: 'error',
+          title: 'Failed to Clear Analyses',
+          description: errData.error || 'Server rejected the clear request.',
+        });
       }
     } catch (e) {
       console.error('Failed to clear analyses:', e);
+      addToast({
+        id: `toast-${Date.now()}`,
+        type: 'error',
+        title: 'Connection Error',
+        description: 'Failed to communicate with the server.',
+      });
     }
   };
 
@@ -405,6 +463,20 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setActiveFeedbackDraft(data.feedback);
+        addToast({
+          id: `toast-${Date.now()}`,
+          type: 'success',
+          title: 'Feedback Draft Saved',
+          description: 'Supplier clarification points updated successfully.',
+        });
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        addToast({
+          id: `toast-${Date.now()}`,
+          type: 'error',
+          title: 'Failed to Save Draft',
+          description: errData.error || 'Permission error saving feedback draft.',
+        });
       }
     } catch (e) {
       console.error('Failed to save feedback draft:', e);
@@ -422,6 +494,12 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setRequirementSets((prev) => [data.requirementSet, ...prev]);
+        addToast({
+          id: `toast-${Date.now()}`,
+          type: 'success',
+          title: 'Specification Created',
+          description: `Specification ${data.requirementSet.title} added to library.`,
+        });
       }
     } catch (e) {
       console.error('Failed to create requirement set:', e);
@@ -436,11 +514,25 @@ export default function App() {
       });
       if (res.ok) {
         setRequirementSets((prev) => prev.filter((r) => r.id !== id));
+        addToast({
+          id: `toast-${Date.now()}`,
+          type: 'success',
+          title: 'Specification Deleted',
+          description: 'The requirement specification was removed from library.',
+        });
         const auditRes = await apiFetch('/api/audit');
         if (auditRes.ok) {
           const auditData = await auditRes.json();
           setAuditLogs(auditData.auditLogs || []);
         }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        addToast({
+          id: `toast-${Date.now()}`,
+          type: 'error',
+          title: 'Failed to Delete Specification',
+          description: errData.error || 'Server rejected the deletion request.',
+        });
       }
     } catch (e) {
       console.error('Failed to delete requirement set:', e);
@@ -456,11 +548,25 @@ export default function App() {
       });
       if (res.ok) {
         setRequirementSets([]);
+        addToast({
+          id: `toast-${Date.now()}`,
+          type: 'success',
+          title: 'Library Cleared',
+          description: 'All requirement specifications have been cleared.',
+        });
         const auditRes = await apiFetch('/api/audit');
         if (auditRes.ok) {
           const auditData = await auditRes.json();
           setAuditLogs(auditData.auditLogs || []);
         }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        addToast({
+          id: `toast-${Date.now()}`,
+          type: 'error',
+          title: 'Failed to Clear Library',
+          description: errData.error || 'Server rejected the clear request.',
+        });
       }
     } catch (e) {
       console.error('Failed to clear requirement sets:', e);
@@ -646,6 +752,9 @@ export default function App() {
           onClose={() => setShowAdminUsersModal(false)}
         />
       )}
+
+      {/* Toast Notifications */}
+      <FramerToast toasts={toasts} onDismiss={handleDismissToast} />
     </DottedGlowBackground>
   );
 }

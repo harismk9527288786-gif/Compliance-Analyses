@@ -159,7 +159,7 @@ async function startServer() {
   });
 
   // Clear all requirement sets for Tenant
-  app.post('/api/requirements/clear', requireAuth, requireRole(['ADMIN']), (req, res) => {
+  app.post('/api/requirements/clear', requireAuth, requireRole(['ADMIN', 'QUALITY_ENGINEER', 'REVIEWER']), (req, res) => {
     const orgId = req.user!.organization_id;
     db.clearAllRequirementSets(orgId);
     db.addAuditEvent(orgId, {
@@ -176,7 +176,7 @@ async function startServer() {
   });
 
   // Delete single requirement set
-  app.delete('/api/requirements/:id', requireAuth, requireRole(['ADMIN']), (req, res) => {
+  app.delete('/api/requirements/:id', requireAuth, requireRole(['ADMIN', 'QUALITY_ENGINEER', 'REVIEWER']), (req, res) => {
     const orgId = req.user!.organization_id;
     const reqSet = db.getRequirementSet(orgId, req.params.id);
     if (!reqSet) return res.status(404).json({ error: 'Requirement set not found.' });
@@ -557,7 +557,7 @@ async function startServer() {
   });
 
   // Clear all analyses for Tenant
-  app.post('/api/analyses/clear', requireAuth, requireRole(['ADMIN']), (req, res) => {
+  app.post('/api/analyses/clear', requireAuth, requireRole(['ADMIN', 'QUALITY_ENGINEER', 'REVIEWER']), (req, res) => {
     const orgId = req.user!.organization_id;
     db.clearAllAnalyses(orgId);
     db.addAuditEvent(orgId, {
@@ -574,7 +574,7 @@ async function startServer() {
   });
 
   // Delete single analysis
-  app.delete('/api/analyses/:id', requireAuth, requireRole(['ADMIN']), (req, res) => {
+  app.delete('/api/analyses/:id', requireAuth, requireRole(['ADMIN', 'QUALITY_ENGINEER', 'REVIEWER']), (req, res) => {
     const orgId = req.user!.organization_id;
     const analysis = db.getAnalysis(orgId, req.params.id);
     if (!analysis) return res.status(404).json({ error: 'Analysis not found in your organization.' });
@@ -753,7 +753,7 @@ async function startServer() {
     res.json({ feedback: draft });
   });
 
-  app.put('/api/feedback/:analysisId', requireAuth, requireRole(['ADMIN', 'REVIEWER']), (req, res) => {
+  app.put('/api/feedback/:analysisId', requireAuth, requireRole(['ADMIN', 'REVIEWER', 'QUALITY_ENGINEER']), (req, res) => {
     const orgId = req.user!.organization_id;
     const { feedback } = req.body;
     const updated = {
