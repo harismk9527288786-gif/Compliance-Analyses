@@ -522,7 +522,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   <Clock className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                   <span><strong>30-Day Retention Policy:</strong> Account &amp; MTC verification data saved for 30 days.</span>
                 </div>
-                <span className="text-[10px] text-slate-400 font-mono shrink-0">Render Cloud</span>
               </div>
 
               {/* Error Banner */}
