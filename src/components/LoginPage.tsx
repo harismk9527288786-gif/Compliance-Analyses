@@ -21,6 +21,7 @@ import {
   BookOpen,
   X,
   Check,
+  Clock,
 } from 'lucide-react';
 import { User as UserType, Organization } from '../types';
 import { DottedGlowBackground } from './DottedGlowBackground';
