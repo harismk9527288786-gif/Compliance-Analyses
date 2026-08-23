@@ -101,7 +101,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   onLoginSuccess,
   defaultEmail = 'qc.lead@apexvalves.com',
 }) => {
-  const [activeTab, setActiveTab] = useState<'signin' | 'quick_roles' | 'accept_invite'>('signin');
+  const [activeTab, setActiveTab] = useState<'signin' | 'register' | 'quick_roles' | 'accept_invite'>('signin');
 
   // Sign-in Form State
   const [email, setEmail] = useState(() => {
@@ -110,6 +110,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+
+  // Direct Registration Form State
+  const [regName, setRegName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regConfirmPassword, setRegConfirmPassword] = useState('');
+  const [regRole, setRegRole] = useState<'QUALITY_ENGINEER' | 'REVIEWER' | 'ADMIN' | 'VIEWER'>('QUALITY_ENGINEER');
+  const [regOrgName, setRegOrgName] = useState('');
+  const [showRegPassword, setShowRegPassword] = useState(false);
 
   // Accept Invite Form State
   const [inviteToken, setInviteToken] = useState('');
@@ -219,6 +228,65 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     } catch (err: any) {
       setIsSubmitting(false);
       setErrorMessage('Failed to connect to authentication server.');
+    }
+  };
+
+  // Handle Real Backend Registration (POST /api/auth/register)
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    const cleanName = regName.trim();
+    const cleanEmail = regEmail.trim().toLowerCase();
+
+    if (!cleanName) {
+      setErrorMessage('Please enter your full name.');
+      return;
+    }
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setErrorMessage('Please enter a valid work email address.');
+      return;
+    }
+    if (!regPassword || regPassword.length < 6) {
+      setErrorMessage('Password must be at least 6 characters long.');
+      return;
+    }
+    if (regPassword !== regConfirmPassword) {
+      setErrorMessage('Passwords do not match. Please verify.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const res = await apiFetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: cleanName,
+          email: cleanEmail,
+          password: regPassword,
+          role: regRole,
+          organizationName: regOrgName.trim() || undefined,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setIsSubmitting(false);
+        setErrorMessage(data.error || 'Failed to create account.');
+        return;
+      }
+
+      setSuccessMessage('Account created successfully! Launching your workstation...');
+      setTimeout(() => {
+        onLoginSuccess(data.user, data.organization);
+      }, 400);
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setErrorMessage('Unable to connect to authentication server. Please check your connection.');
     }
   };
 
@@ -488,7 +556,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           <div className="lg:col-span-7">
             <div className="bg-slate-900/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-800 overflow-hidden">
               {/* Tabs Bar */}
-              <div className="flex items-center border-b border-slate-800 bg-slate-950/60 p-1.5">
+              <div className="flex items-center border-b border-slate-800 bg-slate-950/60 p-1.5 gap-1">
                 <button
                   type="button"
                   onClick={() => {
@@ -496,14 +564,31 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     setErrorMessage(null);
                     setSuccessMessage(null);
                   }}
-                  className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                     activeTab === 'signin'
                       ? 'bg-slate-800 text-white shadow-xs border border-slate-700'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
                   }`}
                 >
                   <LogIn className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
-                  <span>Sign In</span>
+                  <span className="truncate">Sign In</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('register');
+                    setErrorMessage(null);
+                    setSuccessMessage(null);
+                  }}
+                  className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    activeTab === 'register'
+                      ? 'bg-slate-800 text-white shadow-xs border border-slate-700'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                  }`}
+                >
+                  <UserPlus className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
+                  <span className="truncate">Create Account</span>
                 </button>
 
                 <button
@@ -513,14 +598,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     setErrorMessage(null);
                     setSuccessMessage(null);
                   }}
-                  className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                     activeTab === 'quick_roles'
                       ? 'bg-slate-800 text-white shadow-xs border border-slate-700'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
                   }`}
                 >
                   <Zap className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
-                  <span>Quick Demo Roles</span>
+                  <span className="truncate">Demo Roles</span>
                 </button>
 
                 <button
@@ -530,14 +615,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     setErrorMessage(null);
                     setSuccessMessage(null);
                   }}
-                  className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                     activeTab === 'accept_invite'
                       ? 'bg-slate-800 text-white shadow-xs border border-slate-700'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
                   }`}
                 >
-                  <UserPlus className="w-3.5 h-3.5 text-sky-400" aria-hidden="true" />
-                  <span>Accept Invitation</span>
+                  <KeyRound className="w-3.5 h-3.5 text-sky-400" aria-hidden="true" />
+                  <span className="truncate">Token Invite</span>
                 </button>
               </div>
 
@@ -679,20 +764,251 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     </button>
                   </form>
 
-                  {/* 1-Click Demo Profiles Banner */}
-                  <div className="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2.5 text-slate-300">
-                      <Sparkles className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
-                      <span>Testing roles or evaluating the platform?</span>
+                  {/* Direct Registration & 1-Click Demo Profiles Banner */}
+                  <div className="space-y-2.5">
+                    <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2.5 text-slate-300">
+                        <UserPlus className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />
+                        <span>Don't have an account or invitation token?</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTab('register');
+                          setErrorMessage(null);
+                        }}
+                        className="text-emerald-400 hover:text-emerald-300 font-bold underline cursor-pointer text-xs shrink-0"
+                      >
+                        Create Account &rarr;
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('quick_roles')}
-                      className="text-emerald-400 hover:text-emerald-300 font-bold underline cursor-pointer text-xs shrink-0"
-                    >
-                      1-Click Roles &rarr;
-                    </button>
+
+                    <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2.5 text-slate-300">
+                        <Sparkles className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
+                        <span>Testing roles or evaluating the platform?</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTab('quick_roles');
+                          setErrorMessage(null);
+                        }}
+                        className="text-amber-400 hover:text-amber-300 font-bold underline cursor-pointer text-xs shrink-0"
+                      >
+                        1-Click Roles &rarr;
+                      </button>
+                    </div>
                   </div>
+                </div>
+              )}
+
+              {/* TAB 1.5: DIRECT SELF-REGISTRATION / CREATE ACCOUNT */}
+              {activeTab === 'register' && (
+                <div className="p-6 sm:p-8 space-y-6">
+                  <div className="space-y-1">
+                    <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+                      <UserPlus className="w-5 h-5 text-emerald-400" aria-hidden="true" />
+                      <span>Create Workstation Account</span>
+                    </h2>
+                    <p className="text-xs text-slate-400">
+                      Create your verified user profile to access deterministic MTC compliance verification without needing an invitation token.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleRegister} className="space-y-4">
+                    {/* Full Name & Email */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-semibold text-slate-300">
+                          Full Name <span className="text-emerald-400">*</span>
+                        </label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                            <UserIcon className="w-4 h-4" aria-hidden="true" />
+                          </div>
+                          <input
+                            type="text"
+                            required
+                            value={regName}
+                            onChange={(e) => {
+                              setRegName(e.target.value);
+                              setErrorMessage(null);
+                            }}
+                            placeholder="e.g. Alex Morgan"
+                            className="w-full pl-9 pr-3 py-2 text-xs bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-semibold text-slate-300">
+                          Work Email <span className="text-emerald-400">*</span>
+                        </label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                            <Mail className="w-4 h-4" aria-hidden="true" />
+                          </div>
+                          <input
+                            type="email"
+                            required
+                            value={regEmail}
+                            onChange={(e) => {
+                              setRegEmail(e.target.value);
+                              setErrorMessage(null);
+                            }}
+                            placeholder="e.g. alex@company.com"
+                            className="w-full pl-9 pr-3 py-2 text-xs bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Organization & Role */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-semibold text-slate-300">
+                          Company / Organization <span className="text-slate-500">(Optional)</span>
+                        </label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                            <Building2 className="w-4 h-4" aria-hidden="true" />
+                          </div>
+                          <input
+                            type="text"
+                            value={regOrgName}
+                            onChange={(e) => setRegOrgName(e.target.value)}
+                            placeholder="Apex Valve & Flow Engineering Ltd."
+                            className="w-full pl-9 pr-3 py-2 text-xs bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-semibold text-slate-300">
+                          Primary Role <span className="text-emerald-400">*</span>
+                        </label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                            <Briefcase className="w-4 h-4" aria-hidden="true" />
+                          </div>
+                          <select
+                            value={regRole}
+                            onChange={(e) => setRegRole(e.target.value as any)}
+                            className="w-full pl-9 pr-3 py-2 text-xs bg-slate-950 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer transition-all appearance-none"
+                          >
+                            <option value="QUALITY_ENGINEER">Quality Engineer (PE) — MDS Specs & Tolerances</option>
+                            <option value="REVIEWER">Lead QC Inspector / Auditor — Sign-Off & Overrides</option>
+                            <option value="ADMIN">System Administrator — Full Org & Security Admin</option>
+                            <option value="VIEWER">Viewer / Observer — Read-Only Quality Reports</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Password & Confirm Password */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-semibold text-slate-300">
+                          Password <span className="text-emerald-400">*</span>
+                        </label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                            <Lock className="w-4 h-4" aria-hidden="true" />
+                          </div>
+                          <input
+                            type={showRegPassword ? 'text' : 'password'}
+                            required
+                            value={regPassword}
+                            onChange={(e) => {
+                              setRegPassword(e.target.value);
+                              setErrorMessage(null);
+                            }}
+                            placeholder="Min 6 characters"
+                            className="w-full pl-9 pr-10 py-2 text-xs bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowRegPassword(!showRegPassword)}
+                            className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200 cursor-pointer"
+                            aria-label={showRegPassword ? 'Hide password' : 'Show password'}
+                          >
+                            {showRegPassword ? (
+                              <EyeOff className="w-4 h-4" aria-hidden="true" />
+                            ) : (
+                              <Eye className="w-4 h-4" aria-hidden="true" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-semibold text-slate-300">
+                          Confirm Password <span className="text-emerald-400">*</span>
+                        </label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                            <Lock className="w-4 h-4" aria-hidden="true" />
+                          </div>
+                          <input
+                            type={showRegPassword ? 'text' : 'password'}
+                            required
+                            value={regConfirmPassword}
+                            onChange={(e) => {
+                              setRegConfirmPassword(e.target.value);
+                              setErrorMessage(null);
+                            }}
+                            placeholder="Re-enter password"
+                            className="w-full pl-9 pr-3 py-2 text-xs bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Submit Button */}
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer border border-emerald-400/50 disabled:opacity-60 mt-2"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin text-white" aria-hidden="true" />
+                          <span>Creating Account & Initializing Workstation...</span>
+                        </>
+                      ) : (
+                        <>
+                          <UserPlus className="w-4 h-4" aria-hidden="true" />
+                          <span>Create Account & Enter Workstation</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* Navigation helper */}
+                    <div className="pt-2 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 border-t border-slate-800 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTab('signin');
+                          setErrorMessage(null);
+                        }}
+                        className="text-slate-300 hover:text-white cursor-pointer transition-colors"
+                      >
+                        Already have an account? <span className="text-emerald-400 font-bold">Sign In</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTab('accept_invite');
+                          setErrorMessage(null);
+                        }}
+                        className="text-slate-400 hover:text-sky-300 cursor-pointer transition-colors"
+                      >
+                        Have an invite token? <span className="text-sky-400 font-bold">Token Invite</span>
+                      </button>
+                    </div>
+                  </form>
                 </div>
               )}
 
@@ -895,16 +1211,27 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                       </button>
                     </div>
 
-                    <div className="text-center pt-1">
+                    <div className="pt-2 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 border-t border-slate-800 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTab('register');
+                          setErrorMessage(null);
+                        }}
+                        className="text-slate-300 hover:text-white cursor-pointer transition-colors"
+                      >
+                        Don't have a token? <span className="text-emerald-400 font-bold">Create Account</span>
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => {
                           setActiveTab('signin');
                           setErrorMessage(null);
                         }}
-                        className="text-xs text-slate-400 hover:text-white cursor-pointer transition-colors"
+                        className="text-slate-400 hover:text-white cursor-pointer transition-colors"
                       >
-                        Already have active credentials? <span className="text-emerald-400 font-bold">Sign In</span>
+                        Already have credentials? <span className="text-emerald-400 font-bold">Sign In</span>
                       </button>
                     </div>
                   </form>

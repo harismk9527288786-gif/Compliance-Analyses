@@ -7,7 +7,7 @@ import {
   hashToken,
   createRateLimiter,
 } from './security';
-import { sanitizeUser, AuthRole, UserRecord } from './types';
+import { sanitizeUser, AuthRole, UserRecord, OrganizationRecord } from './types';
 import { requireAuth, requireRole, AUTH_COOKIE_NAME } from './middleware';
 
 export const authRouter = express.Router();
@@ -29,6 +29,137 @@ function setSessionCookie(res: express.Response, sessionId: string) {
     maxAge: SESSION_TTL_MS,
   });
 }
+
+/**
+ * POST /api/auth/register
+ * Direct self-registration: Creates a new user (and organization if specified),
+ * hashes password, generates authenticated session, and returns user profile.
+ */
+authRouter.post('/register', authLimiter, async (req, res) => {
+  try {
+    const { name, email, password, role, organizationName } = req.body;
+
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'Please enter your full name.' });
+    }
+    if (!email || typeof email !== 'string' || !email.trim() || !email.includes('@')) {
+      return res.status(400).json({ error: 'Please enter a valid work email address.' });
+    }
+    if (!password || typeof password !== 'string' || password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = name.trim();
+    const existingUser = db.getUserByEmail(cleanEmail);
+
+    if (existingUser) {
+      return res.status(400).json({ error: 'An account with this email address already exists. Please sign in.' });
+    }
+
+    // Determine organization
+    let org: OrganizationRecord;
+    const orgs = db.getOrganizations();
+
+    if (organizationName && typeof organizationName === 'string' && organizationName.trim()) {
+      const cleanOrgName = organizationName.trim();
+      const code = cleanOrgName
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '-')
+        .replace(/-+/g, '-')
+        .slice(0, 10) || 'ORG';
+      const orgId = `org-${Date.now().toString(36)}-${generateRandomToken(4)}`;
+
+      org = db.createOrganization({
+        id: orgId,
+        name: cleanOrgName,
+        code,
+        tier: 'Enterprise Quality Suite',
+        requireMfa: false,
+        allowExternalAi: true,
+        retentionMonths: 24,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    } else {
+      // Default to the first seed organization if not specified
+      org = orgs[0] || db.createOrganization({
+        id: 'org-apex-01',
+        name: 'Apex Valve & Flow Engineering Ltd.',
+        code: 'APEX-VALVES',
+        tier: 'Enterprise Quality Suite',
+        requireMfa: true,
+        allowExternalAi: true,
+        retentionMonths: 24,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    }
+
+    const validRoles: AuthRole[] = ['ADMIN', 'QUALITY_ENGINEER', 'REVIEWER', 'VIEWER'];
+    const assignedRole: AuthRole = (role && validRoles.includes(role as AuthRole)) ? (role as AuthRole) : 'QUALITY_ENGINEER';
+
+    const passwordHash = await hashPassword(password);
+    const userId = `user-${Date.now()}-${generateRandomToken(4)}`;
+
+    const newUser: UserRecord = {
+      id: userId,
+      name: cleanName,
+      email: cleanEmail,
+      password_hash: passwordHash,
+      role: assignedRole,
+      organization_id: org.id,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      last_login_at: new Date().toISOString(),
+      avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(cleanName)}&backgroundColor=059669,0284c7`,
+    };
+
+    db.createUser(newUser);
+
+    // Create session and set cookie
+    const sessionId = generateRandomToken(32);
+    const forwarded = req.headers['x-forwarded-for'];
+    const ipAddress = typeof forwarded === 'string'
+      ? forwarded.split(',')[0].trim()
+      : (req.socket.remoteAddress || req.ip || '127.0.0.1');
+
+    db.createSession({
+      id: sessionId,
+      user_id: newUser.id,
+      organization_id: org.id,
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + SESSION_TTL_MS).toISOString(),
+      last_active_at: new Date().toISOString(),
+      ip_address: ipAddress,
+      user_agent: req.headers['user-agent'] || 'Unknown',
+    });
+
+    setSessionCookie(res, sessionId);
+
+    db.addAuditEvent(org.id, {
+      actorId: newUser.id,
+      actorName: newUser.name,
+      actorRole: newUser.role,
+      action: 'USER_REGISTERED',
+      objectType: 'auth',
+      objectId: newUser.id,
+      objectName: newUser.name,
+      details: { email: newUser.email, role: newUser.role, orgName: org.name },
+    });
+
+    const safeUser = sanitizeUser(newUser, org);
+    return res.status(201).json({
+      success: true,
+      user: safeUser,
+      organization: org,
+    });
+  } catch (err: any) {
+    console.error('Registration error:', err);
+    return res.status(500).json({ error: 'An unexpected server error occurred during account creation.' });
+  }
+});
 
 /**
  * POST /api/auth/login
