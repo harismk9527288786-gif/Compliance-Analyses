@@ -297,7 +297,7 @@ export const RequirementLibrary: React.FC<RequirementLibraryProps> = ({
             )}
 
             {/* Matrix Table */}
-            <div className="border border-slate-200 rounded-lg overflow-x-auto">
+            <div className="border border-slate-200 rounded-lg overflow-x-auto w-full max-w-full">
               <table role="table" className="w-full text-left text-xs border-collapse min-w-[640px]">
                 <caption className="sr-only">List of engineering requirement clauses in selected specification</caption>
                 <thead>

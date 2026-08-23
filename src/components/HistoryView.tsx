@@ -233,7 +233,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
       <section aria-label="Archive Records Table" className="bg-white rounded-xl border border-slate-300 shadow-xs p-5 space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           {/* Segmented Filter Control */}
-          <div role="tablist" aria-label="Archive Filters" className="inline-flex p-1 bg-slate-100 rounded-lg border border-slate-300 text-xs">
+          <div role="tablist" aria-label="Archive Filters" className="inline-flex p-1 bg-slate-100 rounded-lg border border-slate-300 text-xs max-w-full overflow-x-auto">
             <button
               type="button"
               role="tab"
@@ -336,7 +336,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
         </div>
 
         {/* Technical Data Table */}
-        <div className="border border-slate-200 rounded-lg overflow-x-auto">
+        <div className="border border-slate-200 rounded-lg overflow-x-auto w-full max-w-full">
           {filteredAnalyses.length === 0 ? (
             <div className="p-8 text-center space-y-2">
               <FileText className="w-8 h-8 text-slate-400 mx-auto" aria-hidden="true" />

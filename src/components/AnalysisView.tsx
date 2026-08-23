@@ -350,13 +350,13 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
       >
         {/* Filter Controls */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div role="tablist" aria-label="Finding Status Tabs" className="inline-flex p-1 bg-slate-100 rounded-lg border border-slate-300 text-xs">
+          <div role="tablist" aria-label="Finding Status Tabs" className="inline-flex p-1 bg-slate-100 rounded-lg border border-slate-300 text-xs max-w-full overflow-x-auto">
             <button
               type="button"
               role="tab"
               aria-selected={statusTab === 'all'}
               onClick={() => setStatusTab('all')}
-              className={`px-3 py-1 rounded-md font-bold transition-colors cursor-pointer ${
+              className={`px-3 py-1 rounded-md font-bold transition-colors cursor-pointer whitespace-nowrap ${
                 statusTab === 'all'
                   ? 'bg-slate-900 text-white shadow-xs'
                   : 'text-slate-700 hover:text-slate-900'
@@ -369,7 +369,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
               role="tab"
               aria-selected={statusTab === 'issues'}
               onClick={() => setStatusTab('issues')}
-              className={`px-3 py-1 rounded-md font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-1 rounded-md font-bold transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                 statusTab === 'issues'
                   ? 'bg-rose-700 text-white shadow-xs'
                   : 'text-rose-800 hover:text-rose-900'
@@ -383,7 +383,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
               role="tab"
               aria-selected={statusTab === 'pass'}
               onClick={() => setStatusTab('pass')}
-              className={`px-3 py-1 rounded-md font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-1 rounded-md font-bold transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                 statusTab === 'pass'
                   ? 'bg-emerald-700 text-white shadow-xs'
                   : 'text-emerald-800 hover:text-emerald-900'
@@ -408,7 +408,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
         </div>
 
         {/* Findings Table */}
-        <div className="border border-slate-200 rounded-lg overflow-x-auto">
+        <div className="border border-slate-200 rounded-lg overflow-x-auto w-full max-w-full">
           <table role="table" className="w-full text-left text-xs border-collapse min-w-[760px]">
             <caption className="sr-only">Detailed list of compliance findings and metallurgical comparisons</caption>
             <thead>

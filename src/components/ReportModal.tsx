@@ -352,7 +352,7 @@ Apex Valve & Flow Engineering Ltd.`;
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 font-mono">
                   Comprehensive Clause Findings Matrix
                 </h4>
-                <div className="border border-slate-200 rounded-lg overflow-x-auto">
+                <div className="border border-slate-200 rounded-lg overflow-x-auto w-full max-w-full">
                   <table role="table" className="w-full text-left text-xs border-collapse min-w-[640px]">
                     <caption className="sr-only">Comprehensive findings matrix for this technical review</caption>
                     <thead>

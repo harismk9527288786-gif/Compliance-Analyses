@@ -103,22 +103,22 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const isPerfectScore = correctCount === KNOWLEDGE_QUESTIONS.length;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between antialiased">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between antialiased w-full max-w-full">
       {/* Top Header */}
-      <header className="bg-slate-900 border-b border-slate-800 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-lg bg-emerald-600 flex items-center justify-center text-white shadow-xs border border-emerald-400/50">
+      <header className="bg-slate-900 border-b border-slate-800 px-4 sm:px-6 py-4 w-full max-w-full">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-emerald-600 flex items-center justify-center text-white shadow-xs border border-emerald-400/50 shrink-0">
               <FileCheck2 className="w-5 h-5 stroke-[2.5]" aria-hidden="true" />
             </div>
-            <div>
-              <div className="font-bold text-sm tracking-tight text-white flex items-center gap-2">
-                <span>MTC Compliance Checker</span>
-                <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-slate-800 text-emerald-400 border border-slate-700">
+            <div className="min-w-0">
+              <div className="font-bold text-xs sm:text-sm tracking-tight text-white flex items-center gap-2">
+                <span className="truncate">MTC Compliance Checker</span>
+                <span className="hidden xs:inline-block text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-slate-800 text-emerald-400 border border-slate-700 shrink-0">
                   Engineering Workstation
                 </span>
               </div>
-              <div className="text-xs text-slate-400 font-mono">
+              <div className="hidden sm:block text-xs text-slate-400 font-mono">
                 EN 10204 3.1 &amp; MDS Deterministic Metallurgical Verification
               </div>
             </div>
@@ -127,10 +127,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           <button
             type="button"
             onClick={() => handleEnterApp(true)}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors cursor-pointer border border-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors cursor-pointer border border-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 shrink-0"
           >
             <Zap className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
-            <span>Direct Access</span>
+            <span className="hidden xs:inline">Direct Access</span>
+            <span className="xs:hidden">Access</span>
           </button>
         </div>
       </header>

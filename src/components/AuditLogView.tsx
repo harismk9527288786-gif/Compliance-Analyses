@@ -106,7 +106,7 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({ auditLogs }) => {
       {/* Filter and Search Bar */}
       <section aria-label="Audit Events List" className="bg-white rounded-xl border border-slate-300 shadow-xs p-5 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
             {actionTypes.map((act) => (
               <button
                 key={act.id}
@@ -136,7 +136,7 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({ auditLogs }) => {
         </div>
 
         {/* Audit Table */}
-        <div className="border border-slate-200 rounded-lg overflow-x-auto">
+        <div className="border border-slate-200 rounded-lg overflow-x-auto w-full max-w-full">
           <table role="table" className="w-full text-left text-xs border-collapse min-w-[760px]">
             <caption className="sr-only">List of immutable audit events for material verification operations</caption>
             <thead>

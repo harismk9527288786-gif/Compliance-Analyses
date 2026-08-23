@@ -12,6 +12,8 @@ import {
   Wrench,
   Building2,
   Download,
+  Menu,
+  X,
 } from 'lucide-react';
 import { User, Organization } from '../types';
 
@@ -38,6 +40,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showToolsMenu, setShowToolsMenu] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const toolsMenuRef = useRef<HTMLDivElement>(null);
@@ -86,23 +89,26 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <header className="bg-slate-900 border-b border-slate-800 text-slate-100 sticky top-0 z-40 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 gap-4">
+        <div className="flex items-center justify-between h-16 gap-2 sm:gap-4">
           {/* Logo & Org Identifier */}
-          <div className="flex items-center space-x-6 shrink-0">
+          <div className="flex items-center space-x-2 sm:space-x-6 min-w-0">
             <button
               type="button"
-              onClick={() => setActiveTab('dashboard')}
-              className="flex items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 rounded-lg group cursor-pointer"
+              onClick={() => {
+                setActiveTab('dashboard');
+                setShowMobileMenu(false);
+              }}
+              className="flex items-center gap-2.5 sm:gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 rounded-lg group cursor-pointer min-w-0"
             >
-              <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-bold shadow-xs border border-emerald-400/50">
+              <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-bold shadow-xs border border-emerald-400/50 shrink-0">
                 <FileCheck2 className="w-5 h-5 stroke-[2.5]" aria-hidden="true" />
               </div>
-              <div className="flex flex-col justify-center">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-sm tracking-tight text-white">
+              <div className="flex flex-col justify-center min-w-0">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <span className="font-bold text-xs sm:text-sm tracking-tight text-white truncate max-w-[145px] sm:max-w-none">
                     MTC Compliance Checker
                   </span>
-                  <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-slate-800 text-emerald-400 border border-slate-700">
+                  <span className="hidden xs:inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-slate-800 text-emerald-400 border border-slate-700 shrink-0">
                     EN 10204 3.1
                   </span>
                 </div>
@@ -113,8 +119,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             </button>
 
-            {/* Core Navigation */}
-            <nav aria-label="Main Navigation" className="flex items-center space-x-1 pl-3 border-l border-slate-800">
+            {/* Core Desktop Navigation */}
+            <nav aria-label="Main Navigation" className="hidden md:flex items-center space-x-1 pl-3 border-l border-slate-800">
               <button
                 type="button"
                 onClick={() => setActiveTab('dashboard')}
@@ -219,8 +225,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             </nav>
           </div>
 
-          {/* Right Action: Verify Button & Profile */}
-          <div className="flex items-center space-x-3 shrink-0">
+          {/* Right Action: Verify Button, Profile & Mobile Menu Toggle */}
+          <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
             {/* Install Desktop App Button (when available) */}
             {deferredPrompt && (
               <button
@@ -236,11 +242,15 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               type="button"
-              onClick={onOpenNewComparison}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-colors cursor-pointer border border-emerald-400/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+              onClick={() => {
+                onOpenNewComparison();
+                setShowMobileMenu(false);
+              }}
+              className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-colors cursor-pointer border border-emerald-400/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" aria-hidden="true" />
-              <span>Verify MTC</span>
+              <span className="hidden xs:inline">Verify MTC</span>
+              <span className="xs:hidden">Verify</span>
             </button>
 
             {/* Profile Dropdown */}
@@ -250,7 +260,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 aria-haspopup="true"
                 aria-expanded={showProfileMenu}
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
-                className="flex items-center space-x-2 p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                className="flex items-center space-x-1.5 sm:space-x-2 p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                 title="Account Settings"
               >
                 <img
@@ -294,9 +304,104 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </div>
               )}
             </div>
+
+            {/* Mobile Navigation Toggle Button */}
+            <button
+              type="button"
+              aria-label="Toggle navigation menu"
+              aria-expanded={showMobileMenu}
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              className="md:hidden p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+            >
+              {showMobileMenu ? <X className="w-5 h-5" aria-hidden="true" /> : <Menu className="w-5 h-5" aria-hidden="true" />}
+            </button>
           </div>
         </div>
       </div>
+
+      {/* Mobile Navigation Menu Dropdown */}
+      {showMobileMenu && (
+        <nav
+          aria-label="Mobile Navigation Menu"
+          className="md:hidden border-t border-slate-800 bg-slate-900 px-4 py-3 space-y-1 shadow-xl"
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('dashboard');
+              setShowMobileMenu(false);
+            }}
+            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2.5 transition-colors cursor-pointer ${
+              activeTab === 'dashboard'
+                ? 'bg-slate-800 text-emerald-400 border border-slate-700'
+                : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
+            }`}
+          >
+            <Layers className="w-4 h-4" aria-hidden="true" />
+            <span>Dashboard</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('history');
+              setShowMobileMenu(false);
+            }}
+            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2.5 transition-colors cursor-pointer ${
+              activeTab === 'history'
+                ? 'bg-slate-800 text-emerald-400 border border-slate-700'
+                : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
+            }`}
+          >
+            <History className="w-4 h-4" aria-hidden="true" />
+            <span>History</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('library');
+              setShowMobileMenu(false);
+            }}
+            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2.5 transition-colors cursor-pointer ${
+              activeTab === 'library'
+                ? 'bg-slate-800 text-emerald-400 border border-slate-700'
+                : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
+            }`}
+          >
+            <BookOpen className="w-4 h-4 text-blue-400" aria-hidden="true" />
+            <span>MDS Requirement Library</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('audit');
+              setShowMobileMenu(false);
+            }}
+            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2.5 transition-colors cursor-pointer ${
+              activeTab === 'audit'
+                ? 'bg-slate-800 text-emerald-400 border border-slate-700'
+                : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4 text-emerald-400" aria-hidden="true" />
+            <span>Immutable Audit Trail</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              onOpenTestSuite();
+              setShowMobileMenu(false);
+            }}
+            className="w-full text-left px-3 py-2 rounded-lg text-xs font-bold text-amber-300 hover:bg-slate-800/60 hover:text-amber-200 flex items-center gap-2.5 transition-colors cursor-pointer"
+          >
+            <PlayCircle className="w-4 h-4 text-amber-400" aria-hidden="true" />
+            <span>Automated Test Suite</span>
+          </button>
+        </nav>
+      )}
     </header>
   );
 };

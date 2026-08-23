@@ -199,7 +199,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
 
           {/* 3-Second Overall Compliance Verdict Badge */}
-          <div className="bg-slate-950/90 rounded-lg p-4 border border-slate-800 min-w-[280px] space-y-3">
+          <div className="bg-slate-950/90 rounded-lg p-4 border border-slate-800 w-full sm:w-auto sm:min-w-[280px] space-y-3">
             <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 border-b border-slate-800 pb-2">
               <span className="uppercase tracking-wider font-semibold">Active Fleet Verdict</span>
               <span className="font-bold text-slate-300">{totalReviews} Records</span>
@@ -447,15 +447,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
+          <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap max-w-full">
             {/* Segmented Filter Control with high contrast badges */}
-            <div role="tablist" aria-label="Status Filters" className="inline-flex p-1 bg-slate-100 rounded-lg border border-slate-300 text-xs">
+            <div role="tablist" aria-label="Status Filters" className="inline-flex p-1 bg-slate-100 rounded-lg border border-slate-300 text-xs max-w-full overflow-x-auto">
               <button
                 type="button"
                 role="tab"
                 aria-selected={statusFilter === 'all'}
                 onClick={() => setStatusFilter('all')}
-                className={`px-3 py-1 rounded-md font-bold transition-colors cursor-pointer ${
+                className={`px-3 py-1 rounded-md font-bold transition-colors cursor-pointer whitespace-nowrap ${
                   statusFilter === 'all'
                     ? 'bg-slate-900 text-white shadow-xs'
                     : 'text-slate-700 hover:text-slate-900'
@@ -468,7 +468,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 role="tab"
                 aria-selected={statusFilter === 'deviations'}
                 onClick={() => setStatusFilter('deviations')}
-                className={`px-3 py-1 rounded-md font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                className={`px-3 py-1 rounded-md font-bold transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                   statusFilter === 'deviations'
                     ? 'bg-rose-700 text-white shadow-xs'
                     : 'text-rose-800 hover:text-rose-900'
@@ -482,7 +482,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 role="tab"
                 aria-selected={statusFilter === 'pass'}
                 onClick={() => setStatusFilter('pass')}
-                className={`px-3 py-1 rounded-md font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                className={`px-3 py-1 rounded-md font-bold transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                   statusFilter === 'pass'
                     ? 'bg-emerald-700 text-white shadow-xs'
                     : 'text-emerald-800 hover:text-emerald-900'
@@ -494,7 +494,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
 
             {/* Search Input */}
-            <div className="relative flex-1 sm:w-56">
+            <div className="relative flex-1 sm:w-56 min-w-[200px] max-w-full">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
               <input
                 type="text"
@@ -511,7 +511,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <button
                   type="button"
                   onClick={() => exportFleetToExcel(filteredAnalyses)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white border border-emerald-600 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white border border-emerald-600 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 shrink-0"
                   title="Export fleet register & non-conformance logs as multi-tab Excel workbook"
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5" aria-hidden="true" />
@@ -521,7 +521,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <button
                   type="button"
                   onClick={exportTableCSV}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900"
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 shrink-0"
                   title="Export verification fleet records to CSV"
                 >
                   <Download className="w-3.5 h-3.5" aria-hidden="true" />
@@ -535,7 +535,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <button
                 type="button"
                 onClick={() => setShowClearConfirmModal(true)}
-                className="p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 hover:border-rose-300 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
+                className="p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 hover:border-rose-300 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 shrink-0"
                 title="Clear all records"
               >
                 <Trash2 className="w-4 h-4" aria-hidden="true" />
@@ -546,7 +546,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
 
         {/* Technical Data Table with horizontal scrolling and readable column widths */}
-        <div className="border border-slate-200 rounded-lg overflow-x-auto">
+        <div className="border border-slate-200 rounded-lg overflow-x-auto w-full max-w-full">
           {filteredAnalyses.length === 0 ? (
             <div className="p-8 text-center space-y-2">
               <FileText className="w-8 h-8 text-slate-400 mx-auto" aria-hidden="true" />
