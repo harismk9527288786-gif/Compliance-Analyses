@@ -478,7 +478,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col antialiased w-full max-w-full">
+    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col antialiased w-full max-w-full overflow-x-hidden">
       {/* Top Application Navbar */}
       <Navbar
         activeTab={activeTab}
@@ -500,7 +500,7 @@ export default function App() {
       />
 
       {/* Main Page Container */}
-      <main className="flex-1 max-w-7xl w-full max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 min-w-0">
+      <main className="flex-1 max-w-7xl w-full max-w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 min-w-0 overflow-x-hidden">
         {showNewComparison ? (
           <NewComparison
             requirementSets={requirementSets}

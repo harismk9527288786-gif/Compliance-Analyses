@@ -147,28 +147,28 @@ export const Dashboard: React.FC<DashboardProps> = ({
   }, []);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full max-w-full overflow-x-hidden">
       {/* 1. ENGINEERING CONTROL BANNER (High-density, slate-900, zero gimmicks) */}
       <section
         aria-label="Compliance Summary Header"
-        className="bg-slate-900 rounded-xl p-6 text-slate-100 border border-slate-800 shadow-sm"
+        className="bg-slate-900 rounded-xl p-4 sm:p-6 text-slate-100 border border-slate-800 shadow-sm w-full max-w-full"
       >
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-          <div className="space-y-3 max-w-2xl">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 max-w-full">
+          <div className="space-y-3 max-w-2xl min-w-0">
             {/* System Status Rail */}
             <div className="flex items-center gap-2 flex-wrap text-[11px] font-mono">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 font-semibold">
                 <Cpu className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>Deterministic Engine v2.4</span>
               </span>
-              <span className="text-slate-500">|</span>
+              <span className="hidden sm:inline text-slate-500">|</span>
               <span className="text-slate-400">EN 10204 3.1 Traceability</span>
-              <span className="text-slate-500">|</span>
+              <span className="hidden sm:inline text-slate-500">|</span>
               <span className="text-slate-400">ISO 15156 / NACE MR0175 Verified</span>
             </div>
 
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white break-words">
                 MTC Compliance & Material Verification
               </h1>
               <p className="text-xs text-slate-300 font-normal mt-1 leading-relaxed">
@@ -452,7 +452,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap max-w-full">
+          <div className="flex items-center gap-3 flex-wrap max-w-full">
             {/* Segmented Filter Control with high contrast badges */}
             <div role="tablist" aria-label="Status Filters" className="inline-flex p-1 bg-slate-100 rounded-lg border border-slate-300 text-xs max-w-full overflow-x-auto">
               <button

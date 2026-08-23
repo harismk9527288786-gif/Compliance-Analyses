@@ -164,7 +164,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full max-w-full overflow-x-hidden">
       {/* 1. TOP ACTION BAR */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <button

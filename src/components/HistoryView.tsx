@@ -110,7 +110,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full max-w-full overflow-x-hidden">
       {/* 1. Header Card */}
       <section
         aria-label="History Overview"
@@ -291,7 +291,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
             </button>
           </div>
 
-          <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
+          <div className="flex items-center gap-3 flex-wrap max-w-full">
             {/* Supplier Filter */}
             {suppliers.length > 1 && (
               <select

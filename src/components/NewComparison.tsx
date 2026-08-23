@@ -152,7 +152,7 @@ export const NewComparison: React.FC<NewComparisonProps> = ({
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-6 w-full max-w-full overflow-x-hidden">
       {/* Header */}
       <div className="bg-white rounded-xl p-6 border border-slate-300 shadow-xs flex items-center justify-between">
         <div>

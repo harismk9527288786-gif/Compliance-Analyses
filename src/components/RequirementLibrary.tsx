@@ -87,7 +87,7 @@ export const RequirementLibrary: React.FC<RequirementLibraryProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full max-w-full overflow-x-hidden">
       {/* Header */}
       <section
         aria-label="Library Header"

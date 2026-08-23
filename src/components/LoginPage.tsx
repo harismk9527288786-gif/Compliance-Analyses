@@ -103,10 +103,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const isPerfectScore = correctCount === KNOWLEDGE_QUESTIONS.length;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between antialiased w-full max-w-full">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between antialiased w-full max-w-full overflow-x-hidden">
       {/* Top Header */}
-      <header className="bg-slate-900 border-b border-slate-800 px-4 sm:px-6 py-4 w-full max-w-full">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+      <header className="bg-slate-900 border-b border-slate-800 px-4 sm:px-6 py-4 w-full max-w-full overflow-x-hidden">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 max-w-full">
           <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0">
             <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-emerald-600 flex items-center justify-center text-white shadow-xs border border-emerald-400/50 shrink-0">
               <FileCheck2 className="w-5 h-5 stroke-[2.5]" aria-hidden="true" />
@@ -137,7 +137,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       </header>
 
       {/* Main Knowledge Gate Container */}
-      <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-8 flex flex-col justify-center">
+      <main className="flex-1 max-w-2xl w-full max-w-full mx-auto px-4 py-8 flex flex-col justify-center overflow-x-hidden">
         <div className="bg-slate-900 rounded-xl shadow-2xl border border-slate-800 p-6 sm:p-8 space-y-6">
           {/* Heading */}
           <div className="text-center space-y-1.5">
