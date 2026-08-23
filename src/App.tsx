@@ -26,6 +26,7 @@ import {
   FindingStatus,
 } from './types';
 import { apiFetch } from './utils/api';
+import { DottedGlowBackground } from './components/DottedGlowBackground';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -478,7 +479,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col antialiased w-full max-w-full overflow-x-hidden">
+    <DottedGlowBackground className="min-h-screen text-slate-900 font-sans flex flex-col antialiased">
       {/* Top Application Navbar */}
       <Navbar
         activeTab={activeTab}
@@ -608,6 +609,6 @@ export default function App() {
       {showTestSuiteModal && (
         <TestSuiteModal onClose={() => setShowTestSuiteModal(false)} />
       )}
-    </div>
+    </DottedGlowBackground>
   );
 }

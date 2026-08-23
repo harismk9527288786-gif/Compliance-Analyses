@@ -263,7 +263,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               setStatusFilter(statusFilter === 'pass' ? 'all' : 'pass');
             }
           }}
-          className="text-left bg-white rounded-xl p-5 border border-emerald-300 hover:border-emerald-500 hover:bg-emerald-50/40 transition-all cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 group"
+          className="text-left bg-white rounded-xl p-5 border border-emerald-300 hover:border-emerald-500 hover:bg-emerald-50 transition-all cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 group"
         >
           <div className="flex items-start justify-between">
             <div className="space-y-1">
@@ -297,7 +297,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               setStatusFilter(statusFilter === 'deviations' ? 'all' : 'deviations');
             }
           }}
-          className="text-left bg-white rounded-xl p-5 border border-rose-300 hover:border-rose-500 hover:bg-rose-50/40 transition-all cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 group"
+          className="text-left bg-white rounded-xl p-5 border border-rose-300 hover:border-rose-500 hover:bg-rose-50 transition-all cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 group"
         >
           <div className="flex items-start justify-between">
             <div className="space-y-1">
@@ -323,8 +323,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
           onClick={() => setStatusFilter('all')}
           className={`text-left bg-white rounded-xl p-5 border transition-all cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 ${
             statusFilter === 'all'
-              ? 'border-slate-900 ring-2 ring-slate-900 bg-slate-50/60'
-              : 'border-slate-300 hover:border-slate-400 hover:bg-slate-50/60'
+              ? 'border-slate-900 ring-2 ring-slate-900 bg-slate-50'
+              : 'border-slate-300 hover:border-slate-400 hover:bg-slate-50'
           }`}
         >
           <div className="flex items-start justify-between">

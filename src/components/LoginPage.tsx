@@ -10,6 +10,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { User as UserType } from '../types';
+import { DottedGlowBackground } from './DottedGlowBackground';
 
 interface LoginPageProps {
   onLoginSuccess: (user: UserType) => void;
@@ -103,7 +104,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const isPerfectScore = correctCount === KNOWLEDGE_QUESTIONS.length;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between antialiased w-full max-w-full overflow-x-hidden">
+    <DottedGlowBackground variant="dark" className="min-h-screen text-slate-100 flex flex-col justify-between antialiased">
       {/* Top Header */}
       <header className="bg-slate-900 border-b border-slate-800 px-4 sm:px-6 py-4 w-full max-w-full overflow-x-hidden">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 max-w-full">
@@ -317,6 +318,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           </span>
         </div>
       </footer>
-    </div>
+    </DottedGlowBackground>
   );
 };
