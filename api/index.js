@@ -821,559 +821,6 @@ var PILOT_SUPPLIER_MTC = {
   ]
 };
 
-// src/engine/units.ts
-function parseEngineeringValue(raw) {
-  if (raw === void 0 || raw === null) return null;
-  if (typeof raw === "number") {
-    return { value: raw, unit: "", originalText: String(raw) };
-  }
-  const str = String(raw).trim();
-  if (!str) return null;
-  const match = str.match(/^([<>]=?|\b)?\s*([+-]?\d+(?:\.\d+)?)\s*([°a-zA-Z/%³²\-_0-9]+)?/);
-  if (!match) {
-    const numOnly = parseFloat(str.replace(/[^0-9.-]/g, ""));
-    if (!isNaN(numOnly)) {
-      return { value: numOnly, unit: "", originalText: str };
-    }
-    return null;
-  }
-  const numVal = parseFloat(match[2]);
-  if (isNaN(numVal)) return null;
-  let unit = (match[3] || "").trim();
-  return {
-    value: numVal,
-    unit: normalizeUnitString(unit),
-    originalText: str
-  };
-}
-function normalizeUnitString(unit) {
-  const clean = unit.replace(/\s+/g, "").toUpperCase();
-  if (clean === "\xB0C" || clean === "C" || clean === "DEG C" || clean === "DEGC" || clean === "CELSIUS") return "\xB0C";
-  if (clean === "\xB0F" || clean === "F" || clean === "DEG F" || clean === "DEGF" || clean === "FAHRENHEIT") return "\xB0F";
-  if (clean === "MPA" || clean === "N/MM2" || clean === "N/MM\xB2") return "MPa";
-  if (clean === "KSI") return "ksi";
-  if (clean === "PSI") return "psi";
-  if (clean === "%" || clean === "PERCENT" || clean === "PCT") return "%";
-  if (clean === "HBW" || clean === "HB" || clean === "BHN") return "HBW";
-  if (clean === "HRC") return "HRC";
-  if (clean === "HRB") return "HRB";
-  if (clean === "HV" || clean === "VICKERS") return "HV";
-  if (clean === "J" || clean === "JOULE" || clean === "JOULES") return "J";
-  if (clean === "FT-LB" || clean === "FT-LBS" || clean === "FTLBS") return "ft-lbs";
-  if (clean === "MM") return "mm";
-  if (clean === "INCH" || clean === "IN" || clean === "INCHES") return "in";
-  return unit;
-}
-function convertValue(val, sourceUnit, targetUnit) {
-  const src = normalizeUnitString(sourceUnit);
-  const tgt = normalizeUnitString(targetUnit);
-  if (src === tgt || !src || !tgt) return val;
-  if (src === "\xB0F" && tgt === "\xB0C") {
-    return (val - 32) * (5 / 9);
-  }
-  if (src === "\xB0C" && tgt === "\xB0F") {
-    return val * (9 / 5) + 32;
-  }
-  if (src === "ksi" && tgt === "MPa") {
-    return val * 6.89476;
-  }
-  if (src === "MPa" && tgt === "ksi") {
-    return val / 6.89476;
-  }
-  if (src === "psi" && tgt === "MPa") {
-    return val * 689476e-8;
-  }
-  if (src === "ratio" && tgt === "%") {
-    return val * 100;
-  }
-  if (src === "%" && tgt === "ratio") {
-    return val / 100;
-  }
-  if (src === "ft-lbs" && tgt === "J") {
-    return val * 1.35582;
-  }
-  if (src === "J" && tgt === "ft-lbs") {
-    return val / 1.35582;
-  }
-  return val;
-}
-
-// src/engine/ce.ts
-function calculateCarbonEquivalent(chemistry, maxLimit = 0.43, reportedCE) {
-  const c = chemistry.C || 0;
-  const mn = chemistry.Mn || 0;
-  const cr = chemistry.Cr || 0;
-  const mo = chemistry.Mo || 0;
-  const v = chemistry.V || 0;
-  const ni = chemistry.Ni || 0;
-  const cu = chemistry.Cu || 0;
-  const mnPart = mn / 6;
-  const crMoVPart = (cr + mo + v) / 5;
-  const niCuPart = (ni + cu) / 15;
-  const rawCE = c + mnPart + crMoVPart + niCuPart;
-  const calculatedCE = Math.round(rawCE * 1e3) / 1e3;
-  const formula = "CE = C + Mn/6 + (Cr + Mo + V)/5 + (Ni + Cu)/15";
-  const breakdown = `${c.toFixed(3)} + (${mn.toFixed(3)}/6) + ((${cr.toFixed(3)}+${mo.toFixed(3)}+${v.toFixed(3)})/5) + ((${ni.toFixed(3)}+${cu.toFixed(3)})/15) = ${calculatedCE.toFixed(3)}`;
-  const isCompliantWithLimit = calculatedCE <= maxLimit;
-  let discrepancyWithReported = void 0;
-  let isDiscrepancySignificant = false;
-  if (reportedCE !== void 0 && !isNaN(reportedCE)) {
-    discrepancyWithReported = Math.abs(calculatedCE - reportedCE);
-    isDiscrepancySignificant = discrepancyWithReported > 0.015;
-  }
-  return {
-    calculatedCE,
-    formula,
-    elementsUsed: { C: c, Mn: mn, Cr: cr, Mo: mo, V: v, Ni: ni, Cu: cu },
-    breakdown,
-    isCompliantWithLimit,
-    maxLimit,
-    reportedCE,
-    discrepancyWithReported,
-    isDiscrepancySignificant
-  };
-}
-
-// src/engine/rules.ts
-function evaluateCompliance(context) {
-  const { analysisId, requirements, certificate } = context;
-  const findings = [];
-  const heats = certificate.heats && certificate.heats.length > 0 ? certificate.heats : ["GENERAL"];
-  for (const req of requirements) {
-    const isHeatSpecific = ["chemical", "mechanical", "heat_treatment", "hardness"].includes(req.category);
-    if (isHeatSpecific && heats.length > 0) {
-      for (const heatNo of heats) {
-        const finding = evaluateSingleRequirement(analysisId, req, certificate, heatNo);
-        findings.push(finding);
-      }
-    } else {
-      const finding = evaluateSingleRequirement(analysisId, req, certificate, void 0);
-      findings.push(finding);
-    }
-  }
-  return findings;
-}
-function evaluateSingleRequirement(analysisId, req, cert, heatNo) {
-  const matchedEvidence = cert.evidenceItems.filter((e) => {
-    const fieldMatch = e.field.toLowerCase() === req.field.toLowerCase() || e.displayName.toLowerCase() === req.displayName.toLowerCase();
-    if (!fieldMatch) return false;
-    if (heatNo && e.heatNo && e.heatNo !== "GENERAL" && e.heatNo !== heatNo) {
-      return false;
-    }
-    return true;
-  });
-  const evidence = matchedEvidence[0];
-  if (!evidence || !evidence.rawValue || evidence.rawValue.trim() === "" || evidence.rawValue === "NOT_FOUND") {
-    return createDocumentationGapFinding(analysisId, req, heatNo);
-  }
-  if (evidence.confidence === "low") {
-    return createReviewRequiredFinding(
-      analysisId,
-      req,
-      evidence,
-      heatNo,
-      "Extraction confidence is low. Manual human verification required."
-    );
-  }
-  switch (req.operator) {
-    case "MIN":
-      return evaluateMinOperator(analysisId, req, evidence, heatNo);
-    case "MAX":
-      return evaluateMaxOperator(analysisId, req, evidence, heatNo);
-    case "RANGE":
-      return evaluateRangeOperator(analysisId, req, evidence, heatNo);
-    case "EQUALS":
-    case "MATCH":
-      return evaluateMatchOperator(analysisId, req, evidence, heatNo);
-    case "REQUIRED":
-      return evaluateRequiredOperator(analysisId, req, evidence, heatNo);
-    case "FORBIDDEN":
-      return evaluateForbiddenOperator(analysisId, req, evidence, heatNo);
-    case "AGGREGATE":
-      return evaluateAggregateOperator(analysisId, req, cert, evidence, heatNo);
-    default:
-      return evaluateMatchOperator(analysisId, req, evidence, heatNo);
-  }
-}
-function evaluateMinOperator(analysisId, req, evidence, heatNo) {
-  const reqMin = req.minValue ?? 0;
-  const parsed = parseEngineeringValue(evidence.rawValue);
-  if (!parsed) {
-    return createReviewRequiredFinding(
-      analysisId,
-      req,
-      evidence,
-      heatNo,
-      `Could not parse numeric value from supplier evidence: "${evidence.rawValue}"`
-    );
-  }
-  const normalizedVal = req.unit ? convertValue(parsed.value, parsed.unit || req.unit, req.unit) : parsed.value;
-  const isPass = normalizedVal >= reqMin;
-  const status = isPass ? "PASS" : "DEVIATION";
-  const severity = isPass ? "info" : normalizedVal < reqMin * 0.9 ? "critical" : "major";
-  const calcStr = `${normalizedVal} ${req.unit || ""} >= ${reqMin} ${req.unit || ""} -> ${isPass ? "PASS" : "DEVIATION"}`;
-  const reason = isPass ? `Supplier value ${normalizedVal} ${req.unit || ""} satisfies the minimum required threshold of ${reqMin} ${req.unit || ""}.` : `Supplier value ${normalizedVal} ${req.unit || ""} is below the specified minimum limit of ${reqMin} ${req.unit || ""} by ${(reqMin - normalizedVal).toFixed(1)} ${req.unit || ""}.`;
-  return {
-    id: `finding-${req.id}-${heatNo || "gen"}-${Date.now()}`,
-    analysisId,
-    requirementId: req.id,
-    evidenceId: evidence.id,
-    category: req.category,
-    field: req.field,
-    displayName: req.displayName,
-    heatNo,
-    requirementText: `Minimum ${reqMin} ${req.unit || ""}`,
-    requiredMin: reqMin,
-    requiredUnit: req.unit,
-    requirementClause: req.clauseReference,
-    requirementSourceDoc: req.sourceDocument,
-    requirementSourcePage: req.sourcePage,
-    supplierRawValue: evidence.rawValue,
-    supplierNormalizedValue: normalizedVal,
-    supplierUnit: req.unit || parsed.unit,
-    supplierEvidenceDoc: evidence.sourceDocument,
-    supplierEvidencePage: evidence.sourcePage,
-    supplierSnippet: evidence.snippet,
-    confidence: evidence.confidence,
-    operator: "MIN",
-    calculatedComparison: calcStr,
-    status,
-    severity,
-    reason,
-    isReviewed: false
-  };
-}
-function evaluateMaxOperator(analysisId, req, evidence, heatNo) {
-  const reqMax = req.maxValue ?? Infinity;
-  const parsed = parseEngineeringValue(evidence.rawValue);
-  if (!parsed) {
-    return createReviewRequiredFinding(
-      analysisId,
-      req,
-      evidence,
-      heatNo,
-      `Could not parse numeric value from supplier evidence: "${evidence.rawValue}"`
-    );
-  }
-  const normalizedVal = req.unit ? convertValue(parsed.value, parsed.unit || req.unit, req.unit) : parsed.value;
-  const isPass = normalizedVal <= reqMax;
-  const status = isPass ? "PASS" : "DEVIATION";
-  const severity = isPass ? "info" : "critical";
-  const calcStr = `${normalizedVal} ${req.unit || ""} <= ${reqMax} ${req.unit || ""} -> ${isPass ? "PASS" : "DEVIATION"}`;
-  const reason = isPass ? `Supplier value ${normalizedVal} ${req.unit || ""} is within the maximum allowable limit of ${reqMax} ${req.unit || ""}.` : `Supplier value ${normalizedVal} ${req.unit || ""} exceeds the maximum allowable limit of ${reqMax} ${req.unit || ""}.`;
-  return {
-    id: `finding-${req.id}-${heatNo || "gen"}-${Date.now()}`,
-    analysisId,
-    requirementId: req.id,
-    evidenceId: evidence.id,
-    category: req.category,
-    field: req.field,
-    displayName: req.displayName,
-    heatNo,
-    requirementText: `Maximum ${reqMax} ${req.unit || ""}`,
-    requiredMax: reqMax,
-    requiredUnit: req.unit,
-    requirementClause: req.clauseReference,
-    requirementSourceDoc: req.sourceDocument,
-    requirementSourcePage: req.sourcePage,
-    supplierRawValue: evidence.rawValue,
-    supplierNormalizedValue: normalizedVal,
-    supplierUnit: req.unit || parsed.unit,
-    supplierEvidenceDoc: evidence.sourceDocument,
-    supplierEvidencePage: evidence.sourcePage,
-    supplierSnippet: evidence.snippet,
-    confidence: evidence.confidence,
-    operator: "MAX",
-    calculatedComparison: calcStr,
-    status,
-    severity,
-    reason,
-    isReviewed: false
-  };
-}
-function evaluateRangeOperator(analysisId, req, evidence, heatNo) {
-  const reqMin = req.minValue ?? 0;
-  const reqMax = req.maxValue ?? Infinity;
-  const parsed = parseEngineeringValue(evidence.rawValue);
-  if (!parsed) {
-    return createReviewRequiredFinding(
-      analysisId,
-      req,
-      evidence,
-      heatNo,
-      `Could not parse numeric range value from supplier evidence: "${evidence.rawValue}"`
-    );
-  }
-  const normalizedVal = req.unit ? convertValue(parsed.value, parsed.unit || req.unit, req.unit) : parsed.value;
-  const isPass = normalizedVal >= reqMin && normalizedVal <= reqMax;
-  const status = isPass ? "PASS" : "DEVIATION";
-  const severity = isPass ? "info" : "critical";
-  const calcStr = `${reqMin} <= ${normalizedVal} <= ${reqMax} ${req.unit || ""} -> ${isPass ? "PASS" : "DEVIATION"}`;
-  let reason = "";
-  if (isPass) {
-    reason = `Supplier value ${normalizedVal} ${req.unit || ""} falls within the specified range [${reqMin} - ${reqMax} ${req.unit || ""}].`;
-  } else if (normalizedVal < reqMin) {
-    reason = `Supplier value ${normalizedVal} ${req.unit || ""} is below the lower range limit of ${reqMin} ${req.unit || ""}.`;
-  } else {
-    reason = `Supplier value ${normalizedVal} ${req.unit || ""} exceeds the upper range limit of ${reqMax} ${req.unit || ""}.`;
-  }
-  return {
-    id: `finding-${req.id}-${heatNo || "gen"}-${Date.now()}`,
-    analysisId,
-    requirementId: req.id,
-    evidenceId: evidence.id,
-    category: req.category,
-    field: req.field,
-    displayName: req.displayName,
-    heatNo,
-    requirementText: `${reqMin} \u2013 ${reqMax} ${req.unit || ""}`,
-    requiredMin: reqMin,
-    requiredMax: reqMax,
-    requiredUnit: req.unit,
-    requirementClause: req.clauseReference,
-    requirementSourceDoc: req.sourceDocument,
-    requirementSourcePage: req.sourcePage,
-    supplierRawValue: evidence.rawValue,
-    supplierNormalizedValue: normalizedVal,
-    supplierUnit: req.unit || parsed.unit,
-    supplierEvidenceDoc: evidence.sourceDocument,
-    supplierEvidencePage: evidence.sourcePage,
-    supplierSnippet: evidence.snippet,
-    confidence: evidence.confidence,
-    operator: "RANGE",
-    calculatedComparison: calcStr,
-    status,
-    severity,
-    reason,
-    isReviewed: false
-  };
-}
-function evaluateMatchOperator(analysisId, req, evidence, heatNo) {
-  const reqTarget = String(req.targetValue || req.description || "").trim().toLowerCase();
-  const rawEv = String(evidence.rawValue || "").trim().toLowerCase();
-  const cleanTarget = reqTarget.replace(/[\s\-_/]/g, "");
-  const cleanEvidence = rawEv.replace(/[\s\-_/]/g, "");
-  const isMatch = cleanEvidence.includes(cleanTarget) || cleanTarget.includes(cleanEvidence) || rawEv.includes("pass") || rawEv.includes("conforms") || rawEv.includes("satisfactory") || rawEv.includes("normalized") || rawEv.includes("3.1") && reqTarget.includes("3.1") || rawEv.includes("nace") && reqTarget.includes("nace");
-  const status = isMatch ? "PASS" : "DEVIATION";
-  const severity = isMatch ? "info" : "major";
-  const calcStr = `"${evidence.rawValue}" MATCH "${req.targetValue || req.description}" -> ${status}`;
-  const reason = isMatch ? `Supplier statement satisfies requirement: "${evidence.rawValue}".` : `Supplier statement "${evidence.rawValue}" does not match specified requirement: "${req.targetValue || req.description}".`;
-  return {
-    id: `finding-${req.id}-${heatNo || "gen"}-${Date.now()}`,
-    analysisId,
-    requirementId: req.id,
-    evidenceId: evidence.id,
-    category: req.category,
-    field: req.field,
-    displayName: req.displayName,
-    heatNo,
-    requirementText: req.description || String(req.targetValue || ""),
-    requiredTarget: String(req.targetValue || ""),
-    requirementClause: req.clauseReference,
-    requirementSourceDoc: req.sourceDocument,
-    requirementSourcePage: req.sourcePage,
-    supplierRawValue: evidence.rawValue,
-    supplierEvidenceDoc: evidence.sourceDocument,
-    supplierEvidencePage: evidence.sourcePage,
-    supplierSnippet: evidence.snippet,
-    confidence: evidence.confidence,
-    operator: "MATCH",
-    calculatedComparison: calcStr,
-    status,
-    severity,
-    reason,
-    isReviewed: false
-  };
-}
-function evaluateRequiredOperator(analysisId, req, evidence, heatNo) {
-  const raw = String(evidence.rawValue || "").trim().toLowerCase();
-  const isPresent = raw !== "" && raw !== "not_found" && raw !== "absent" && !raw.includes("not provided");
-  if (!isPresent) {
-    return createDocumentationGapFinding(analysisId, req, heatNo);
-  }
-  const isPositive = raw.includes("yes") || raw.includes("completed") || raw.includes("pass") || raw.includes("conforms") || raw.includes("performed") || raw.includes("certified") || raw.includes("100%") || raw.includes("satisfactory");
-  const status = isPositive ? "PASS" : "DEVIATION";
-  const severity = isPositive ? "info" : "minor";
-  const calcStr = `Evidence Present: "${evidence.rawValue}" -> ${status}`;
-  const reason = isPositive ? `Required evidence confirmed: "${evidence.rawValue}".` : `Evidence provided does not confirm requirement: "${evidence.rawValue}".`;
-  return {
-    id: `finding-${req.id}-${heatNo || "gen"}-${Date.now()}`,
-    analysisId,
-    requirementId: req.id,
-    evidenceId: evidence.id,
-    category: req.category,
-    field: req.field,
-    displayName: req.displayName,
-    heatNo,
-    requirementText: req.description || "Mandatory Evidence Required",
-    requirementClause: req.clauseReference,
-    requirementSourceDoc: req.sourceDocument,
-    requirementSourcePage: req.sourcePage,
-    supplierRawValue: evidence.rawValue,
-    supplierEvidenceDoc: evidence.sourceDocument,
-    supplierEvidencePage: evidence.sourcePage,
-    supplierSnippet: evidence.snippet,
-    confidence: evidence.confidence,
-    operator: "REQUIRED",
-    calculatedComparison: calcStr,
-    status,
-    severity,
-    reason,
-    isReviewed: false
-  };
-}
-function evaluateForbiddenOperator(analysisId, req, evidence, heatNo) {
-  const raw = String(evidence.rawValue || "").trim().toLowerCase();
-  const forbiddenPhrases = ["repaired", "weld repaired", "defect repaired", "welding performed"];
-  const safePhrases = ["no weld repair", "without weld repair", "none", "nil", "not permitted", "no welding"];
-  const containsForbidden = forbiddenPhrases.some((p) => raw.includes(p)) && !safePhrases.some((p) => raw.includes(p));
-  const status = containsForbidden ? "DEVIATION" : "PASS";
-  const severity = containsForbidden ? "critical" : "info";
-  const calcStr = `Check Prohibited Condition -> ${status}`;
-  const reason = containsForbidden ? `Supplier evidence indicates prohibited activity: "${evidence.rawValue}".` : `Supplier confirms no prohibited repair/condition: "${evidence.rawValue}".`;
-  return {
-    id: `finding-${req.id}-${heatNo || "gen"}-${Date.now()}`,
-    analysisId,
-    requirementId: req.id,
-    evidenceId: evidence.id,
-    category: req.category,
-    field: req.field,
-    displayName: req.displayName,
-    heatNo,
-    requirementText: req.description || "Prohibited condition",
-    requirementClause: req.clauseReference,
-    requirementSourceDoc: req.sourceDocument,
-    requirementSourcePage: req.sourcePage,
-    supplierRawValue: evidence.rawValue,
-    supplierEvidenceDoc: evidence.sourceDocument,
-    supplierEvidencePage: evidence.sourcePage,
-    supplierSnippet: evidence.snippet,
-    confidence: evidence.confidence,
-    operator: "FORBIDDEN",
-    calculatedComparison: calcStr,
-    status,
-    severity,
-    reason,
-    isReviewed: false
-  };
-}
-function evaluateAggregateOperator(analysisId, req, cert, evidence, heatNo) {
-  const chemistry = {};
-  const heatEvidence = cert.evidenceItems.filter((e) => !heatNo || e.heatNo === heatNo || e.heatNo === "GENERAL");
-  for (const item of heatEvidence) {
-    if (item.category === "chemical") {
-      const parsed = parseEngineeringValue(item.rawValue);
-      if (parsed) {
-        chemistry[item.field] = parsed.value;
-      }
-    }
-  }
-  const reportedParsed = parseEngineeringValue(evidence.rawValue);
-  const reportedCE = reportedParsed ? reportedParsed.value : void 0;
-  const maxLimit = req.maxValue ?? 0.43;
-  const ceResult = calculateCarbonEquivalent(chemistry, maxLimit, reportedCE);
-  const isPass = ceResult.isCompliantWithLimit;
-  const status = isPass ? "PASS" : "DEVIATION";
-  const severity = isPass ? "info" : "major";
-  let calcStr = `Calculated CE: ${ceResult.calculatedCE} <= ${maxLimit} [${ceResult.breakdown}]`;
-  if (reportedCE !== void 0) {
-    calcStr += ` | Reported MTC CE: ${reportedCE}`;
-  }
-  let reason = "";
-  if (isPass) {
-    reason = `Carbon Equivalent of ${ceResult.calculatedCE} is within the max limit of ${maxLimit}. Calculated chemistry aligns with reported values.`;
-  } else {
-    reason = `Calculated Carbon Equivalent ${ceResult.calculatedCE} exceeds maximum limit of ${maxLimit}.`;
-  }
-  return {
-    id: `finding-${req.id}-${heatNo || "gen"}-${Date.now()}`,
-    analysisId,
-    requirementId: req.id,
-    evidenceId: evidence.id,
-    category: req.category,
-    field: req.field,
-    displayName: req.displayName,
-    heatNo,
-    requirementText: `Max ${maxLimit}`,
-    requiredMax: maxLimit,
-    requirementClause: req.clauseReference,
-    requirementSourceDoc: req.sourceDocument,
-    requirementSourcePage: req.sourcePage,
-    supplierRawValue: evidence.rawValue,
-    supplierNormalizedValue: ceResult.calculatedCE,
-    supplierEvidenceDoc: evidence.sourceDocument,
-    supplierEvidencePage: evidence.sourcePage,
-    supplierSnippet: evidence.snippet,
-    confidence: evidence.confidence,
-    operator: "AGGREGATE",
-    calculatedComparison: calcStr,
-    status,
-    severity,
-    reason,
-    metallurgicalExplanation: `Formula: ${ceResult.formula}. Elements: C=${chemistry.C ?? 0}%, Mn=${chemistry.Mn ?? 0}%, Cr=${chemistry.Cr ?? 0}%, Mo=${chemistry.Mo ?? 0}%, V=${chemistry.V ?? 0}%, Ni=${chemistry.Ni ?? 0}%, Cu=${chemistry.Cu ?? 0}%.`,
-    isReviewed: false
-  };
-}
-function createDocumentationGapFinding(analysisId, req, heatNo) {
-  return {
-    id: `gap-${req.id}-${heatNo || "gen"}-${Date.now()}`,
-    analysisId,
-    requirementId: req.id,
-    category: req.category,
-    field: req.field,
-    displayName: req.displayName,
-    heatNo,
-    requirementText: req.description || `Required: ${req.displayName}`,
-    requiredMin: req.minValue,
-    requiredMax: req.maxValue,
-    requiredUnit: req.unit,
-    requiredTarget: String(req.targetValue || ""),
-    requirementClause: req.clauseReference,
-    requirementSourceDoc: req.sourceDocument,
-    requirementSourcePage: req.sourcePage,
-    supplierRawValue: "NOT IDENTIFIED IN MTC",
-    confidence: "high",
-    operator: req.operator,
-    calculatedComparison: "Evidence Missing -> DOCUMENTATION_GAP",
-    status: "DOCUMENTATION_GAP",
-    severity: req.mandatory ? "major" : "minor",
-    reason: `The client specification requires "${req.displayName}" (${req.clauseReference || req.sourceDocument}), but corresponding test evidence or certification statement was not explicitly identified in the submitted MTC.`,
-    metallurgicalExplanation: "This is classified as a documentation gap rather than a material failure. Verification or supplementary certificate required from supplier.",
-    isReviewed: false
-  };
-}
-function createReviewRequiredFinding(analysisId, req, evidence, heatNo, reason) {
-  return {
-    id: `dev-${req.id}-${heatNo || "gen"}-${Date.now()}`,
-    analysisId,
-    requirementId: req.id,
-    evidenceId: evidence.id,
-    category: req.category,
-    field: req.field,
-    displayName: req.displayName,
-    heatNo,
-    requirementText: req.description || req.displayName,
-    requiredMin: req.minValue,
-    requiredMax: req.maxValue,
-    requiredUnit: req.unit,
-    requiredTarget: String(req.targetValue || ""),
-    requirementClause: req.clauseReference,
-    requirementSourceDoc: req.sourceDocument,
-    requirementSourcePage: req.sourcePage,
-    supplierRawValue: evidence.rawValue,
-    supplierEvidenceDoc: evidence.sourceDocument,
-    supplierEvidencePage: evidence.sourcePage,
-    supplierSnippet: evidence.snippet,
-    confidence: evidence.confidence,
-    operator: req.operator,
-    calculatedComparison: "Unverified / Invalid Format -> DEVIATION",
-    status: "DEVIATION",
-    severity: "major",
-    reason,
-    isReviewed: false
-  };
-}
-
 // server/db.ts
 var DATA_DIR = path.join(process.cwd(), "data");
 var DB_FILE = path.join(DATA_DIR, "mtc_compliance_database.json");
@@ -1776,91 +1223,6 @@ var DatabaseStore = class {
         organizationId: apexOrgId,
         requirements: PILOT_MDS_REQUIREMENT_SET.requirements
       };
-    }
-    const pilotAnalysisId = "analysis-pilot-ww2606229-3";
-    if (!this.data.analyses[pilotAnalysisId]) {
-      const pilotFindings = evaluateCompliance({
-        analysisId: pilotAnalysisId,
-        requirements: PILOT_MDS_REQUIREMENT_SET.requirements,
-        certificate: PILOT_SUPPLIER_MTC
-      });
-      const passCount = pilotFindings.filter((f) => f.status === "PASS").length;
-      const devCount = pilotFindings.filter((f) => f.status === "DEVIATION").length;
-      const gapCount = pilotFindings.filter((f) => f.status === "DOCUMENTATION_GAP").length;
-      const reqCount = pilotFindings.filter((f) => f.status === "REVIEW_REQUIRED").length;
-      this.data.certificates[PILOT_SUPPLIER_MTC.id] = { ...PILOT_SUPPLIER_MTC };
-      this.data.analyses[pilotAnalysisId] = {
-        id: pilotAnalysisId,
-        organizationId: apexOrgId,
-        title: "Pilot Benchmark Analysis: Western Forge (WW2606229-3) vs Hawa MDS Rev A",
-        mtcDocumentId: "doc-mtc-ww2606229-3",
-        mtcFilename: "Western_Forge_MTC_WW2606229-3.pdf",
-        requirementSetId: PILOT_MDS_REQUIREMENT_SET.id,
-        requirementSetTitle: PILOT_MDS_REQUIREMENT_SET.title,
-        materialGrade: "ASTM A105N",
-        supplierName: "Western Forge & Flange Co.",
-        clientName: "Hawa Valves Quality Directorate",
-        poNumber: "PO-2026-APEX-8821",
-        mtcNumber: "WW2606229-3",
-        heats: ["HEAT-8821A", "HEAT-8821B"],
-        status: "ready_for_review",
-        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-        createdBy: "user-lead-qc",
-        createdByName: "Sarah Jenkins (Lead QC)",
-        passCount,
-        deviationCount: devCount,
-        documentationGapCount: gapCount,
-        reviewRequiredCount: reqCount,
-        totalFindings: pilotFindings.length,
-        reviewedCount: 0,
-        ruleEngineVersion: "MTC-CoreEngine v2.4.0",
-        aiModelUsed: "gemini-3.7-flash"
-      };
-      this.data.findings[pilotAnalysisId] = pilotFindings;
-      const deviations = pilotFindings.filter((f) => f.status === "DEVIATION");
-      const gaps = pilotFindings.filter((f) => f.status === "DOCUMENTATION_GAP");
-      this.data.feedbackDrafts[pilotAnalysisId] = {
-        id: `feedback-${pilotAnalysisId}`,
-        analysisId: pilotAnalysisId,
-        title: "Supplier Quality Review & Clarification Request: Western Forge WW2606229-3",
-        overallStatus: devCount > 0 ? "REVIEW REQUIRED" : "COMPLIANT",
-        salutation: "Dear Western Forge & Flange Quality Directorate,",
-        openingStatement: "The submitted Material Test Certificate (WW2606229-3) for PO PO-2026-APEX-8821 has been analyzed against project specification Hawa Valves MDS Rev A.",
-        conformingSummary: "Chemical composition and standard tensile mechanical properties for approved heats have been verified against applicable ASTM A105N thresholds.",
-        clarificationPoints: [
-          ...deviations.map((d, i) => ({
-            id: `dev-pt-${i + 1}`,
-            itemNumber: i + 1,
-            title: `${d.displayName} Deviation (${d.heatNo || "General"})`,
-            findingId: d.id,
-            description: `Reported value "${d.supplierRawValue}" deviates from specified requirement "${d.requirementText}". Reason: ${d.reason}`,
-            actionRequired: "Please submit corrective technical documentation or re-test justification."
-          })),
-          ...gaps.map((g, i) => ({
-            id: `gap-pt-${i + 1}`,
-            itemNumber: deviations.length + i + 1,
-            title: `Missing Evidence: ${g.displayName}`,
-            findingId: g.id,
-            description: `Client MDS Clause mandates "${g.displayName}", which was not identified in the submitted MTC.`,
-            actionRequired: "Please attach formal Level II supplementary test certificate."
-          }))
-        ],
-        closingStatement: "Please provide written clarification and supporting documentation within 5 working days to enable final material acceptance.",
-        status: "draft"
-      };
-      this.data.auditLogs.unshift({
-        id: `audit-init-${Date.now()}`,
-        timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-        organizationId: apexOrgId,
-        actorId: "user-admin-system",
-        actorName: "David Chen",
-        actorRole: "ADMIN",
-        action: "SYSTEM_INITIALIZE",
-        objectType: "system",
-        objectId: "system-seed",
-        objectName: "MTC Compliance System Initialization",
-        details: { version: "2.4.0", initialAnalyses: 1, initialOrg: apexOrgId }
-      });
     }
     this.persistToDisk();
   }
@@ -3368,6 +2730,559 @@ function fallbackSupplierEvidenceExtraction(text, filename) {
   };
 }
 
+// src/engine/units.ts
+function parseEngineeringValue(raw) {
+  if (raw === void 0 || raw === null) return null;
+  if (typeof raw === "number") {
+    return { value: raw, unit: "", originalText: String(raw) };
+  }
+  const str = String(raw).trim();
+  if (!str) return null;
+  const match = str.match(/^([<>]=?|\b)?\s*([+-]?\d+(?:\.\d+)?)\s*([°a-zA-Z/%³²\-_0-9]+)?/);
+  if (!match) {
+    const numOnly = parseFloat(str.replace(/[^0-9.-]/g, ""));
+    if (!isNaN(numOnly)) {
+      return { value: numOnly, unit: "", originalText: str };
+    }
+    return null;
+  }
+  const numVal = parseFloat(match[2]);
+  if (isNaN(numVal)) return null;
+  let unit = (match[3] || "").trim();
+  return {
+    value: numVal,
+    unit: normalizeUnitString(unit),
+    originalText: str
+  };
+}
+function normalizeUnitString(unit) {
+  const clean = unit.replace(/\s+/g, "").toUpperCase();
+  if (clean === "\xB0C" || clean === "C" || clean === "DEG C" || clean === "DEGC" || clean === "CELSIUS") return "\xB0C";
+  if (clean === "\xB0F" || clean === "F" || clean === "DEG F" || clean === "DEGF" || clean === "FAHRENHEIT") return "\xB0F";
+  if (clean === "MPA" || clean === "N/MM2" || clean === "N/MM\xB2") return "MPa";
+  if (clean === "KSI") return "ksi";
+  if (clean === "PSI") return "psi";
+  if (clean === "%" || clean === "PERCENT" || clean === "PCT") return "%";
+  if (clean === "HBW" || clean === "HB" || clean === "BHN") return "HBW";
+  if (clean === "HRC") return "HRC";
+  if (clean === "HRB") return "HRB";
+  if (clean === "HV" || clean === "VICKERS") return "HV";
+  if (clean === "J" || clean === "JOULE" || clean === "JOULES") return "J";
+  if (clean === "FT-LB" || clean === "FT-LBS" || clean === "FTLBS") return "ft-lbs";
+  if (clean === "MM") return "mm";
+  if (clean === "INCH" || clean === "IN" || clean === "INCHES") return "in";
+  return unit;
+}
+function convertValue(val, sourceUnit, targetUnit) {
+  const src = normalizeUnitString(sourceUnit);
+  const tgt = normalizeUnitString(targetUnit);
+  if (src === tgt || !src || !tgt) return val;
+  if (src === "\xB0F" && tgt === "\xB0C") {
+    return (val - 32) * (5 / 9);
+  }
+  if (src === "\xB0C" && tgt === "\xB0F") {
+    return val * (9 / 5) + 32;
+  }
+  if (src === "ksi" && tgt === "MPa") {
+    return val * 6.89476;
+  }
+  if (src === "MPa" && tgt === "ksi") {
+    return val / 6.89476;
+  }
+  if (src === "psi" && tgt === "MPa") {
+    return val * 689476e-8;
+  }
+  if (src === "ratio" && tgt === "%") {
+    return val * 100;
+  }
+  if (src === "%" && tgt === "ratio") {
+    return val / 100;
+  }
+  if (src === "ft-lbs" && tgt === "J") {
+    return val * 1.35582;
+  }
+  if (src === "J" && tgt === "ft-lbs") {
+    return val / 1.35582;
+  }
+  return val;
+}
+
+// src/engine/ce.ts
+function calculateCarbonEquivalent(chemistry, maxLimit = 0.43, reportedCE) {
+  const c = chemistry.C || 0;
+  const mn = chemistry.Mn || 0;
+  const cr = chemistry.Cr || 0;
+  const mo = chemistry.Mo || 0;
+  const v = chemistry.V || 0;
+  const ni = chemistry.Ni || 0;
+  const cu = chemistry.Cu || 0;
+  const mnPart = mn / 6;
+  const crMoVPart = (cr + mo + v) / 5;
+  const niCuPart = (ni + cu) / 15;
+  const rawCE = c + mnPart + crMoVPart + niCuPart;
+  const calculatedCE = Math.round(rawCE * 1e3) / 1e3;
+  const formula = "CE = C + Mn/6 + (Cr + Mo + V)/5 + (Ni + Cu)/15";
+  const breakdown = `${c.toFixed(3)} + (${mn.toFixed(3)}/6) + ((${cr.toFixed(3)}+${mo.toFixed(3)}+${v.toFixed(3)})/5) + ((${ni.toFixed(3)}+${cu.toFixed(3)})/15) = ${calculatedCE.toFixed(3)}`;
+  const isCompliantWithLimit = calculatedCE <= maxLimit;
+  let discrepancyWithReported = void 0;
+  let isDiscrepancySignificant = false;
+  if (reportedCE !== void 0 && !isNaN(reportedCE)) {
+    discrepancyWithReported = Math.abs(calculatedCE - reportedCE);
+    isDiscrepancySignificant = discrepancyWithReported > 0.015;
+  }
+  return {
+    calculatedCE,
+    formula,
+    elementsUsed: { C: c, Mn: mn, Cr: cr, Mo: mo, V: v, Ni: ni, Cu: cu },
+    breakdown,
+    isCompliantWithLimit,
+    maxLimit,
+    reportedCE,
+    discrepancyWithReported,
+    isDiscrepancySignificant
+  };
+}
+
+// src/engine/rules.ts
+function evaluateCompliance(context) {
+  const { analysisId, requirements, certificate } = context;
+  const findings = [];
+  const heats = certificate.heats && certificate.heats.length > 0 ? certificate.heats : ["GENERAL"];
+  for (const req of requirements) {
+    const isHeatSpecific = ["chemical", "mechanical", "heat_treatment", "hardness"].includes(req.category);
+    if (isHeatSpecific && heats.length > 0) {
+      for (const heatNo of heats) {
+        const finding = evaluateSingleRequirement(analysisId, req, certificate, heatNo);
+        findings.push(finding);
+      }
+    } else {
+      const finding = evaluateSingleRequirement(analysisId, req, certificate, void 0);
+      findings.push(finding);
+    }
+  }
+  return findings;
+}
+function evaluateSingleRequirement(analysisId, req, cert, heatNo) {
+  const matchedEvidence = cert.evidenceItems.filter((e) => {
+    const fieldMatch = e.field.toLowerCase() === req.field.toLowerCase() || e.displayName.toLowerCase() === req.displayName.toLowerCase();
+    if (!fieldMatch) return false;
+    if (heatNo && e.heatNo && e.heatNo !== "GENERAL" && e.heatNo !== heatNo) {
+      return false;
+    }
+    return true;
+  });
+  const evidence = matchedEvidence[0];
+  if (!evidence || !evidence.rawValue || evidence.rawValue.trim() === "" || evidence.rawValue === "NOT_FOUND") {
+    return createDocumentationGapFinding(analysisId, req, heatNo);
+  }
+  if (evidence.confidence === "low") {
+    return createReviewRequiredFinding(
+      analysisId,
+      req,
+      evidence,
+      heatNo,
+      "Extraction confidence is low. Manual human verification required."
+    );
+  }
+  switch (req.operator) {
+    case "MIN":
+      return evaluateMinOperator(analysisId, req, evidence, heatNo);
+    case "MAX":
+      return evaluateMaxOperator(analysisId, req, evidence, heatNo);
+    case "RANGE":
+      return evaluateRangeOperator(analysisId, req, evidence, heatNo);
+    case "EQUALS":
+    case "MATCH":
+      return evaluateMatchOperator(analysisId, req, evidence, heatNo);
+    case "REQUIRED":
+      return evaluateRequiredOperator(analysisId, req, evidence, heatNo);
+    case "FORBIDDEN":
+      return evaluateForbiddenOperator(analysisId, req, evidence, heatNo);
+    case "AGGREGATE":
+      return evaluateAggregateOperator(analysisId, req, cert, evidence, heatNo);
+    default:
+      return evaluateMatchOperator(analysisId, req, evidence, heatNo);
+  }
+}
+function evaluateMinOperator(analysisId, req, evidence, heatNo) {
+  const reqMin = req.minValue ?? 0;
+  const parsed = parseEngineeringValue(evidence.rawValue);
+  if (!parsed) {
+    return createReviewRequiredFinding(
+      analysisId,
+      req,
+      evidence,
+      heatNo,
+      `Could not parse numeric value from supplier evidence: "${evidence.rawValue}"`
+    );
+  }
+  const normalizedVal = req.unit ? convertValue(parsed.value, parsed.unit || req.unit, req.unit) : parsed.value;
+  const isPass = normalizedVal >= reqMin;
+  const status = isPass ? "PASS" : "DEVIATION";
+  const severity = isPass ? "info" : normalizedVal < reqMin * 0.9 ? "critical" : "major";
+  const calcStr = `${normalizedVal} ${req.unit || ""} >= ${reqMin} ${req.unit || ""} -> ${isPass ? "PASS" : "DEVIATION"}`;
+  const reason = isPass ? `Supplier value ${normalizedVal} ${req.unit || ""} satisfies the minimum required threshold of ${reqMin} ${req.unit || ""}.` : `Supplier value ${normalizedVal} ${req.unit || ""} is below the specified minimum limit of ${reqMin} ${req.unit || ""} by ${(reqMin - normalizedVal).toFixed(1)} ${req.unit || ""}.`;
+  return {
+    id: `finding-${req.id}-${heatNo || "gen"}-${Date.now()}`,
+    analysisId,
+    requirementId: req.id,
+    evidenceId: evidence.id,
+    category: req.category,
+    field: req.field,
+    displayName: req.displayName,
+    heatNo,
+    requirementText: `Minimum ${reqMin} ${req.unit || ""}`,
+    requiredMin: reqMin,
+    requiredUnit: req.unit,
+    requirementClause: req.clauseReference,
+    requirementSourceDoc: req.sourceDocument,
+    requirementSourcePage: req.sourcePage,
+    supplierRawValue: evidence.rawValue,
+    supplierNormalizedValue: normalizedVal,
+    supplierUnit: req.unit || parsed.unit,
+    supplierEvidenceDoc: evidence.sourceDocument,
+    supplierEvidencePage: evidence.sourcePage,
+    supplierSnippet: evidence.snippet,
+    confidence: evidence.confidence,
+    operator: "MIN",
+    calculatedComparison: calcStr,
+    status,
+    severity,
+    reason,
+    isReviewed: false
+  };
+}
+function evaluateMaxOperator(analysisId, req, evidence, heatNo) {
+  const reqMax = req.maxValue ?? Infinity;
+  const parsed = parseEngineeringValue(evidence.rawValue);
+  if (!parsed) {
+    return createReviewRequiredFinding(
+      analysisId,
+      req,
+      evidence,
+      heatNo,
+      `Could not parse numeric value from supplier evidence: "${evidence.rawValue}"`
+    );
+  }
+  const normalizedVal = req.unit ? convertValue(parsed.value, parsed.unit || req.unit, req.unit) : parsed.value;
+  const isPass = normalizedVal <= reqMax;
+  const status = isPass ? "PASS" : "DEVIATION";
+  const severity = isPass ? "info" : "critical";
+  const calcStr = `${normalizedVal} ${req.unit || ""} <= ${reqMax} ${req.unit || ""} -> ${isPass ? "PASS" : "DEVIATION"}`;
+  const reason = isPass ? `Supplier value ${normalizedVal} ${req.unit || ""} is within the maximum allowable limit of ${reqMax} ${req.unit || ""}.` : `Supplier value ${normalizedVal} ${req.unit || ""} exceeds the maximum allowable limit of ${reqMax} ${req.unit || ""}.`;
+  return {
+    id: `finding-${req.id}-${heatNo || "gen"}-${Date.now()}`,
+    analysisId,
+    requirementId: req.id,
+    evidenceId: evidence.id,
+    category: req.category,
+    field: req.field,
+    displayName: req.displayName,
+    heatNo,
+    requirementText: `Maximum ${reqMax} ${req.unit || ""}`,
+    requiredMax: reqMax,
+    requiredUnit: req.unit,
+    requirementClause: req.clauseReference,
+    requirementSourceDoc: req.sourceDocument,
+    requirementSourcePage: req.sourcePage,
+    supplierRawValue: evidence.rawValue,
+    supplierNormalizedValue: normalizedVal,
+    supplierUnit: req.unit || parsed.unit,
+    supplierEvidenceDoc: evidence.sourceDocument,
+    supplierEvidencePage: evidence.sourcePage,
+    supplierSnippet: evidence.snippet,
+    confidence: evidence.confidence,
+    operator: "MAX",
+    calculatedComparison: calcStr,
+    status,
+    severity,
+    reason,
+    isReviewed: false
+  };
+}
+function evaluateRangeOperator(analysisId, req, evidence, heatNo) {
+  const reqMin = req.minValue ?? 0;
+  const reqMax = req.maxValue ?? Infinity;
+  const parsed = parseEngineeringValue(evidence.rawValue);
+  if (!parsed) {
+    return createReviewRequiredFinding(
+      analysisId,
+      req,
+      evidence,
+      heatNo,
+      `Could not parse numeric range value from supplier evidence: "${evidence.rawValue}"`
+    );
+  }
+  const normalizedVal = req.unit ? convertValue(parsed.value, parsed.unit || req.unit, req.unit) : parsed.value;
+  const isPass = normalizedVal >= reqMin && normalizedVal <= reqMax;
+  const status = isPass ? "PASS" : "DEVIATION";
+  const severity = isPass ? "info" : "critical";
+  const calcStr = `${reqMin} <= ${normalizedVal} <= ${reqMax} ${req.unit || ""} -> ${isPass ? "PASS" : "DEVIATION"}`;
+  let reason = "";
+  if (isPass) {
+    reason = `Supplier value ${normalizedVal} ${req.unit || ""} falls within the specified range [${reqMin} - ${reqMax} ${req.unit || ""}].`;
+  } else if (normalizedVal < reqMin) {
+    reason = `Supplier value ${normalizedVal} ${req.unit || ""} is below the lower range limit of ${reqMin} ${req.unit || ""}.`;
+  } else {
+    reason = `Supplier value ${normalizedVal} ${req.unit || ""} exceeds the upper range limit of ${reqMax} ${req.unit || ""}.`;
+  }
+  return {
+    id: `finding-${req.id}-${heatNo || "gen"}-${Date.now()}`,
+    analysisId,
+    requirementId: req.id,
+    evidenceId: evidence.id,
+    category: req.category,
+    field: req.field,
+    displayName: req.displayName,
+    heatNo,
+    requirementText: `${reqMin} \u2013 ${reqMax} ${req.unit || ""}`,
+    requiredMin: reqMin,
+    requiredMax: reqMax,
+    requiredUnit: req.unit,
+    requirementClause: req.clauseReference,
+    requirementSourceDoc: req.sourceDocument,
+    requirementSourcePage: req.sourcePage,
+    supplierRawValue: evidence.rawValue,
+    supplierNormalizedValue: normalizedVal,
+    supplierUnit: req.unit || parsed.unit,
+    supplierEvidenceDoc: evidence.sourceDocument,
+    supplierEvidencePage: evidence.sourcePage,
+    supplierSnippet: evidence.snippet,
+    confidence: evidence.confidence,
+    operator: "RANGE",
+    calculatedComparison: calcStr,
+    status,
+    severity,
+    reason,
+    isReviewed: false
+  };
+}
+function evaluateMatchOperator(analysisId, req, evidence, heatNo) {
+  const reqTarget = String(req.targetValue || req.description || "").trim().toLowerCase();
+  const rawEv = String(evidence.rawValue || "").trim().toLowerCase();
+  const cleanTarget = reqTarget.replace(/[\s\-_/]/g, "");
+  const cleanEvidence = rawEv.replace(/[\s\-_/]/g, "");
+  const isMatch = cleanEvidence.includes(cleanTarget) || cleanTarget.includes(cleanEvidence) || rawEv.includes("pass") || rawEv.includes("conforms") || rawEv.includes("satisfactory") || rawEv.includes("normalized") || rawEv.includes("3.1") && reqTarget.includes("3.1") || rawEv.includes("nace") && reqTarget.includes("nace");
+  const status = isMatch ? "PASS" : "DEVIATION";
+  const severity = isMatch ? "info" : "major";
+  const calcStr = `"${evidence.rawValue}" MATCH "${req.targetValue || req.description}" -> ${status}`;
+  const reason = isMatch ? `Supplier statement satisfies requirement: "${evidence.rawValue}".` : `Supplier statement "${evidence.rawValue}" does not match specified requirement: "${req.targetValue || req.description}".`;
+  return {
+    id: `finding-${req.id}-${heatNo || "gen"}-${Date.now()}`,
+    analysisId,
+    requirementId: req.id,
+    evidenceId: evidence.id,
+    category: req.category,
+    field: req.field,
+    displayName: req.displayName,
+    heatNo,
+    requirementText: req.description || String(req.targetValue || ""),
+    requiredTarget: String(req.targetValue || ""),
+    requirementClause: req.clauseReference,
+    requirementSourceDoc: req.sourceDocument,
+    requirementSourcePage: req.sourcePage,
+    supplierRawValue: evidence.rawValue,
+    supplierEvidenceDoc: evidence.sourceDocument,
+    supplierEvidencePage: evidence.sourcePage,
+    supplierSnippet: evidence.snippet,
+    confidence: evidence.confidence,
+    operator: "MATCH",
+    calculatedComparison: calcStr,
+    status,
+    severity,
+    reason,
+    isReviewed: false
+  };
+}
+function evaluateRequiredOperator(analysisId, req, evidence, heatNo) {
+  const raw = String(evidence.rawValue || "").trim().toLowerCase();
+  const isPresent = raw !== "" && raw !== "not_found" && raw !== "absent" && !raw.includes("not provided");
+  if (!isPresent) {
+    return createDocumentationGapFinding(analysisId, req, heatNo);
+  }
+  const isPositive = raw.includes("yes") || raw.includes("completed") || raw.includes("pass") || raw.includes("conforms") || raw.includes("performed") || raw.includes("certified") || raw.includes("100%") || raw.includes("satisfactory");
+  const status = isPositive ? "PASS" : "DEVIATION";
+  const severity = isPositive ? "info" : "minor";
+  const calcStr = `Evidence Present: "${evidence.rawValue}" -> ${status}`;
+  const reason = isPositive ? `Required evidence confirmed: "${evidence.rawValue}".` : `Evidence provided does not confirm requirement: "${evidence.rawValue}".`;
+  return {
+    id: `finding-${req.id}-${heatNo || "gen"}-${Date.now()}`,
+    analysisId,
+    requirementId: req.id,
+    evidenceId: evidence.id,
+    category: req.category,
+    field: req.field,
+    displayName: req.displayName,
+    heatNo,
+    requirementText: req.description || "Mandatory Evidence Required",
+    requirementClause: req.clauseReference,
+    requirementSourceDoc: req.sourceDocument,
+    requirementSourcePage: req.sourcePage,
+    supplierRawValue: evidence.rawValue,
+    supplierEvidenceDoc: evidence.sourceDocument,
+    supplierEvidencePage: evidence.sourcePage,
+    supplierSnippet: evidence.snippet,
+    confidence: evidence.confidence,
+    operator: "REQUIRED",
+    calculatedComparison: calcStr,
+    status,
+    severity,
+    reason,
+    isReviewed: false
+  };
+}
+function evaluateForbiddenOperator(analysisId, req, evidence, heatNo) {
+  const raw = String(evidence.rawValue || "").trim().toLowerCase();
+  const forbiddenPhrases = ["repaired", "weld repaired", "defect repaired", "welding performed"];
+  const safePhrases = ["no weld repair", "without weld repair", "none", "nil", "not permitted", "no welding"];
+  const containsForbidden = forbiddenPhrases.some((p) => raw.includes(p)) && !safePhrases.some((p) => raw.includes(p));
+  const status = containsForbidden ? "DEVIATION" : "PASS";
+  const severity = containsForbidden ? "critical" : "info";
+  const calcStr = `Check Prohibited Condition -> ${status}`;
+  const reason = containsForbidden ? `Supplier evidence indicates prohibited activity: "${evidence.rawValue}".` : `Supplier confirms no prohibited repair/condition: "${evidence.rawValue}".`;
+  return {
+    id: `finding-${req.id}-${heatNo || "gen"}-${Date.now()}`,
+    analysisId,
+    requirementId: req.id,
+    evidenceId: evidence.id,
+    category: req.category,
+    field: req.field,
+    displayName: req.displayName,
+    heatNo,
+    requirementText: req.description || "Prohibited condition",
+    requirementClause: req.clauseReference,
+    requirementSourceDoc: req.sourceDocument,
+    requirementSourcePage: req.sourcePage,
+    supplierRawValue: evidence.rawValue,
+    supplierEvidenceDoc: evidence.sourceDocument,
+    supplierEvidencePage: evidence.sourcePage,
+    supplierSnippet: evidence.snippet,
+    confidence: evidence.confidence,
+    operator: "FORBIDDEN",
+    calculatedComparison: calcStr,
+    status,
+    severity,
+    reason,
+    isReviewed: false
+  };
+}
+function evaluateAggregateOperator(analysisId, req, cert, evidence, heatNo) {
+  const chemistry = {};
+  const heatEvidence = cert.evidenceItems.filter((e) => !heatNo || e.heatNo === heatNo || e.heatNo === "GENERAL");
+  for (const item of heatEvidence) {
+    if (item.category === "chemical") {
+      const parsed = parseEngineeringValue(item.rawValue);
+      if (parsed) {
+        chemistry[item.field] = parsed.value;
+      }
+    }
+  }
+  const reportedParsed = parseEngineeringValue(evidence.rawValue);
+  const reportedCE = reportedParsed ? reportedParsed.value : void 0;
+  const maxLimit = req.maxValue ?? 0.43;
+  const ceResult = calculateCarbonEquivalent(chemistry, maxLimit, reportedCE);
+  const isPass = ceResult.isCompliantWithLimit;
+  const status = isPass ? "PASS" : "DEVIATION";
+  const severity = isPass ? "info" : "major";
+  let calcStr = `Calculated CE: ${ceResult.calculatedCE} <= ${maxLimit} [${ceResult.breakdown}]`;
+  if (reportedCE !== void 0) {
+    calcStr += ` | Reported MTC CE: ${reportedCE}`;
+  }
+  let reason = "";
+  if (isPass) {
+    reason = `Carbon Equivalent of ${ceResult.calculatedCE} is within the max limit of ${maxLimit}. Calculated chemistry aligns with reported values.`;
+  } else {
+    reason = `Calculated Carbon Equivalent ${ceResult.calculatedCE} exceeds maximum limit of ${maxLimit}.`;
+  }
+  return {
+    id: `finding-${req.id}-${heatNo || "gen"}-${Date.now()}`,
+    analysisId,
+    requirementId: req.id,
+    evidenceId: evidence.id,
+    category: req.category,
+    field: req.field,
+    displayName: req.displayName,
+    heatNo,
+    requirementText: `Max ${maxLimit}`,
+    requiredMax: maxLimit,
+    requirementClause: req.clauseReference,
+    requirementSourceDoc: req.sourceDocument,
+    requirementSourcePage: req.sourcePage,
+    supplierRawValue: evidence.rawValue,
+    supplierNormalizedValue: ceResult.calculatedCE,
+    supplierEvidenceDoc: evidence.sourceDocument,
+    supplierEvidencePage: evidence.sourcePage,
+    supplierSnippet: evidence.snippet,
+    confidence: evidence.confidence,
+    operator: "AGGREGATE",
+    calculatedComparison: calcStr,
+    status,
+    severity,
+    reason,
+    metallurgicalExplanation: `Formula: ${ceResult.formula}. Elements: C=${chemistry.C ?? 0}%, Mn=${chemistry.Mn ?? 0}%, Cr=${chemistry.Cr ?? 0}%, Mo=${chemistry.Mo ?? 0}%, V=${chemistry.V ?? 0}%, Ni=${chemistry.Ni ?? 0}%, Cu=${chemistry.Cu ?? 0}%.`,
+    isReviewed: false
+  };
+}
+function createDocumentationGapFinding(analysisId, req, heatNo) {
+  return {
+    id: `gap-${req.id}-${heatNo || "gen"}-${Date.now()}`,
+    analysisId,
+    requirementId: req.id,
+    category: req.category,
+    field: req.field,
+    displayName: req.displayName,
+    heatNo,
+    requirementText: req.description || `Required: ${req.displayName}`,
+    requiredMin: req.minValue,
+    requiredMax: req.maxValue,
+    requiredUnit: req.unit,
+    requiredTarget: String(req.targetValue || ""),
+    requirementClause: req.clauseReference,
+    requirementSourceDoc: req.sourceDocument,
+    requirementSourcePage: req.sourcePage,
+    supplierRawValue: "NOT IDENTIFIED IN MTC",
+    confidence: "high",
+    operator: req.operator,
+    calculatedComparison: "Evidence Missing -> DOCUMENTATION_GAP",
+    status: "DOCUMENTATION_GAP",
+    severity: req.mandatory ? "major" : "minor",
+    reason: `The client specification requires "${req.displayName}" (${req.clauseReference || req.sourceDocument}), but corresponding test evidence or certification statement was not explicitly identified in the submitted MTC.`,
+    metallurgicalExplanation: "This is classified as a documentation gap rather than a material failure. Verification or supplementary certificate required from supplier.",
+    isReviewed: false
+  };
+}
+function createReviewRequiredFinding(analysisId, req, evidence, heatNo, reason) {
+  return {
+    id: `dev-${req.id}-${heatNo || "gen"}-${Date.now()}`,
+    analysisId,
+    requirementId: req.id,
+    evidenceId: evidence.id,
+    category: req.category,
+    field: req.field,
+    displayName: req.displayName,
+    heatNo,
+    requirementText: req.description || req.displayName,
+    requiredMin: req.minValue,
+    requiredMax: req.maxValue,
+    requiredUnit: req.unit,
+    requiredTarget: String(req.targetValue || ""),
+    requirementClause: req.clauseReference,
+    requirementSourceDoc: req.sourceDocument,
+    requirementSourcePage: req.sourcePage,
+    supplierRawValue: evidence.rawValue,
+    supplierEvidenceDoc: evidence.sourceDocument,
+    supplierEvidencePage: evidence.sourcePage,
+    supplierSnippet: evidence.snippet,
+    confidence: evidence.confidence,
+    operator: req.operator,
+    calculatedComparison: "Unverified / Invalid Format -> DEVIATION",
+    status: "DEVIATION",
+    severity: "major",
+    reason,
+    isReviewed: false
+  };
+}
+
 // src/engine/testSuite.ts
 function runAllTestCases() {
   const results = [];
@@ -4192,7 +4107,7 @@ app.post("/api/requirements", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINE
     res.status(500).json({ error: e.message });
   }
 });
-app.post("/api/pilot-case", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINEER"]), (req, res) => {
+app.post("/api/pilot-case", requireAuth, (req, res) => {
   try {
     const orgId = req.user.organization_id;
     const pilotAnalysisId = "analysis-pilot-ww2606229-3";

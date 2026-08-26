@@ -268,8 +268,8 @@ app.use('/api/auth', authRouter);
     }
   });
 
-  // --- PILOT BENCHMARK CASE LOADER ---
-  app.post('/api/pilot-case', requireAuth, requireRole(['ADMIN', 'QUALITY_ENGINEER']), (req, res) => {
+  // --- PILOT BENCHMARK CASE LOADER (On-Demand) ---
+  app.post('/api/pilot-case', requireAuth, (req, res) => {
     try {
       const orgId = req.user!.organization_id;
       const pilotAnalysisId = 'analysis-pilot-ww2606229-3';

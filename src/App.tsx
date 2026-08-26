@@ -218,25 +218,29 @@ export default function App() {
   // 1-Click Launch Benchmark Pilot Case
   const handleLoadPilotCase = async () => {
     try {
-      const pilot = analyses.find((a) => a.id.includes('pilot') || a.mtcNumber === 'WW2606229-3');
-      if (pilot) {
-        handleSelectAnalysis(pilot.id);
-      } else {
-        const res = await apiFetch('/api/pilot-case', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
+      const res = await apiFetch('/api/pilot-case', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAnalyses((prev) => {
+          const filtered = prev.filter((a) => a.id !== data.analysis.id);
+          return [data.analysis, ...filtered];
         });
-        if (res.ok) {
-          const data = await res.json();
-          setAnalyses((prev) => [data.analysis, ...prev]);
-          const reqRes = await apiFetch('/api/requirements');
-          if (reqRes.ok) {
-            const reqData = await reqRes.json();
-            setRequirementSets(reqData.requirementSets || []);
-          }
-          handleSelectAnalysis(data.analysis.id);
+        const reqRes = await apiFetch('/api/requirements');
+        if (reqRes.ok) {
+          const reqData = await reqRes.json();
+          setRequirementSets(reqData.requirementSets || []);
         }
+        handleSelectAnalysis(data.analysis.id);
+        addToast({
+          id: `toast-pilot-${Date.now()}`,
+          type: 'success',
+          title: 'Benchmark MTC Loaded',
+          description: 'Loaded ASTM A105N benchmark test certificate (Western Forge WW2606229-3).',
+        });
       }
     } catch (e) {
       console.error('Failed to load pilot test case:', e);

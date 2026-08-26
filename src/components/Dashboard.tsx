@@ -568,14 +568,40 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Technical Data Table with horizontal scrolling and readable column widths */}
         <div className="border border-slate-200 rounded-lg overflow-x-auto w-full max-w-full">
           {filteredAnalyses.length === 0 ? (
-            <div className="p-8 text-center space-y-2">
-              <FileText className="w-8 h-8 text-slate-400 mx-auto" aria-hidden="true" />
-              <p className="text-xs font-bold text-slate-800">No matching verification records</p>
-              <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
-                {statusFilter !== 'all'
-                  ? 'No records match the active filter criteria.'
-                  : 'Get started by running a verification on an MTC certificate.'}
-              </p>
+            <div className="p-10 text-center space-y-3">
+              <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center mx-auto text-slate-500">
+                <FileText className="w-6 h-6 stroke-[2]" aria-hidden="true" />
+              </div>
+              <div className="space-y-1 max-w-sm mx-auto">
+                <p className="text-sm font-bold text-slate-800">
+                  {analyses.length === 0 ? 'No MTC Analyses Yet' : 'No matching verification records'}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {analyses.length === 0
+                    ? 'Your workspace is clean. Upload your first Material Test Certificate to begin, or load the pre-configured ASTM A105N benchmark case.'
+                    : 'No records match the active filter criteria.'}
+                </p>
+              </div>
+              {analyses.length === 0 && (
+                <div className="flex items-center justify-center gap-2.5 pt-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={onOpenNewComparison}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer transition-colors shadow-xs"
+                  >
+                    <Plus className="w-4 h-4 stroke-[2.5]" aria-hidden="true" />
+                    <span>Verify New MTC</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onLoadPilotCase}
+                    className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 cursor-pointer transition-colors"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
+                    <span>Load Benchmark MTC (ASTM A105N)</span>
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <table role="table" className="w-full text-left border-collapse min-w-[760px]">
