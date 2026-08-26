@@ -73,7 +73,7 @@ interface RateLimitRecord {
 const rateLimitStore = new Map<string, RateLimitRecord>();
 
 // Clean up expired rate limit entries every 5 minutes
-setInterval(() => {
+const cleanupTimer = setInterval(() => {
   const now = Date.now();
   for (const [key, record] of rateLimitStore.entries()) {
     if (now > record.resetAt) {
@@ -81,6 +81,9 @@ setInterval(() => {
     }
   }
 }, 5 * 60 * 1000);
+if (cleanupTimer && typeof cleanupTimer.unref === 'function') {
+  cleanupTimer.unref();
+}
 
 export function createRateLimiter(maxRequests = 10, windowMs = 60 * 1000, message = 'Too many authentication attempts. Please try again later.') {
   return (req: Request, res: Response, next: NextFunction) => {

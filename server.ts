@@ -56,43 +56,29 @@ app.use(async (req, res, next) => {
   }
 });
 
-// Flush pending database writes before response completion (Crucial for Vercel Serverless)
-app.use((req, res, next) => {
-  const origJson = res.json.bind(res);
-  res.json = function (body: any) {
-    if (db.hasPendingWrites()) {
-      db.flushWrites()
-        .then(() => origJson(body))
-        .catch((err) => {
-          console.error('Failed to flush DB writes before sending response:', err);
-          origJson(body);
-        });
-      return res;
-    }
-    return origJson(body);
-  };
-  next();
-});
-
 // Session Authentication Middleware (attaches req.user, req.organization, req.session)
 app.use(authenticate);
 
-  // --- API ROUTES ---
+// --- API ROUTES ---
 
-  // Health check (Public)
-  app.get('/api/health', (req, res) => {
-    res.json({
-      status: 'ok',
-      service: 'MTC Compliance Checker API',
-      version: '2.4.0',
-      database: db.isPostgresConnected ? 'postgresql (supabase/connected)' : 'local/memory store',
-      authenticated: !!req.user,
-      timestamp: new Date().toISOString(),
-    });
+// Health check & Root API info (Public)
+const healthHandler = (req: express.Request, res: express.Response) => {
+  res.json({
+    status: 'ok',
+    service: 'MTC Compliance Checker API',
+    version: '2.4.0',
+    database: db.isPostgresConnected ? 'postgresql (supabase/connected)' : 'local/memory store',
+    authenticated: !!req.user,
+    timestamp: new Date().toISOString(),
   });
+};
 
-  // Dedicated Authentication Router
-  app.use('/api/auth', authRouter);
+app.get('/api/health', healthHandler);
+app.get('/health', healthHandler);
+app.get('/api', healthHandler);
+
+// Dedicated Authentication Router
+app.use('/api/auth', authRouter);
 
   // Tenant Users & Organization info (Protected)
   app.get('/api/users', requireAuth, (req, res) => {

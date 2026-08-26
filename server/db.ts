@@ -174,13 +174,18 @@ export class DatabaseStore {
     this.loadFromDisk();
     this.ensureSeedData();
     this.initPromise = this.initPostgres().catch((err) => {
-      console.warn('Optional PostgreSQL initialization notice:', err.message);
+      console.warn('Optional PostgreSQL initialization notice:', err?.message || err);
     });
 
     // Run 30-day retention maintenance check every 60 minutes
-    setInterval(() => {
-      this.enforce30DayRetention();
-    }, 60 * 60 * 1000);
+    if (!process.env.VERCEL) {
+      const retentionTimer = setInterval(() => {
+        this.enforce30DayRetention();
+      }, 60 * 60 * 1000);
+      if (retentionTimer && typeof retentionTimer.unref === 'function') {
+        retentionTimer.unref();
+      }
+    }
   }
 
   private async initPostgres(): Promise<void> {
@@ -208,9 +213,9 @@ export class DatabaseStore {
       this.pgPool = new pg.Pool({
         connectionString: dbUrl,
         ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
-        max: process.env.VERCEL ? 3 : 10,
+        max: process.env.VERCEL ? 1 : 10,
         idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 10000,
+        connectionTimeoutMillis: 4000,
       });
 
       this.pgPool.on('error', (err) => {
@@ -311,8 +316,10 @@ export class DatabaseStore {
 
   private loadFromDisk(): void {
     try {
-      if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
+      if (!process.env.VERCEL) {
+        if (!fs.existsSync(DATA_DIR)) {
+          fs.mkdirSync(DATA_DIR, { recursive: true });
+        }
       }
 
       if (fs.existsSync(DB_FILE)) {
