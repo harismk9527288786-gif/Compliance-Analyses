@@ -184,7 +184,12 @@ export class DatabaseStore {
   }
 
   private async initPostgres(): Promise<void> {
-    const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRES_URL_NON_POOLING;
+    const dbUrl =
+      process.env.DATABASE_URL ||
+      process.env.POSTGRES_URL ||
+      process.env.POSTGRES_PRISMA_URL ||
+      process.env.POSTGRES_URL_NON_POOLING ||
+      process.env.SUPABASE_DB_URL;
     if (!dbUrl) return;
 
     try {
@@ -195,6 +200,7 @@ export class DatabaseStore {
         dbUrl.includes('ssl=true') ||
         dbUrl.includes('postgres.') ||
         dbUrl.includes('supabase') ||
+        dbUrl.includes('pooler.supabase.com') ||
         dbUrl.includes('neon.tech') ||
         dbUrl.includes('render.com') ||
         dbUrl.includes('vercel-storage');
@@ -202,7 +208,7 @@ export class DatabaseStore {
       this.pgPool = new pg.Pool({
         connectionString: dbUrl,
         ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
-        max: 10,
+        max: process.env.VERCEL ? 3 : 10,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 10000,
       });

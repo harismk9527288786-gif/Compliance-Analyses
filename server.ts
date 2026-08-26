@@ -85,6 +85,7 @@ app.use(authenticate);
       status: 'ok',
       service: 'MTC Compliance Checker API',
       version: '2.4.0',
+      database: db.isPostgresConnected ? 'postgresql (supabase/connected)' : 'local/memory store',
       authenticated: !!req.user,
       timestamp: new Date().toISOString(),
     });
