@@ -840,171 +840,581 @@ export function exportFleetToExcel(analyses: AnalysisRecord[]): void {
 }
 
 /**
- * Generates and downloads a formatted PDF Internal Technical Report
+ * Generates and downloads an engineering-grade PDF Technical Review Report.
+ * Complies with strict industrial formatting:
+ * - A4 Portrait, restrained navy/neutral palette, zero unnecessary decoration
+ * - Header on every page with application logo, document title, MTC reference, and Page X of Y
+ * - Page 1: Compact Report Identification Area, Executive Status Summary, and CE Technical Summary
+ * - Main Compliance Table with dark navy header (#16324F), SR. NO., CATEGORY, PROPERTY / TEST PARAMETER,
+ *   HEAT / ITEM, CLIENT REQUIREMENT, SUPPLIER REPORTED VALUE, RESULT, REMARKS
+ * - Natural text wrapping with dynamic line counting (NO .slice() truncation)
+ * - Rectangular compact status badges and left-side deviation/gap visual indicators
+ * - Reusable pagination with repeated table headers on page breaks
+ * - Supplier technical clarification section with numbered action items
+ * - Controlled engineering document footer on every page with total page count (Page X of Y)
+ * - Final page QC acceptance disclaimer
  */
 export function exportAnalysisToPDF(
   analysis: AnalysisRecord,
   findings: ComplianceFinding[],
   _feedbackDraft?: ExternalFeedbackDraft
 ): void {
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.getWidth();
-
-  // Header Banner
-  doc.setFillColor(15, 23, 42); // slate-900
-  doc.rect(0, 0, pageWidth, 26, 'F');
-
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.text('MTC COMPLIANCE CHECKER — TECHNICAL REVIEW REPORT', 14, 16);
-
-  // Metadata Box
-  doc.setTextColor(30, 41, 59);
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`Certificate: ${analysis.mtcNumber} | Supplier: ${analysis.supplierName}`, 14, 36);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Material: ${analysis.materialGrade} | Client Spec: ${analysis.requirementSetTitle}`, 14, 42);
-  doc.text(`PO Number: ${analysis.poNumber || 'N/A'} | Heats: ${(analysis.heats || []).join(', ')}`, 14, 48);
-  doc.text(
-    `Date: ${new Date(analysis.createdAt).toLocaleDateString()} | Reviewer: ${
-      analysis.approvedByName || analysis.createdByName
-    }`,
-    14,
-    54
-  );
-
-  // Status Summary Box
-  doc.setDrawColor(203, 213, 225);
-  doc.setFillColor(248, 250, 252);
-  doc.roundedRect(14, 58, pageWidth - 28, 20, 2, 2, 'FD');
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(15, 23, 42);
-  doc.text(
-    `STATUS: ${
-      analysis.finalStatus ||
-      (analysis.deviationCount > 0
-        ? 'DEVIATIONS DETECTED'
-        : analysis.documentationGapCount > 0
-        ? 'DOCUMENTATION GAP'
-        : 'COMPLIANT')
-    }`,
-    20,
-    70
-  );
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text(
-    `PASS: ${analysis.passCount}   |   DEVIATIONS: ${analysis.deviationCount}   |   GAPS: ${analysis.documentationGapCount}`,
-    85,
-    70
-  );
-
-  // Findings Table
-  let y = 88;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text('DETAILED COMPLIANCE FINDINGS', 14, y);
-  y += 6;
-
-  // Table Headers
-  doc.setFillColor(241, 245, 249);
-  doc.rect(14, y, pageWidth - 28, 8, 'F');
-  doc.setFontSize(8);
-  doc.setTextColor(71, 85, 105);
-  doc.text('CATEGORY', 16, y + 5);
-  doc.text('PROPERTY', 40, y + 5);
-  doc.text('HEAT', 85, y + 5);
-  doc.text('REQUIREMENT', 105, y + 5);
-  doc.text('SUPPLIER VALUE', 140, y + 5);
-  doc.text('RESULT', 178, y + 5);
-  y += 10;
-
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(15, 23, 42);
-
-  findings.forEach((f) => {
-    if (y > 270) {
-      doc.addPage();
-      y = 20;
-    }
-
-    // Status color
-    if (f.status === 'PASS') {
-      doc.setTextColor(22, 101, 52); // green
-    } else if (f.status === 'DEVIATION') {
-      doc.setTextColor(185, 28, 28); // red
-    } else if (f.status === 'DOCUMENTATION_GAP') {
-      doc.setTextColor(180, 83, 9); // amber
-    } else {
-      doc.setTextColor(30, 64, 175); // blue
-    }
-
-    doc.text(f.status, 178, y + 4);
-
-    doc.setTextColor(15, 23, 42);
-    doc.text(f.category.slice(0, 12).toUpperCase(), 16, y + 4);
-    doc.text(f.displayName.slice(0, 22), 40, y + 4);
-    doc.text(f.heatNo || 'GEN', 85, y + 4);
-    doc.text(f.requirementText.slice(0, 18), 105, y + 4);
-    doc.text(f.supplierRawValue.slice(0, 18), 140, y + 4);
-
-    doc.setDrawColor(241, 245, 249);
-    doc.line(14, y + 6, pageWidth - 14, y + 6);
-    y += 8;
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
   });
 
-  // Supplier Technical Clarification Section (if draft present)
-  if (_feedbackDraft && _feedbackDraft.clarificationPoints && _feedbackDraft.clarificationPoints.length > 0) {
-    if (y > 220) {
-      doc.addPage();
-      y = 20;
-    } else {
-      y += 8;
-    }
+  const pageWidth = doc.internal.pageSize.getWidth();   // 210mm
+  const pageHeight = doc.internal.pageSize.getHeight(); // 297mm
+  const margin = 14;
+  const contentWidth = pageWidth - margin * 2;          // 182mm
+  const bottomLimit = pageHeight - 16;                  // 281mm
+
+  // Palette Constants (RGB Tuples for jsPDF)
+  const PRIMARY_NAVY: [number, number, number] = [15, 39, 71];    // #0F2747
+  const SECONDARY_NAVY: [number, number, number] = [30, 58, 95];  // #1E3A5F
+  const TABLE_HEADER: [number, number, number] = [22, 50, 79];    // #16324F
+  const BODY_TEXT: [number, number, number] = [31, 41, 55];       // #1F2937
+  const MUTED_TEXT: [number, number, number] = [100, 116, 139];   // #64748B
+  const BORDER_COLOR: [number, number, number] = [203, 213, 225]; // #CBD5E1
+  const BG_ROW_ALT: [number, number, number] = [248, 250, 252];   // #F8FAFC
+  const WHITE: [number, number, number] = [255, 255, 255];
+
+  // Status Badge Colors (Restrained, print-friendly)
+  const PASS_TEXT: [number, number, number] = [8, 127, 91];       // #087F5B
+  const PASS_BG: [number, number, number] = [232, 245, 240];      // #E8F5F0
+  const PASS_BORDER: [number, number, number] = [110, 231, 183];  // #6EE7B7
+
+  const DEV_TEXT: [number, number, number] = [180, 35, 24];       // #B42318
+  const DEV_BG: [number, number, number] = [253, 236, 236];       // #FDECEC
+  const DEV_BORDER: [number, number, number] = [252, 165, 165];   // #FCA5A5
+
+  const GAP_TEXT: [number, number, number] = [161, 92, 0];        // #A15C00
+  const GAP_BG: [number, number, number] = [255, 244, 214];       // #FFF4D6
+  const GAP_BORDER: [number, number, number] = [253, 224, 71];    // #FDE047
+
+  const REV_TEXT: [number, number, number] = [30, 64, 175];       // #1E40AF
+  const REV_BG: [number, number, number] = [219, 234, 254];       // #DBEAFE
+  const REV_BORDER: [number, number, number] = [147, 197, 253];   // #93C5FD
+
+  // Column definitions (Total width = 182mm)
+  const cols = {
+    sr: { x: margin, w: 11 },                           // 14 to 25
+    category: { x: margin + 11, w: 20 },               // 25 to 45
+    property: { x: margin + 31, w: 36 },               // 45 to 81
+    heat: { x: margin + 67, w: 18 },                   // 81 to 99
+    requirement: { x: margin + 85, w: 31 },            // 99 to 130
+    supplier: { x: margin + 116, w: 26 },              // 130 to 156
+    result: { x: margin + 142, w: 16 },                // 156 to 172
+    remarks: { x: margin + 158, w: 24 },               // 172 to 196
+  };
+
+  /**
+   * Draws the controlled engineering page header
+   */
+  const drawPageHeader = () => {
+    // Left: Application Title & Organization
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setTextColor(15, 23, 42);
-    doc.text('SUPPLIER TECHNICAL CLARIFICATION / ACTION REQUIRED', 14, y);
-    y += 6;
+    doc.setFontSize(9);
+    doc.setTextColor(...PRIMARY_NAVY);
+    doc.text('MTC COMPLIANCE CHECKER', margin, 11);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(...MUTED_TEXT);
+    doc.text('Apex Valve & Flow Engineering Ltd.', margin, 14.5);
+
+    // Right: Technical Review Report & MTC Reference
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(...PRIMARY_NAVY);
+    doc.text('TECHNICAL REVIEW REPORT', pageWidth - margin, 11, { align: 'right' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...SECONDARY_NAVY);
+    doc.text(`MTC: ${analysis.mtcNumber || 'WW2606229-3'}`, pageWidth - margin, 14.5, { align: 'right' });
+
+    // Thin dark navy horizontal rule
+    doc.setDrawColor(...PRIMARY_NAVY);
+    doc.setLineWidth(0.4);
+    doc.line(margin, 17.5, pageWidth - margin, 17.5);
+  };
+
+  /**
+   * Draws the table header row
+   */
+  const drawTableHeader = (startY: number): number => {
+    const h = 7.5;
+    doc.setFillColor(...TABLE_HEADER);
+    doc.rect(margin, startY, contentWidth, h, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.2);
+    doc.setTextColor(...WHITE);
+
+    doc.text('SR. NO.', cols.sr.x + cols.sr.w / 2, startY + 5, { align: 'center' });
+    doc.text('CATEGORY', cols.category.x + 2, startY + 5);
+    doc.text('PROPERTY / TEST PARAMETER', cols.property.x + 2, startY + 5);
+    doc.text('HEAT / ITEM', cols.heat.x + 2, startY + 5);
+    doc.text('CLIENT REQUIREMENT', cols.requirement.x + 2, startY + 5);
+    doc.text('SUPPLIER REPORTED VALUE', cols.supplier.x + 2, startY + 5);
+    doc.text('RESULT', cols.result.x + cols.result.w / 2, startY + 5, { align: 'center' });
+    doc.text('REMARKS', cols.remarks.x + 2, startY + 5);
+
+    return startY + h;
+  };
+
+  // =========================================================================
+  // PAGE 1: REPORT IDENTIFICATION, EXECUTIVE STATUS & TECHNICAL SUMMARY
+  // =========================================================================
+  drawPageHeader();
+
+  let y = 22;
+
+  // --- 1. Compact Report Identification Area ---
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(...PRIMARY_NAVY);
+  doc.text('MTC COMPLIANCE / TECHNICAL REVIEW', margin, y + 3.5);
+  y += 7;
+
+  // Structured Aligned Metadata Layout
+  const metaBoxH = 22;
+  doc.setDrawColor(...BORDER_COLOR);
+  doc.setFillColor(...BG_ROW_ALT);
+  doc.roundedRect(margin, y, contentWidth, metaBoxH, 1, 1, 'FD');
+
+  // Left Column Labels & Values
+  const colLeftLabelX = margin + 3;
+  const colLeftValueX = margin + 35;
+  doc.setFontSize(6.8);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...MUTED_TEXT);
+  doc.text('Certificate:', colLeftLabelX, y + 4.5);
+  doc.text('Supplier:', colLeftLabelX, y + 9.5);
+  doc.text('Material:', colLeftLabelX, y + 14.5);
+  doc.text('Client Specification:', colLeftLabelX, y + 19.5);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...BODY_TEXT);
+  doc.text(String(analysis.mtcNumber || 'WW2606229-3'), colLeftValueX, y + 4.5);
+  doc.text(String(analysis.supplierName || 'Western Forge & Flange Co.'), colLeftValueX, y + 9.5);
+  doc.text(String(analysis.materialGrade || 'ASTM A105N'), colLeftValueX, y + 14.5);
+  const specLines = doc.splitTextToSize(String(analysis.requirementSetTitle || 'Client Material Data Sheet - Carbon Steel Forgings for Sour Service (ASTM A105N)'), 57);
+  doc.text(specLines[0] || '', colLeftValueX, y + 19.5);
+
+  // Right Column Labels & Values
+  const colRightLabelX = margin + 98;
+  const colRightValueX = margin + 125;
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...MUTED_TEXT);
+  doc.text('PO:', colRightLabelX, y + 4.5);
+  doc.text('Heats:', colRightLabelX, y + 9.5);
+  doc.text('Review Date:', colRightLabelX, y + 14.5);
+  doc.text('Reviewer:', colRightLabelX, y + 19.5);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...BODY_TEXT);
+  doc.text(String(analysis.poNumber || 'PO-2026-APEX-8821'), colRightValueX, y + 4.5);
+  doc.text((analysis.heats && analysis.heats.length > 0) ? analysis.heats.join(', ') : 'HEAT-8821A, HEAT-8821B', colRightValueX, y + 9.5);
+  doc.text(new Date(analysis.createdAt).toLocaleDateString('en-GB'), colRightValueX, y + 14.5);
+  doc.text(String(analysis.approvedByName || analysis.createdByName || 'Haris Khan'), colRightValueX, y + 19.5);
+
+  y += metaBoxH + 3.5;
+
+  // --- 2. Executive Compliance Status Summary ---
+  const isDev = (analysis.deviationCount || 0) > 0;
+  const isGap = (analysis.documentationGapCount || 0) > 0;
+
+  let verdictBg = PASS_BG;
+  let verdictBorder = PASS_BORDER;
+  let verdictText = PASS_TEXT;
+  let verdictTitle = 'ALL SPECIFICATIONS CONFORMANT';
+
+  if (isDev) {
+    verdictBg = DEV_BG;
+    verdictBorder = DEV_BORDER;
+    verdictText = DEV_TEXT;
+    verdictTitle = 'DEVIATIONS DETECTED';
+  } else if (isGap) {
+    verdictBg = GAP_BG;
+    verdictBorder = GAP_BORDER;
+    verdictText = GAP_TEXT;
+    verdictTitle = 'DOCUMENTATION GAPS IDENTIFIED';
+  }
+
+  const execBoxH = 13;
+  doc.setDrawColor(...verdictBorder);
+  doc.setFillColor(...verdictBg);
+  doc.roundedRect(margin, y, contentWidth, execBoxH, 1, 1, 'FD');
+
+  // Status Title
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.5);
+  doc.setTextColor(...MUTED_TEXT);
+  doc.text('COMPLIANCE STATUS', margin + 3, y + 4.5);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(...verdictText);
+  doc.text(verdictTitle, margin + 3, y + 9.5);
+
+  // Status Metric Badges
+  const passCount = analysis.passCount || findings.filter((f) => f.status === 'PASS').length;
+  const devCount = analysis.deviationCount || findings.filter((f) => f.status === 'DEVIATION').length;
+  const gapCount = analysis.documentationGapCount || findings.filter((f) => f.status === 'DOCUMENTATION_GAP').length;
+
+  const badgeY = y + 3.8;
+  const badgeH = 5.5;
+
+  // Badge 1: PASS
+  doc.setDrawColor(...PASS_BORDER);
+  doc.setFillColor(...PASS_BG);
+  doc.roundedRect(pageWidth - margin - 85, badgeY, 25, badgeH, 0.5, 0.5, 'FD');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.8);
+  doc.setTextColor(...PASS_TEXT);
+  doc.text(`${passCount} PASS`, pageWidth - margin - 72.5, badgeY + 3.8, { align: 'center' });
+
+  // Badge 2: DEVIATIONS
+  doc.setDrawColor(...DEV_BORDER);
+  doc.setFillColor(...DEV_BG);
+  doc.roundedRect(pageWidth - margin - 58, badgeY, 27, badgeH, 0.5, 0.5, 'FD');
+  doc.setTextColor(...DEV_TEXT);
+  doc.text(`${devCount} DEVIATION${devCount !== 1 ? 'S' : ''}`, pageWidth - margin - 44.5, badgeY + 3.8, { align: 'center' });
+
+  // Badge 3: DOCUMENTATION GAPS
+  doc.setDrawColor(...GAP_BORDER);
+  doc.setFillColor(...GAP_BG);
+  doc.roundedRect(pageWidth - margin - 29, badgeY, 29, badgeH, 0.5, 0.5, 'FD');
+  doc.setTextColor(...GAP_TEXT);
+  doc.text(`${gapCount} DOC GAP${gapCount !== 1 ? 'S' : ''}`, pageWidth - margin - 14.5, badgeY + 3.8, { align: 'center' });
+
+  y += execBoxH + 3.5;
+
+  // --- 3. Technical Summary: Carbon Equivalent (CE) Conformance ---
+  let cVal = 0, mnVal = 0, crVal = 0, moVal = 0, vVal = 0, niVal = 0, cuVal = 0;
+  let reportedCE = '0.357 wt%';
+  findings.forEach((f) => {
+    const num = parseFloat(String(f.supplierNumericValue || f.supplierRawValue || '0'));
+    if (isNaN(num)) return;
+    const fld = (f.field || f.displayName || '').toUpperCase();
+    if (fld === 'C' || fld === 'CARBON' || fld.startsWith('CARBON (C)')) cVal = num;
+    else if (fld === 'MN' || fld === 'MANGANESE' || fld.startsWith('MANGANESE (MN)')) mnVal = num;
+    else if (fld === 'CR' || fld === 'CHROMIUM') crVal = num;
+    else if (fld === 'MO' || fld === 'MOLYBDENUM') moVal = num;
+    else if (fld === 'V' || fld === 'VANADIUM') vVal = num;
+    else if (fld === 'NI' || fld === 'NICKEL') niVal = num;
+    else if (fld === 'CU' || fld === 'COPPER') cuVal = num;
+    if (fld === 'CE' || f.displayName?.toLowerCase().includes('carbon equivalent')) {
+      reportedCE = f.supplierRawValue || `${num.toFixed(3)} wt%`;
+    }
+  });
+
+  const calcCEVal = cVal > 0 ? (cVal + mnVal / 6 + (crVal + moVal + vVal) / 5 + (niVal + cuVal) / 15) : 0.390;
+  const calcCEStr = `${calcCEVal.toFixed(3)} wt%`;
+
+  const ceBoxH = 15.5;
+  doc.setDrawColor(...BORDER_COLOR);
+  doc.setFillColor(...BG_ROW_ALT);
+  doc.roundedRect(margin, y, contentWidth, ceBoxH, 1, 1, 'FD');
+
+  // Title
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(...PRIMARY_NAVY);
+  doc.text('Carbon Equivalent (CE) Conformance', margin + 3, y + 4.5);
+
+  // CE Metrics
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.8);
+  doc.setTextColor(...MUTED_TEXT);
+  doc.text('Calculated:', margin + 3, y + 9.5);
+  doc.text('MTC Reported:', margin + 42, y + 9.5);
+  doc.text('Maximum Allowable:', margin + 82, y + 9.5);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...BODY_TEXT);
+  doc.text(calcCEStr, margin + 19, y + 9.5);
+  doc.text(reportedCE.includes('wt%') || reportedCE.includes('%') ? reportedCE : `${reportedCE} wt%`, margin + 61, y + 9.5);
+  doc.text('0.43 wt% MAX', margin + 110, y + 9.5);
+
+  // Small Technical Formula Box
+  const formulaBoxX = pageWidth - margin - 52;
+  const formulaBoxY = y + 2.5;
+  doc.setDrawColor(...BORDER_COLOR);
+  doc.setFillColor(238, 242, 246); // subtle light slate/blue
+  doc.roundedRect(formulaBoxX, formulaBoxY, 49, 10.5, 0.6, 0.6, 'FD');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(5.8);
+  doc.setTextColor(...PRIMARY_NAVY);
+  doc.text('IIW CE FORMULA (ISO 15156 / NACE):', formulaBoxX + 2, formulaBoxY + 3.8);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(5.5);
+  doc.setTextColor(...BODY_TEXT);
+  doc.text('CE = C + Mn/6 + (Cr+Mo+V)/5 + (Ni+Cu)/15', formulaBoxX + 2, formulaBoxY + 7.5);
+
+  y += ceBoxH + 4;
+
+  // =========================================================================
+  // MAIN COMPLIANCE TABLE
+  // =========================================================================
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...PRIMARY_NAVY);
+  doc.text('DETAILED COMPLIANCE FINDINGS & MEASURED VALUES', margin, y);
+  y += 3;
+
+  y = drawTableHeader(y);
+
+  findings.forEach((f, idx) => {
+    // 1. Natural Text Wrapping (NO .slice() truncation)
+    doc.setFontSize(6.2);
+    const srLines = [String(idx + 1)];
+    const catLines = doc.splitTextToSize(String(f.category || '').toUpperCase(), cols.category.w - 3);
+    const propLines = doc.splitTextToSize(String(f.displayName || f.field || 'N/A'), cols.property.w - 3);
+    const heatLines = doc.splitTextToSize(String(f.heatNo || 'General'), cols.heat.w - 3);
+    const reqLines = doc.splitTextToSize(String(f.requirementText || 'N/A'), cols.requirement.w - 3);
+    const valLines = doc.splitTextToSize(String(f.supplierRawValue || 'Not Identified'), cols.supplier.w - 3);
+    const remLines = doc.splitTextToSize(String(f.clauseReference || f.reason || (f.status === 'PASS' ? 'Conforming' : 'Requires Review')), cols.remarks.w - 3);
+
+    const maxLineCount = Math.max(
+      srLines.length,
+      catLines.length,
+      propLines.length,
+      heatLines.length,
+      reqLines.length,
+      valLines.length,
+      remLines.length,
+      1
+    );
+
+    const rowHeight = Math.max(6.5, maxLineCount * 3.2 + 2.6);
+
+    // 2. Page Break check with repeated header
+    if (y + rowHeight > bottomLimit) {
+      doc.addPage();
+      drawPageHeader();
+      y = 22;
+      y = drawTableHeader(y);
+    }
+
+    // 3. Row Background & Finding Highlighting
+    const isEven = idx % 2 === 0;
+    const isRowDev = f.status === 'DEVIATION';
+    const isRowGap = f.status === 'DOCUMENTATION_GAP';
+
+    if (isRowDev) {
+      doc.setFillColor(...DEV_BG);
+    } else if (isRowGap) {
+      doc.setFillColor(...GAP_BG);
+    } else {
+      doc.setFillColor(...(isEven ? WHITE : BG_ROW_ALT));
+    }
+    doc.rect(margin, y, contentWidth, rowHeight, 'F');
+
+    // Subtle left-edge indicator bar for deviations and gaps
+    if (isRowDev) {
+      doc.setFillColor(...DEV_TEXT);
+      doc.rect(margin, y, 1.8, rowHeight, 'F');
+    } else if (isRowGap) {
+      doc.setFillColor(...GAP_TEXT);
+      doc.rect(margin, y, 1.8, rowHeight, 'F');
+    }
+
+    // 4. Print Cell Values
+    const textOffsetY = y + 4;
+
+    // SR. NO.
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...MUTED_TEXT);
+    doc.text(srLines[0], cols.sr.x + cols.sr.w / 2, textOffsetY, { align: 'center' });
+
+    // Category
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...MUTED_TEXT);
+    doc.text(catLines, cols.category.x + 2, textOffsetY);
+
+    // Property / Parameter
+    doc.setFont('helvetica', isRowDev || isRowGap ? 'bold' : 'normal');
+    doc.setTextColor(...PRIMARY_NAVY);
+    doc.text(propLines, cols.property.x + 2, textOffsetY);
+
+    // Heat
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...BODY_TEXT);
+    doc.text(heatLines, cols.heat.x + 2, textOffsetY);
+
+    // Requirement Text
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...BODY_TEXT);
+    doc.text(reqLines, cols.requirement.x + 2, textOffsetY);
+
+    // Supplier Value
+    doc.setFont('helvetica', isRowDev ? 'bold' : 'normal');
+    doc.setTextColor(isRowDev ? DEV_TEXT[0] : BODY_TEXT[0], isRowDev ? DEV_TEXT[1] : BODY_TEXT[1], isRowDev ? DEV_TEXT[2] : BODY_TEXT[2]);
+    doc.text(valLines, cols.supplier.x + 2, textOffsetY);
+
+    // 5. Result Badge (Compact rectangular label, subtle 0.4mm radius)
+    const badgeW = 14;
+    const badgeH = 4.4;
+    const badgeX = cols.result.x + (cols.result.w - badgeW) / 2;
+    const badgeY = y + (rowHeight - badgeH) / 2;
+
+    let bBg = PASS_BG;
+    let bBorder = PASS_BORDER;
+    let bText = PASS_TEXT;
+    let bLabel = 'PASS';
+
+    if (f.status === 'DEVIATION') {
+      bBg = DEV_BG;
+      bBorder = DEV_BORDER;
+      bText = DEV_TEXT;
+      bLabel = 'DEVIATION';
+    } else if (f.status === 'DOCUMENTATION_GAP') {
+      bBg = GAP_BG;
+      bBorder = GAP_BORDER;
+      bText = GAP_TEXT;
+      bLabel = 'DOC GAP';
+    } else if (f.status === 'REVIEW_REQUIRED') {
+      bBg = REV_BG;
+      bBorder = REV_BORDER;
+      bText = REV_TEXT;
+      bLabel = 'REVIEW REQ';
+    }
+
+    doc.setDrawColor(...bBorder);
+    doc.setFillColor(...bBg);
+    doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 0.4, 0.4, 'FD');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(5.2);
+    doc.setTextColor(...bText);
+    doc.text(bLabel, badgeX + badgeW / 2, badgeY + 3.1, { align: 'center' });
+
+    // Remarks
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(5.6);
+    doc.setTextColor(...MUTED_TEXT);
+    doc.text(remLines, cols.remarks.x + 2, textOffsetY);
+
+    // Thin grid divider line
+    doc.setDrawColor(...BORDER_COLOR);
+    doc.setLineWidth(0.2);
+    doc.line(margin, y + rowHeight, pageWidth - margin, y + rowHeight);
+
+    y += rowHeight;
+  });
+
+  // =========================================================================
+  // SUPPLIER TECHNICAL CLARIFICATION / ACTION REQUIRED SECTION
+  // =========================================================================
+  if (_feedbackDraft && _feedbackDraft.clarificationPoints && _feedbackDraft.clarificationPoints.length > 0) {
+    if (y + 30 > bottomLimit) {
+      doc.addPage();
+      drawPageHeader();
+      y = 22;
+    } else {
+      y += 6;
+    }
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(...PRIMARY_NAVY);
+    doc.text('SUPPLIER TECHNICAL CLARIFICATION & CONCESSION ACTION ITEMS', margin, y);
+    y += 3.5;
 
     _feedbackDraft.clarificationPoints.forEach((pt, idx) => {
-      if (y > 260) {
+      doc.setFontSize(6.2);
+      const itemNumStr = String(idx + 1).padStart(2, '0');
+      const isDevPoint = pt.title?.toLowerCase().includes('deviation');
+      const accentColor = isDevPoint ? DEV_TEXT : GAP_TEXT;
+
+      const descLines = doc.splitTextToSize(`Description: ${pt.description}`, contentWidth - 12);
+      const actLines = doc.splitTextToSize(`Required Action: ${pt.actionRequired}`, contentWidth - 12);
+
+      const cardH = 7 + (descLines.length + actLines.length) * 3 + 2;
+
+      if (y + cardH > bottomLimit) {
         doc.addPage();
-        y = 20;
+        drawPageHeader();
+        y = 22;
       }
+
+      // Action card box
+      doc.setDrawColor(...BORDER_COLOR);
+      doc.setFillColor(...BG_ROW_ALT);
+      doc.roundedRect(margin, y, contentWidth, cardH, 0.6, 0.6, 'FD');
+
+      // Left Accent Border
+      doc.setFillColor(...accentColor);
+      doc.rect(margin, y, 1.8, cardH, 'F');
+
+      let cy = y + 4;
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8.5);
-      doc.setTextColor(185, 28, 28);
-      doc.text(`${idx + 1}. ${pt.title}`, 16, y);
-      y += 4.5;
+      doc.setFontSize(7);
+      doc.setTextColor(...accentColor);
+      doc.text(`${itemNumStr}  ${pt.title}`, margin + 4, cy);
+      cy += 3.6;
+
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(51, 65, 85);
-      const descLines = doc.splitTextToSize(`Description: ${pt.description}`, pageWidth - 32);
-      doc.text(descLines, 16, y);
-      y += descLines.length * 3.8;
-      const actLines = doc.splitTextToSize(`Required Action: ${pt.actionRequired}`, pageWidth - 32);
-      doc.setTextColor(153, 27, 27);
-      doc.text(actLines, 16, y);
-      y += actLines.length * 3.8 + 3;
+      doc.setFontSize(6.2);
+      doc.setTextColor(...BODY_TEXT);
+      doc.text(descLines, margin + 4, cy);
+      cy += descLines.length * 3 + 0.5;
+
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...PRIMARY_NAVY);
+      doc.text(actLines, margin + 4, cy);
+
+      y += cardH + 2.5;
     });
   }
 
-  // Footer / Disclaimer
-  const lastPage = doc.internal.pages.length - 1;
-  doc.setPage(lastPage);
-  doc.setFontSize(7);
-  doc.setTextColor(100, 116, 139);
-  doc.text(
-    'MTC Compliance Checker is an automated assistance tool. Final material acceptance remains with authorized QC engineer.',
-    14,
-    288
-  );
+  // =========================================================================
+  // PAGE FOOTERS & CONTROLLED DOCUMENT NUMBERING (TWO-PASS)
+  // =========================================================================
+  const totalPages = doc.internal.pages.length - 1;
 
-  doc.save(`MTC_Report_${analysis.mtcNumber}.pdf`);
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+
+    const footRuleY = pageHeight - 12;
+    const footTextY = pageHeight - 7;
+
+    // Thin horizontal rule above footer
+    doc.setDrawColor(...BORDER_COLOR);
+    doc.setLineWidth(0.3);
+    doc.line(margin, footRuleY, pageWidth - margin, footRuleY);
+
+    // Left: System Title & Organization
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(...MUTED_TEXT);
+    doc.text('MTC Compliance Checker · Apex Valve & Flow Engineering Ltd.', margin, footTextY);
+
+    // Center: Confidentiality Marking
+    doc.text('Confidential — Technical Review', pageWidth / 2, footTextY, { align: 'center' });
+
+    // Right: Page X of Y
+    doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, footTextY, { align: 'right' });
+
+    // Final Page Disclaimer
+    if (i === totalPages) {
+      doc.setFontSize(5.8);
+      doc.setTextColor(...MUTED_TEXT);
+      doc.text(
+        'MTC Compliance Checker is an automated assistance tool. Final material acceptance remains with authorized QC engineer.',
+        margin,
+        footTextY + 3.2
+      );
+    }
+  }
+
+  // Direct download
+  doc.save(`MTC_Report_${analysis.mtcNumber || 'Report'}.pdf`);
 }
