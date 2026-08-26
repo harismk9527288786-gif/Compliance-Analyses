@@ -270,19 +270,20 @@ export class DatabaseStore {
       if (res.rows.length > 0 && res.rows[0].data) {
         const parsed = res.rows[0].data;
         this.data = {
-          organizations: parsed.organizations || {},
-          users: parsed.users || {},
+          organizations: { ...(this.data.organizations || {}), ...(parsed.organizations || {}) },
+          users: { ...(this.data.users || {}), ...(parsed.users || {}) },
           sessions: parsed.sessions || {},
           invitations: parsed.invitations || {},
           passwordResetTokens: parsed.passwordResetTokens || {},
           documents: parsed.documents || {},
-          requirementSets: parsed.requirementSets || {},
+          requirementSets: { ...(this.data.requirementSets || {}), ...(parsed.requirementSets || {}) },
           certificates: parsed.certificates || {},
           analyses: parsed.analyses || {},
           findings: parsed.findings || {},
           feedbackDrafts: parsed.feedbackDrafts || {},
           auditLogs: parsed.auditLogs || [],
         };
+        this.ensureSeedData();
         this.lastSyncedAtTime = now;
       }
     } catch (err: any) {

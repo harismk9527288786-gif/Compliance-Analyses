@@ -47,7 +47,11 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
       return next();
     }
 
-    const organization = db.getOrganization(session.organization_id);
+    let organization = db.getOrganization(session.organization_id);
+    if (!organization) {
+      const orgs = db.getOrganizations();
+      organization = orgs[0];
+    }
     if (!organization) {
       db.deleteSession(sessionId);
       res.clearCookie(AUTH_COOKIE_NAME, { path: '/' });
