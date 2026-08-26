@@ -900,14 +900,14 @@ export function exportAnalysisToPDF(
 
   // Column definitions (Total width = 182mm)
   const cols = {
-    sr: { x: margin, w: 11 },                           // 14 to 25
-    category: { x: margin + 11, w: 20 },               // 25 to 45
-    property: { x: margin + 31, w: 36 },               // 45 to 81
-    heat: { x: margin + 67, w: 18 },                   // 81 to 99
-    requirement: { x: margin + 85, w: 31 },            // 99 to 130
-    supplier: { x: margin + 116, w: 26 },              // 130 to 156
-    result: { x: margin + 142, w: 16 },                // 156 to 172
-    remarks: { x: margin + 158, w: 24 },               // 172 to 196
+    sr: { x: margin, w: 10 },                           // 14 to 24
+    category: { x: margin + 10, w: 23 },               // 24 to 47
+    property: { x: margin + 33, w: 35 },               // 47 to 82
+    heat: { x: margin + 68, w: 16 },                   // 82 to 98
+    requirement: { x: margin + 84, w: 32 },            // 98 to 130
+    supplier: { x: margin + 116, w: 24 },              // 130 to 154
+    result: { x: margin + 140, w: 16 },                // 154 to 170
+    remarks: { x: margin + 156, w: 26 },               // 170 to 196
   };
 
   /**
@@ -946,7 +946,7 @@ export function exportAnalysisToPDF(
    * Draws the table header row
    */
   const drawTableHeader = (startY: number): number => {
-    const h = 7.5;
+    const h = 7.2;
     doc.setFillColor(...TABLE_HEADER);
     doc.rect(margin, startY, contentWidth, h, 'F');
 
@@ -954,14 +954,14 @@ export function exportAnalysisToPDF(
     doc.setFontSize(6.2);
     doc.setTextColor(...WHITE);
 
-    doc.text('SR. NO.', cols.sr.x + cols.sr.w / 2, startY + 5, { align: 'center' });
-    doc.text('CATEGORY', cols.category.x + 2, startY + 5);
-    doc.text('PROPERTY / TEST PARAMETER', cols.property.x + 2, startY + 5);
-    doc.text('HEAT / ITEM', cols.heat.x + 2, startY + 5);
-    doc.text('CLIENT REQUIREMENT', cols.requirement.x + 2, startY + 5);
-    doc.text('SUPPLIER REPORTED VALUE', cols.supplier.x + 2, startY + 5);
-    doc.text('RESULT', cols.result.x + cols.result.w / 2, startY + 5, { align: 'center' });
-    doc.text('REMARKS', cols.remarks.x + 2, startY + 5);
+    doc.text('SR.', cols.sr.x + cols.sr.w / 2, startY + 4.8, { align: 'center' });
+    doc.text('CATEGORY', cols.category.x + 2, startY + 4.8);
+    doc.text('PROPERTY / TEST PARAMETER', cols.property.x + 2, startY + 4.8);
+    doc.text('HEAT / ITEM', cols.heat.x + 2, startY + 4.8);
+    doc.text('CLIENT REQUIREMENT', cols.requirement.x + 2, startY + 4.8);
+    doc.text('SUPPLIER VALUE', cols.supplier.x + 2, startY + 4.8);
+    doc.text('RESULT', cols.result.x + cols.result.w / 2, startY + 4.8, { align: 'center' });
+    doc.text('REMARKS', cols.remarks.x + 2, startY + 4.8);
 
     return startY + h;
   };
@@ -975,13 +975,13 @@ export function exportAnalysisToPDF(
 
   // --- 1. Compact Report Identification Area ---
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
+  doc.setFontSize(10.5);
   doc.setTextColor(...PRIMARY_NAVY);
-  doc.text('MTC COMPLIANCE / TECHNICAL REVIEW', margin, y + 3.5);
-  y += 7;
+  doc.text('MTC COMPLIANCE / TECHNICAL REVIEW', margin, y + 3.2);
+  y += 6.5;
 
   // Structured Aligned Metadata Layout
-  const metaBoxH = 22;
+  const metaBoxH = 21;
   doc.setDrawColor(...BORDER_COLOR);
   doc.setFillColor(...BG_ROW_ALT);
   doc.roundedRect(margin, y, contentWidth, metaBoxH, 1, 1, 'FD');
@@ -992,37 +992,37 @@ export function exportAnalysisToPDF(
   doc.setFontSize(6.8);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...MUTED_TEXT);
-  doc.text('Certificate:', colLeftLabelX, y + 4.5);
-  doc.text('Supplier:', colLeftLabelX, y + 9.5);
-  doc.text('Material:', colLeftLabelX, y + 14.5);
-  doc.text('Client Specification:', colLeftLabelX, y + 19.5);
+  doc.text('Certificate:', colLeftLabelX, y + 4.2);
+  doc.text('Supplier:', colLeftLabelX, y + 9.0);
+  doc.text('Material:', colLeftLabelX, y + 13.8);
+  doc.text('Client Specification:', colLeftLabelX, y + 18.6);
 
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...BODY_TEXT);
-  doc.text(String(analysis.mtcNumber || 'WW2606229-3'), colLeftValueX, y + 4.5);
-  doc.text(String(analysis.supplierName || 'Western Forge & Flange Co.'), colLeftValueX, y + 9.5);
-  doc.text(String(analysis.materialGrade || 'ASTM A105N'), colLeftValueX, y + 14.5);
+  doc.text(String(analysis.mtcNumber || 'WW2606229-3'), colLeftValueX, y + 4.2);
+  doc.text(String(analysis.supplierName || 'Western Forge & Flange Co.'), colLeftValueX, y + 9.0);
+  doc.text(String(analysis.materialGrade || 'ASTM A105N'), colLeftValueX, y + 13.8);
   const specLines = doc.splitTextToSize(String(analysis.requirementSetTitle || 'Client Material Data Sheet - Carbon Steel Forgings for Sour Service (ASTM A105N)'), 57);
-  doc.text(specLines[0] || '', colLeftValueX, y + 19.5);
+  doc.text(specLines[0] || '', colLeftValueX, y + 18.6);
 
   // Right Column Labels & Values
   const colRightLabelX = margin + 98;
   const colRightValueX = margin + 125;
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...MUTED_TEXT);
-  doc.text('PO:', colRightLabelX, y + 4.5);
-  doc.text('Heats:', colRightLabelX, y + 9.5);
-  doc.text('Review Date:', colRightLabelX, y + 14.5);
-  doc.text('Reviewer:', colRightLabelX, y + 19.5);
+  doc.text('PO:', colRightLabelX, y + 4.2);
+  doc.text('Heats:', colRightLabelX, y + 9.0);
+  doc.text('Review Date:', colRightLabelX, y + 13.8);
+  doc.text('Reviewer:', colRightLabelX, y + 18.6);
 
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...BODY_TEXT);
-  doc.text(String(analysis.poNumber || 'PO-2026-APEX-8821'), colRightValueX, y + 4.5);
-  doc.text((analysis.heats && analysis.heats.length > 0) ? analysis.heats.join(', ') : 'HEAT-8821A, HEAT-8821B', colRightValueX, y + 9.5);
-  doc.text(new Date(analysis.createdAt).toLocaleDateString('en-GB'), colRightValueX, y + 14.5);
-  doc.text(String(analysis.approvedByName || analysis.createdByName || 'Haris Khan'), colRightValueX, y + 19.5);
+  doc.text(String(analysis.poNumber || 'PO-2026-APEX-8821'), colRightValueX, y + 4.2);
+  doc.text((analysis.heats && analysis.heats.length > 0) ? analysis.heats.join(', ') : 'HEAT-8821A, HEAT-8821B', colRightValueX, y + 9.0);
+  doc.text(new Date(analysis.createdAt).toLocaleDateString('en-GB'), colRightValueX, y + 13.8);
+  doc.text(String(analysis.approvedByName || analysis.createdByName || 'Haris Khan'), colRightValueX, y + 18.6);
 
-  y += metaBoxH + 3.5;
+  y += metaBoxH + 3;
 
   // --- 2. Executive Compliance Status Summary ---
   const isDev = (analysis.deviationCount || 0) > 0;
@@ -1045,29 +1045,29 @@ export function exportAnalysisToPDF(
     verdictTitle = 'DOCUMENTATION GAPS IDENTIFIED';
   }
 
-  const execBoxH = 13;
+  const execBoxH = 12;
   doc.setDrawColor(...verdictBorder);
   doc.setFillColor(...verdictBg);
   doc.roundedRect(margin, y, contentWidth, execBoxH, 1, 1, 'FD');
 
   // Status Title
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(6.5);
+  doc.setFontSize(6.2);
   doc.setTextColor(...MUTED_TEXT);
-  doc.text('COMPLIANCE STATUS', margin + 3, y + 4.5);
+  doc.text('COMPLIANCE STATUS', margin + 3, y + 4.2);
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
+  doc.setFontSize(8.8);
   doc.setTextColor(...verdictText);
-  doc.text(verdictTitle, margin + 3, y + 9.5);
+  doc.text(verdictTitle, margin + 3, y + 9.0);
 
   // Status Metric Badges
   const passCount = analysis.passCount || findings.filter((f) => f.status === 'PASS').length;
   const devCount = analysis.deviationCount || findings.filter((f) => f.status === 'DEVIATION').length;
   const gapCount = analysis.documentationGapCount || findings.filter((f) => f.status === 'DOCUMENTATION_GAP').length;
 
-  const badgeY = y + 3.8;
-  const badgeH = 5.5;
+  const badgeY = y + 3.2;
+  const badgeH = 5.2;
 
   // Badge 1: PASS
   doc.setDrawColor(...PASS_BORDER);
@@ -1076,23 +1076,23 @@ export function exportAnalysisToPDF(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6.8);
   doc.setTextColor(...PASS_TEXT);
-  doc.text(`${passCount} PASS`, pageWidth - margin - 72.5, badgeY + 3.8, { align: 'center' });
+  doc.text(`${passCount} PASS`, pageWidth - margin - 72.5, badgeY + 3.6, { align: 'center' });
 
   // Badge 2: DEVIATIONS
   doc.setDrawColor(...DEV_BORDER);
   doc.setFillColor(...DEV_BG);
   doc.roundedRect(pageWidth - margin - 58, badgeY, 27, badgeH, 0.5, 0.5, 'FD');
   doc.setTextColor(...DEV_TEXT);
-  doc.text(`${devCount} DEVIATION${devCount !== 1 ? 'S' : ''}`, pageWidth - margin - 44.5, badgeY + 3.8, { align: 'center' });
+  doc.text(`${devCount} DEVIATION${devCount !== 1 ? 'S' : ''}`, pageWidth - margin - 44.5, badgeY + 3.6, { align: 'center' });
 
   // Badge 3: DOCUMENTATION GAPS
   doc.setDrawColor(...GAP_BORDER);
   doc.setFillColor(...GAP_BG);
   doc.roundedRect(pageWidth - margin - 29, badgeY, 29, badgeH, 0.5, 0.5, 'FD');
   doc.setTextColor(...GAP_TEXT);
-  doc.text(`${gapCount} DOC GAP${gapCount !== 1 ? 'S' : ''}`, pageWidth - margin - 14.5, badgeY + 3.8, { align: 'center' });
+  doc.text(`${gapCount} DOC GAP${gapCount !== 1 ? 'S' : ''}`, pageWidth - margin - 14.5, badgeY + 3.6, { align: 'center' });
 
-  y += execBoxH + 3.5;
+  y += execBoxH + 3;
 
   // --- 3. Technical Summary: Carbon Equivalent (CE) Conformance ---
   let cVal = 0, mnVal = 0, crVal = 0, moVal = 0, vVal = 0, niVal = 0, cuVal = 0;
@@ -1116,66 +1116,69 @@ export function exportAnalysisToPDF(
   const calcCEVal = cVal > 0 ? (cVal + mnVal / 6 + (crVal + moVal + vVal) / 5 + (niVal + cuVal) / 15) : 0.390;
   const calcCEStr = `${calcCEVal.toFixed(3)} wt%`;
 
-  const ceBoxH = 15.5;
+  const ceBoxH = 14.5;
   doc.setDrawColor(...BORDER_COLOR);
   doc.setFillColor(...BG_ROW_ALT);
   doc.roundedRect(margin, y, contentWidth, ceBoxH, 1, 1, 'FD');
 
   // Title
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
+  doc.setFontSize(7.2);
   doc.setTextColor(...PRIMARY_NAVY);
-  doc.text('Carbon Equivalent (CE) Conformance', margin + 3, y + 4.5);
+  doc.text('Carbon Equivalent (CE) Conformance', margin + 3, y + 4.2);
 
   // CE Metrics
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(6.8);
+  doc.setFontSize(6.5);
   doc.setTextColor(...MUTED_TEXT);
-  doc.text('Calculated:', margin + 3, y + 9.5);
-  doc.text('MTC Reported:', margin + 42, y + 9.5);
-  doc.text('Maximum Allowable:', margin + 82, y + 9.5);
+  doc.text('Calculated:', margin + 3, y + 9.0);
+  doc.text('MTC Reported:', margin + 42, y + 9.0);
+  doc.text('Maximum Allowable:', margin + 82, y + 9.0);
 
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...BODY_TEXT);
-  doc.text(calcCEStr, margin + 19, y + 9.5);
-  doc.text(reportedCE.includes('wt%') || reportedCE.includes('%') ? reportedCE : `${reportedCE} wt%`, margin + 61, y + 9.5);
-  doc.text('0.43 wt% MAX', margin + 110, y + 9.5);
+  doc.text(calcCEStr, margin + 19, y + 9.0);
+  doc.text(reportedCE.includes('wt%') || reportedCE.includes('%') ? reportedCE : `${reportedCE} wt%`, margin + 61, y + 9.0);
+  doc.text('0.43 wt% MAX', margin + 110, y + 9.0);
 
   // Small Technical Formula Box
   const formulaBoxX = pageWidth - margin - 52;
-  const formulaBoxY = y + 2.5;
+  const formulaBoxY = y + 2.0;
   doc.setDrawColor(...BORDER_COLOR);
   doc.setFillColor(238, 242, 246); // subtle light slate/blue
-  doc.roundedRect(formulaBoxX, formulaBoxY, 49, 10.5, 0.6, 0.6, 'FD');
+  doc.roundedRect(formulaBoxX, formulaBoxY, 49, 10.0, 0.6, 0.6, 'FD');
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(5.8);
+  doc.setFontSize(5.6);
   doc.setTextColor(...PRIMARY_NAVY);
-  doc.text('IIW CE FORMULA (ISO 15156 / NACE):', formulaBoxX + 2, formulaBoxY + 3.8);
+  doc.text('IIW CE FORMULA (ISO 15156 / NACE):', formulaBoxX + 2, formulaBoxY + 3.6);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(5.5);
+  doc.setFontSize(5.3);
   doc.setTextColor(...BODY_TEXT);
-  doc.text('CE = C + Mn/6 + (Cr+Mo+V)/5 + (Ni+Cu)/15', formulaBoxX + 2, formulaBoxY + 7.5);
+  doc.text('CE = C + Mn/6 + (Cr+Mo+V)/5 + (Ni+Cu)/15', formulaBoxX + 2, formulaBoxY + 7.2);
 
-  y += ceBoxH + 4;
+  y += ceBoxH + 3.5;
 
   // =========================================================================
   // MAIN COMPLIANCE TABLE
   // =========================================================================
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
+  doc.setFontSize(8.2);
   doc.setTextColor(...PRIMARY_NAVY);
   doc.text('DETAILED COMPLIANCE FINDINGS & MEASURED VALUES', margin, y);
-  y += 3;
+  y += 2.8;
 
   y = drawTableHeader(y);
 
   findings.forEach((f, idx) => {
+    // Clean formatted category text without awkward underscores
+    const rawCategory = String(f.category || '').replace(/_/g, ' ').toUpperCase();
+
     // 1. Natural Text Wrapping (NO .slice() truncation)
-    doc.setFontSize(6.2);
+    doc.setFontSize(6.0);
     const srLines = [String(idx + 1)];
-    const catLines = doc.splitTextToSize(String(f.category || '').toUpperCase(), cols.category.w - 3);
+    const catLines = doc.splitTextToSize(rawCategory, cols.category.w - 3);
     const propLines = doc.splitTextToSize(String(f.displayName || f.field || 'N/A'), cols.property.w - 3);
     const heatLines = doc.splitTextToSize(String(f.heatNo || 'General'), cols.heat.w - 3);
     const reqLines = doc.splitTextToSize(String(f.requirementText || 'N/A'), cols.requirement.w - 3);
@@ -1193,7 +1196,7 @@ export function exportAnalysisToPDF(
       1
     );
 
-    const rowHeight = Math.max(6.5, maxLineCount * 3.2 + 2.6);
+    const rowHeight = Math.max(5.8, maxLineCount * 2.9 + 2.0);
 
     // 2. Page Break check with repeated header
     if (y + rowHeight > bottomLimit) {
@@ -1227,7 +1230,7 @@ export function exportAnalysisToPDF(
     }
 
     // 4. Print Cell Values
-    const textOffsetY = y + 4;
+    const textOffsetY = y + 3.6;
 
     // SR. NO.
     doc.setFont('helvetica', 'bold');
@@ -1261,7 +1264,7 @@ export function exportAnalysisToPDF(
 
     // 5. Result Badge (Compact rectangular label, subtle 0.4mm radius)
     const badgeW = 14;
-    const badgeH = 4.4;
+    const badgeH = 4.2;
     const badgeX = cols.result.x + (cols.result.w - badgeW) / 2;
     const badgeY = y + (rowHeight - badgeH) / 2;
 
@@ -1292,13 +1295,13 @@ export function exportAnalysisToPDF(
     doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 0.4, 0.4, 'FD');
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(5.2);
+    doc.setFontSize(5.0);
     doc.setTextColor(...bText);
-    doc.text(bLabel, badgeX + badgeW / 2, badgeY + 3.1, { align: 'center' });
+    doc.text(bLabel, badgeX + badgeW / 2, badgeY + 2.9, { align: 'center' });
 
     // Remarks
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(5.6);
+    doc.setFontSize(5.4);
     doc.setTextColor(...MUTED_TEXT);
     doc.text(remLines, cols.remarks.x + 2, textOffsetY);
 
@@ -1314,22 +1317,22 @@ export function exportAnalysisToPDF(
   // SUPPLIER TECHNICAL CLARIFICATION / ACTION REQUIRED SECTION
   // =========================================================================
   if (_feedbackDraft && _feedbackDraft.clarificationPoints && _feedbackDraft.clarificationPoints.length > 0) {
-    if (y + 30 > bottomLimit) {
+    if (y + 24 > bottomLimit) {
       doc.addPage();
       drawPageHeader();
       y = 22;
     } else {
-      y += 6;
+      y += 4.5;
     }
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
+    doc.setFontSize(8.2);
     doc.setTextColor(...PRIMARY_NAVY);
     doc.text('SUPPLIER TECHNICAL CLARIFICATION & CONCESSION ACTION ITEMS', margin, y);
-    y += 3.5;
+    y += 3.0;
 
     _feedbackDraft.clarificationPoints.forEach((pt, idx) => {
-      doc.setFontSize(6.2);
+      doc.setFontSize(6.0);
       const itemNumStr = String(idx + 1).padStart(2, '0');
       const isDevPoint = pt.title?.toLowerCase().includes('deviation');
       const accentColor = isDevPoint ? DEV_TEXT : GAP_TEXT;
@@ -1337,7 +1340,7 @@ export function exportAnalysisToPDF(
       const descLines = doc.splitTextToSize(`Description: ${pt.description}`, contentWidth - 12);
       const actLines = doc.splitTextToSize(`Required Action: ${pt.actionRequired}`, contentWidth - 12);
 
-      const cardH = 7 + (descLines.length + actLines.length) * 3 + 2;
+      const cardH = 6 + (descLines.length + actLines.length) * 2.8 + 1.5;
 
       if (y + cardH > bottomLimit) {
         doc.addPage();
@@ -1354,24 +1357,24 @@ export function exportAnalysisToPDF(
       doc.setFillColor(...accentColor);
       doc.rect(margin, y, 1.8, cardH, 'F');
 
-      let cy = y + 4;
+      let cy = y + 3.4;
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7);
+      doc.setFontSize(6.8);
       doc.setTextColor(...accentColor);
       doc.text(`${itemNumStr}  ${pt.title}`, margin + 4, cy);
-      cy += 3.6;
+      cy += 3.4;
 
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6.2);
+      doc.setFontSize(6.0);
       doc.setTextColor(...BODY_TEXT);
       doc.text(descLines, margin + 4, cy);
-      cy += descLines.length * 3 + 0.5;
+      cy += descLines.length * 2.8 + 0.4;
 
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...PRIMARY_NAVY);
       doc.text(actLines, margin + 4, cy);
 
-      y += cardH + 2.5;
+      y += cardH + 2.0;
     });
   }
 
