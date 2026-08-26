@@ -226,12 +226,23 @@ export class DatabaseStore {
         dbUrl.includes('render.com') ||
         dbUrl.includes('vercel-storage');
 
+      // Strip strict sslmode parameters so pg-connection-string honors rejectUnauthorized: false
+      let sanitizedUrl = dbUrl;
+      try {
+        const parsedUrl = new URL(sanitizedUrl);
+        parsedUrl.searchParams.delete('sslmode');
+        parsedUrl.searchParams.delete('sslrootcert');
+        sanitizedUrl = parsedUrl.toString();
+      } catch {
+        sanitizedUrl = sanitizedUrl.replace(/([?&])sslmode=[^&]+(&|$)/g, '$1').replace(/\?$/, '');
+      }
+
       this.pgPool = new pg.Pool({
-        connectionString: dbUrl,
+        connectionString: sanitizedUrl,
         ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
         max: process.env.VERCEL ? 1 : 10,
         idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 5000,
+        connectionTimeoutMillis: 8000,
       });
 
       this.pgPool.on('error', (err) => {

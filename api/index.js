@@ -1533,12 +1533,21 @@ var DatabaseStore = class {
     try {
       const isProduction3 = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
       const needsSsl = isProduction3 || dbUrl.includes("sslmode=require") || dbUrl.includes("ssl=true") || dbUrl.includes("postgres.") || dbUrl.includes("supabase") || dbUrl.includes("pooler.supabase.com") || dbUrl.includes("neon.tech") || dbUrl.includes("render.com") || dbUrl.includes("vercel-storage");
+      let sanitizedUrl = dbUrl;
+      try {
+        const parsedUrl = new URL(sanitizedUrl);
+        parsedUrl.searchParams.delete("sslmode");
+        parsedUrl.searchParams.delete("sslrootcert");
+        sanitizedUrl = parsedUrl.toString();
+      } catch {
+        sanitizedUrl = sanitizedUrl.replace(/([?&])sslmode=[^&]+(&|$)/g, "$1").replace(/\?$/, "");
+      }
       this.pgPool = new pg.Pool({
-        connectionString: dbUrl,
+        connectionString: sanitizedUrl,
         ssl: needsSsl ? { rejectUnauthorized: false } : void 0,
         max: process.env.VERCEL ? 1 : 10,
         idleTimeoutMillis: 3e4,
-        connectionTimeoutMillis: 5e3
+        connectionTimeoutMillis: 8e3
       });
       this.pgPool.on("error", (err) => {
         console.warn("PostgreSQL pool background client warning:", err?.message || err);
