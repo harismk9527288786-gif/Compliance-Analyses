@@ -1515,80 +1515,89 @@ var DatabaseStore = class {
   }
   async initPostgres() {
     const candidates = [
+      { name: "POSTGRES_PRISMA_URL", val: process.env.POSTGRES_PRISMA_URL },
       { name: "DATABASE_URL", val: process.env.DATABASE_URL },
       { name: "POSTGRES_URL", val: process.env.POSTGRES_URL },
-      { name: "POSTGRES_PRISMA_URL", val: process.env.POSTGRES_PRISMA_URL },
-      { name: "POSTGRES_URL_NON_POOLING", val: process.env.POSTGRES_URL_NON_POOLING },
-      { name: "SUPABASE_DB_URL", val: process.env.SUPABASE_DB_URL }
-    ];
-    const match = candidates.find((c) => !!c.val && typeof c.val === "string" && c.val.trim().length > 0);
-    if (!match || !match.val) {
+      { name: "SUPABASE_DB_URL", val: process.env.SUPABASE_DB_URL },
+      { name: "POSTGRES_URL_NON_POOLING", val: process.env.POSTGRES_URL_NON_POOLING }
+    ].filter((c) => !!c.val && typeof c.val === "string" && c.val.trim().length > 0);
+    if (candidates.length === 0) {
       this.dbConfigured = false;
       this.lastPostgresError = "No DATABASE_URL or POSTGRES_URL environment variable detected.";
       return;
     }
     this.dbConfigured = true;
-    this.detectedSource = match.name;
-    const dbUrl = match.val.trim();
-    try {
-      const isProduction3 = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
-      const needsSsl = isProduction3 || dbUrl.includes("sslmode=require") || dbUrl.includes("ssl=true") || dbUrl.includes("postgres.") || dbUrl.includes("supabase") || dbUrl.includes("pooler.supabase.com") || dbUrl.includes("neon.tech") || dbUrl.includes("render.com") || dbUrl.includes("vercel-storage");
-      let sanitizedUrl = dbUrl;
+    const isProduction3 = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
+    let connected = false;
+    for (const candidate of candidates) {
+      const dbUrl = candidate.val.trim();
+      this.detectedSource = candidate.name;
       try {
-        const parsedUrl = new URL(sanitizedUrl);
-        parsedUrl.searchParams.delete("sslmode");
-        parsedUrl.searchParams.delete("sslrootcert");
-        sanitizedUrl = parsedUrl.toString();
-      } catch {
-        sanitizedUrl = sanitizedUrl.replace(/([?&])sslmode=[^&]+(&|$)/g, "$1").replace(/\?$/, "");
-      }
-      this.pgPool = new pg.Pool({
-        connectionString: sanitizedUrl,
-        ssl: needsSsl ? { rejectUnauthorized: false } : void 0,
-        max: process.env.VERCEL ? 1 : 10,
-        idleTimeoutMillis: 3e4,
-        connectionTimeoutMillis: 8e3
-      });
-      this.pgPool.on("error", (err) => {
-        console.warn("PostgreSQL pool background client warning:", err?.message || err);
+        const needsSsl = isProduction3 || dbUrl.includes("sslmode=require") || dbUrl.includes("ssl=true") || dbUrl.includes("postgres.") || dbUrl.includes("supabase") || dbUrl.includes("pooler.supabase.com") || dbUrl.includes("neon.tech") || dbUrl.includes("render.com") || dbUrl.includes("vercel-storage");
+        let sanitizedUrl = dbUrl;
+        try {
+          const parsedUrl = new URL(sanitizedUrl);
+          parsedUrl.searchParams.delete("sslmode");
+          parsedUrl.searchParams.delete("sslrootcert");
+          sanitizedUrl = parsedUrl.toString();
+        } catch {
+          sanitizedUrl = sanitizedUrl.replace(/([?&])sslmode=[^&]+(&|$)/g, "$1").replace(/\?$/, "");
+        }
+        const pool = new pg.Pool({
+          connectionString: sanitizedUrl,
+          ssl: needsSsl ? { rejectUnauthorized: false } : void 0,
+          max: process.env.VERCEL ? 1 : 10,
+          idleTimeoutMillis: 3e4,
+          connectionTimeoutMillis: 5e3
+        });
+        pool.on("error", (err) => {
+          console.warn("PostgreSQL pool background client warning:", err?.message || err);
+          this.lastPostgresError = err?.message || String(err);
+        });
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS mtc_database_store (
+            id VARCHAR(50) PRIMARY KEY,
+            data JSONB NOT NULL,
+            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+          );
+        `);
+        const res = await pool.query("SELECT data FROM mtc_database_store WHERE id = $1", ["main_store"]);
+        if (res.rows.length > 0 && res.rows[0].data) {
+          const parsed = res.rows[0].data;
+          this.data = {
+            organizations: { ...this.data.organizations || {}, ...parsed.organizations || {} },
+            users: { ...this.data.users || {}, ...parsed.users || {} },
+            sessions: parsed.sessions || {},
+            invitations: parsed.invitations || {},
+            passwordResetTokens: parsed.passwordResetTokens || {},
+            documents: parsed.documents || {},
+            requirementSets: { ...this.data.requirementSets || {}, ...parsed.requirementSets || {} },
+            certificates: parsed.certificates || {},
+            analyses: parsed.analyses || {},
+            findings: parsed.findings || {},
+            feedbackDrafts: parsed.feedbackDrafts || {},
+            auditLogs: parsed.auditLogs || []
+          };
+          this.ensureSeedData();
+          this.persistToDisk();
+        } else {
+          this.pgPool = pool;
+          await this.persistToPostgres();
+        }
+        this.pgPool = pool;
+        this.isPostgresConnected = true;
+        this.lastPostgresError = null;
+        this.lastSyncedAtTime = Date.now();
+        connected = true;
+        console.log(`Successfully connected to PostgreSQL persistence store via ${candidate.name}.`);
+        break;
+      } catch (err) {
+        this.isPostgresConnected = false;
         this.lastPostgresError = err?.message || String(err);
-      });
-      await this.pgPool.query(`
-        CREATE TABLE IF NOT EXISTS mtc_database_store (
-          id VARCHAR(50) PRIMARY KEY,
-          data JSONB NOT NULL,
-          updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-        );
-      `);
-      const res = await this.pgPool.query("SELECT data FROM mtc_database_store WHERE id = $1", ["main_store"]);
-      if (res.rows.length > 0 && res.rows[0].data) {
-        const parsed = res.rows[0].data;
-        this.data = {
-          organizations: { ...this.data.organizations || {}, ...parsed.organizations || {} },
-          users: { ...this.data.users || {}, ...parsed.users || {} },
-          sessions: parsed.sessions || {},
-          invitations: parsed.invitations || {},
-          passwordResetTokens: parsed.passwordResetTokens || {},
-          documents: parsed.documents || {},
-          requirementSets: { ...this.data.requirementSets || {}, ...parsed.requirementSets || {} },
-          certificates: parsed.certificates || {},
-          analyses: parsed.analyses || {},
-          findings: parsed.findings || {},
-          feedbackDrafts: parsed.feedbackDrafts || {},
-          auditLogs: parsed.auditLogs || []
-        };
-        this.ensureSeedData();
-        this.persistToDisk();
-      } else {
-        await this.persistToPostgres();
+        console.warn(`PostgreSQL connection failed via ${candidate.name}:`, this.lastPostgresError);
       }
-      this.isPostgresConnected = true;
-      this.lastPostgresError = null;
-      this.lastSyncedAtTime = Date.now();
-      console.log(`Successfully connected to PostgreSQL persistence store via ${this.detectedSource}.`);
-    } catch (err) {
-      this.isPostgresConnected = false;
-      this.lastPostgresError = err?.message || String(err);
+    }
+    if (!connected) {
       console.warn("PostgreSQL connection fallback to persistent local store:", this.lastPostgresError);
     }
   }
