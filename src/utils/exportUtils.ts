@@ -839,9 +839,6 @@ export function exportFleetToExcel(analyses: AnalysisRecord[]): void {
   XLSX.writeFile(wb, `MTC_Fleet_Verification_Archive_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
-// Official MTC Compliance Checker Logo Asset (JPEG Base64)
-const MTC_LOGO_BASE64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAIBAQEBAQIBAQECAgICAgQDAgICAgUEBAMEBgUGBgYFBgYGBwkIBgcJBwYGCAsICQoKCgoKBggLDAsKDAkKCgr/2wBDAQICAgICAgUDAwUKBwYHCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgr/wAARCAEAAQADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD9/KKKKACiiodR1HT9H0+fVtWvobW1tYWmubm5lCRwxqCzOzNgKoAJJPAAoFKUYxbbskTUV8rfGb/gqT8OfCK3Nr8KvDj62sNrKz63qkrWdnC3lqySBGXzJEUlt4byfucMQ24fHfxj/wCCs/xI1eSaxuvjVqBT+0POSy8HQpbCAMrEKtxHsaSNQ23a0rnO3dllyFe+2p+T574y8HZRUdLDyliZrT92k4p/421FrzhzI/W2ivwc8Y/tzX3ifxHc65qWg6nrM8+zfqWs6yTczbUVRvysh4ACj5jwo6dBmf8ADY//AFTn/wAq/wD9pp2qdj4qf0gJKb5MsbXS9ZJ2817N2fld+p++1FfgT/w2P/1Tn/yr/wD2mj/hsf8A6pz/AOVf/wC00ctTsT/xMBW/6Ff/AJX/APuR++1FfgT/AMNj/wDVOf8Ayr//AGmj/hsf/qnP/lX/APtNHLU7B/xMBW/6Ff8A5X/+5H77UV+BP/DY/wD1Tn/yr/8A2mj/AIbH/wCqc/8AlX/+00ctTsH/ABMBW/6Ff/lf/wC5H77UV+BP/DY//VOf/Kv/APaaP+Gx/wDqnP8A5V//ALTRy1Owf8TAVv8AoV/+V/8A7kfvtRX4E/8ADY//AFTn/wAq/wD9po/4bH/6pz/5V/8A7TRy1Owf8TAVv+hX/wCV/wD7kfvtRX4E/wDDY/8A1Tn/AMq//wBpo/4bH/6pz/5V/wD7TRy1Owf8TAVv+hX/AOV//uR++1FfgT/w2P8A9U5/8q//ANpo/wCGx/8AqnP/AJV//tNHLU7B/wATAVv+hX/5X/8AuR++1FfgT/w2P/1Tn/yr/wD2mj/hsf8A6pz/AOVf/wC00ctTsH/EwFb/AKFf/lf/AO5H77UV+BP/AA2P/wBU5/8AKv8A/aataJ+2vPpWs2mqWvg26sZba6jljvbLWCJrdlYESR4jX51IyPmXkDkdaLVOw4/SAqcyvlen/X5f/Kj97KK/H/4Yf8FXPiRpNzcWmn/HPxHZtdvEmfE6JfKxywGxpvOEIGfmOUByM528fYPwU/4KueFvFKWUPxR8KQRW9xlX8ReGrnz7bd520EwElljVM7iskjZQ4Q7sKr23Psck8auEM0qKliufDSfWavBu+ylFu2mrclFLufX9FZvg/wAYeGPiB4YsvGXg3WYdQ0zUIRLaXcBO11zggg4KsCCrKQGVgVIBBFaVM/WqVWlXpRqU5KUZJNNO6aeqaa0aa2YUUUUGgUUVDqOo6fo+nz6tq19Da2trC01zc3MoSOGNQWZ2ZsBVABJJ4AFApSjGLbdkjA+LXxZ8EfBTwRdePfHuqfZ7O3+WKKMBprqYglYYlJG+RsHAyAACzFVVmH5cftx/8FHNf+Is8Nn4iFqIbO6ZtO8JaXdELESSRNcuckyCJwoYqAcnYih5DR/Uc/bjn+Iuv/wDCRWdldWcItZbLwjpzyFjEoOXu5QS0ayEshZVHIWJMsEMlfBV1dXN7cyXt7cPNNM5eWWVyzOxOSxJ5JJ5zRGPPq9j+P/ABH8R8XxVi54HAzccFF20uva2fxS2fLde7H5vWyW544+JvjT4h3Jl8S6y8kIfdFZRfJBFy2MIOCQGI3HLY4JNYFFFbpJbH5WkkrIKKKKYwooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigArV8KeNvFfgi9N/4V12ezdv9YsZBSTAIG9Gyr43HGQcE5HNZVFDSYmk1Zn2d+xh/wAFB/FHw48Ty33h+8stM1K5hSC70nUZGex1XI2qQu5SJFkYlVDbxuwGZWkFfqz+zz+0N4I/aL8EL4p8LSfZ7y32x6xo80gaaxmIPB4G+NsEpIAAwB4VldF/nYr7B/4J9/th+IPh3400/W0M97q+jQOt/b3Fw6pqtix2srun8S7kxvDfOkchDkMBhKHJqtj9G8PvELH8G4yGHryc8FJ+9F3fs7vWcN3pu4rSWunNZr9o6Kx/h9468P8AxN8EaX4/8LXPmWGrWaXEGXQtHkfNG+xmUSI2UZQTtZWHatikf2VQrUsTRjVpS5oySaa2aaumvVBXyt/VJ+My+Efhzp3wqtdStYV1t3vdbd7mPdDZ27KyB0YEojy/MJMr/x7MvILY+qa/JL/AIKz/GOTV/iR41urG71DYdQTw9ZJc7WEAhTy7hVBYhI2aO5Ybecy7sKzHCeunc/K/GXPamUcHSw9J2niZKnpuotNz+TiuR+Uj4n+Jvji5+IfjS98SylxDI+yyifP7qBeEXG4hTj5mAONzMR1rAooroSSVj+Q0lFWQUUUUxhRRRQAUUV/Qx/wxX+xv/0aX8Mv/CD07/4zUylyn3nBHAeL43+sewrRp+y5L8ybvz821u3L+J/PPRX9DH/DFf7G/wD0aX8Mv/CD07/4zR/wxX+xv/0aX8Mv/CD07/4zS9oj73/iA+b/APQZD/wGR/PPRX9DH/DFf7G//Rpfwy/8IPTv/jNH/DFf7G//AEaX8Mv/AAg9O/8AjNHtEH/EB83/AOgyH/gMj+eeiv6GP+GK/wBjf/o0v4Zf+EHp3/xmj/hiv9jf/o0v4Zf+EHp3/wAZo9og/wCID5v/ANBkP/AZH889Ff0Mf8MV/sb/APRpfwy/8IPTv/jNH/DFf7G//Rpfwy/8IPTv/jNHtEH/ABAfN/8AoMh/4DI/nnor+hj/AIYr/Y3/AOjS/hl/4Qenf/Ga8M+Mn/BHn9nj42/tDn4gan4f0zwv4LtvAy6ZaeGfBGnxabJPqrS3Ze/lMcYQeVHLAUGGMkkaiT93EY5jnRxY7wO4hw9JPD14VJNpW1jZdW2+i+/smz8WqK9g/bR/Yu+Kv7E3xVf4f/ABAh+26Ze75vDPia2gKW2r2ykAsoJPlypuUSQkkxlgQXR45H/e9f0Mf8MV/sb/9Gl/DL/wg9O/+M0f8MV/sb/8ARpfwy/8ACD07/wCM0e0Qf8QHzf8A6DIf+AyP556K/oY/4Yr/AGN/+jS/hl/4Qenf/GaP+GK/2N/+jS/hl/4Qenf/ABmj2iD/AIPm/wD0GQ/8Bkfzz0V/Qx/wxX+xv/0aX8Mv/CD07/4zR/wxX+xv/0aX8Mv/CD07/4zR7RB/wAQHzf/AKDIf+AyP556K/oY/4Yr/Y3/AOjS/hl/4Qenf/GaP+GK/wBjf/o0v4Zf+EHp3/xmj2iD/iA+b/8AQZD/AMBkfzz0V/Qx/wAMV/sb/wDRpfwy/wDCD07/AOM0f8MV/sb/APRpfwy/8IPTv/jNHtEH/EB83/6DIf8AgMj+eeiv6GP+GK/2N/8Ao0v4Zf8AhB6d/wDGaP8Ahiv9jf8A6NL+GX/hB6d/8Zo9og/4gPm//QZD/wABkfzz1e8NeIdS8Ka/aeI9Il23FnOsseWYBsdVbaQSrDKkZ5BI71/Qd/wxX+xv/wBGl/DL/wAIPTv/AIzR/wAMV/sb/wDRpfwy/wDCD07/AOM0e0Qf8QHzf/oMh/4DI/Fb9kP9qPwb4j8baToPiy8t9H8XwSRx28t82y21Zwy7f3jkBZGIB2MQWbdtYkhB+yHwd17WPFfwf8K+KPEV59o1DU/DljdX1x5ap5k0lujO21QFGWJOAABngV5R+1h/wS1+AX7Rnw7j8K+APDXh/wCHGr2upw3dr4h8N+EraJioDI8MsUJi8yMhiwBbh0Q46g+4/DfwVb/Db4eeH/h1Z6hJdw6BolnpsN1MoDzJbwpEHIGQCQgJA7mlJp7H6V4X+G+L8PqmIniatOftIpWhfa97tuMduis7Xet7GxX4k/8FEf+UjPxU/7GLS//AE12dfvZX4T/APBRH/lIz8VP+xi0v/012dKn8R8x9IH/AJJOh/1+h/6TUPIKKKK6D+dgooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAr8Zf+CiX/KRv4p/9jBpf/prtK/Zqvxk/wCiuf8ABWf/ALqV/wCyVdPdn2XBhth8x/7Bav5wPB6KKK0PjQooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAr8Wv2WP+Tx/j/9PH/5+39ftLX4v/sc/wDJ/wD+0T/3N3/o64qJ/Efb8H/8inNP+vK/9LgeOUUUVZ8QFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFfj3+x3/yf/8AtE/9zd/6OuK/YStbwn4J8F+Avtb+BvCGl6Kb+4ee/Olaffftk7ktJLL5SrvdiSSzZJycmlKN2j18qzP+z8HXo8nN7VJWvb7SkvJ7W69zyeivR/GXhvwtc+HLnW7Lw1p9reW3lyfaLGzhgeQtIqkuEQB8hicNn16815xVI8qUVF2uFFFFBIUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFAH//2Q==';
-
 /**
  * Generates and downloads an engineering-grade PDF Technical Review Report.
  * Complies with strict industrial formatting:
@@ -917,14 +914,44 @@ export function exportAnalysisToPDF(
    * Draws the controlled engineering page header with the official application logo
    */
   const drawPageHeader = () => {
-    // Official Logo Asset: 10mm x 10mm top-left
-    try {
-      doc.addImage(MTC_LOGO_BASE64, 'PNG', margin, 6.2, 10, 10);
-    } catch {
-      // Graceful fallback if image rendering is unsupported
-    }
+    // Official MTC Logo: Green rounded square with white document & checkmark
+    const logoX = margin;
+    const logoY = 6.2;
+    const logoSize = 10;
 
-    // Left: Application Title & Organization (offset to accommodate 10mm logo)
+    // 1. Emerald green rounded square container (#059669) with subtle border (#34D399)
+    doc.setFillColor(5, 150, 105);
+    doc.setDrawColor(52, 211, 153);
+    doc.setLineWidth(0.35);
+    doc.roundedRect(logoX, logoY, logoSize, logoSize, 2.2, 2.2, 'FD');
+
+    // 2. White document sheet with top-right corner fold
+    const docX = logoX + 2.4;
+    const docY = logoY + 1.8;
+    const docW = 5.2;
+    const docH = 6.4;
+    const fold = 1.6;
+
+    doc.setDrawColor(255, 255, 255);
+    doc.setLineWidth(0.45);
+
+    // Document outline
+    doc.line(docX, docY, docX + docW - fold, docY);
+    doc.line(docX + docW - fold, docY, docX + docW, docY + fold);
+    doc.line(docX + docW, docY + fold, docX + docW, docY + docH);
+    doc.line(docX + docW, docY + docH, docX, docY + docH);
+    doc.line(docX, docY + docH, docX, docY);
+
+    // Corner fold crease
+    doc.line(docX + docW - fold, docY, docX + docW - fold, docY + fold);
+    doc.line(docX + docW - fold, docY + fold, docX + docW, docY + fold);
+
+    // 3. Crisp white checkmark
+    doc.setLineWidth(0.6);
+    doc.line(docX + 1.2, docY + 3.8, docX + 2.3, docY + 4.9);
+    doc.line(docX + 2.3, docY + 4.9, docX + 4.1, docY + 2.6);
+
+    // Left: Application Title & Organization (offset to sit right of logo)
     const textStartX = margin + 12.5;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9.5);
