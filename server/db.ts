@@ -169,12 +169,17 @@ export class DatabaseStore {
   private pgPool: pg.Pool | null = null;
   private lastSyncedAtTime = 0;
   public isPostgresConnected = false;
+  public dbConfigured = false;
+  public detectedSource: string | null = null;
+  public lastPostgresError: string | null = null;
 
   constructor() {
     this.loadFromDisk();
     this.ensureSeedData();
     this.initPromise = this.initPostgres().catch((err) => {
-      console.warn('Optional PostgreSQL initialization notice:', err?.message || err);
+      this.isPostgresConnected = false;
+      this.lastPostgresError = err?.message || String(err);
+      console.warn('Optional PostgreSQL initialization notice:', this.lastPostgresError);
     });
 
     // Run 30-day retention maintenance check every 60 minutes
@@ -189,13 +194,24 @@ export class DatabaseStore {
   }
 
   private async initPostgres(): Promise<void> {
-    const dbUrl =
-      process.env.DATABASE_URL ||
-      process.env.POSTGRES_URL ||
-      process.env.POSTGRES_PRISMA_URL ||
-      process.env.POSTGRES_URL_NON_POOLING ||
-      process.env.SUPABASE_DB_URL;
-    if (!dbUrl) return;
+    const candidates = [
+      { name: 'DATABASE_URL', val: process.env.DATABASE_URL },
+      { name: 'POSTGRES_URL', val: process.env.POSTGRES_URL },
+      { name: 'POSTGRES_PRISMA_URL', val: process.env.POSTGRES_PRISMA_URL },
+      { name: 'POSTGRES_URL_NON_POOLING', val: process.env.POSTGRES_URL_NON_POOLING },
+      { name: 'SUPABASE_DB_URL', val: process.env.SUPABASE_DB_URL },
+    ];
+
+    const match = candidates.find((c) => !!c.val && typeof c.val === 'string' && c.val.trim().length > 0);
+    if (!match || !match.val) {
+      this.dbConfigured = false;
+      this.lastPostgresError = 'No DATABASE_URL or POSTGRES_URL environment variable detected.';
+      return;
+    }
+
+    this.dbConfigured = true;
+    this.detectedSource = match.name;
+    const dbUrl = match.val.trim();
 
     try {
       const isProduction = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
@@ -215,11 +231,12 @@ export class DatabaseStore {
         ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
         max: process.env.VERCEL ? 1 : 10,
         idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 4000,
+        connectionTimeoutMillis: 5000,
       });
 
       this.pgPool.on('error', (err) => {
-        console.warn('PostgreSQL pool background client warning:', err.message);
+        console.warn('PostgreSQL pool background client warning:', err?.message || err);
+        this.lastPostgresError = err?.message || String(err);
       });
 
       await this.pgPool.query(`
@@ -236,26 +253,30 @@ export class DatabaseStore {
         this.data = {
           organizations: { ...(this.data.organizations || {}), ...(parsed.organizations || {}) },
           users: { ...(this.data.users || {}), ...(parsed.users || {}) },
-          sessions: { ...(this.data.sessions || {}), ...(parsed.sessions || {}) },
-          invitations: { ...(this.data.invitations || {}), ...(parsed.invitations || {}) },
-          passwordResetTokens: { ...(this.data.passwordResetTokens || {}), ...(parsed.passwordResetTokens || {}) },
-          documents: { ...(this.data.documents || {}), ...(parsed.documents || {}) },
+          sessions: parsed.sessions || {},
+          invitations: parsed.invitations || {},
+          passwordResetTokens: parsed.passwordResetTokens || {},
+          documents: parsed.documents || {},
           requirementSets: { ...(this.data.requirementSets || {}), ...(parsed.requirementSets || {}) },
-          certificates: { ...(this.data.certificates || {}), ...(parsed.certificates || {}) },
-          analyses: { ...(this.data.analyses || {}), ...(parsed.analyses || {}) },
-          findings: { ...(this.data.findings || {}), ...(parsed.findings || {}) },
-          feedbackDrafts: { ...(this.data.feedbackDrafts || {}), ...(parsed.feedbackDrafts || {}) },
-          auditLogs: parsed.auditLogs || this.data.auditLogs || [],
+          certificates: parsed.certificates || {},
+          analyses: parsed.analyses || {},
+          findings: parsed.findings || {},
+          feedbackDrafts: parsed.feedbackDrafts || {},
+          auditLogs: parsed.auditLogs || [],
         };
+        this.ensureSeedData();
         this.persistToDisk();
       } else {
         await this.persistToPostgres();
       }
       this.isPostgresConnected = true;
+      this.lastPostgresError = null;
       this.lastSyncedAtTime = Date.now();
-      console.log('Successfully connected to PostgreSQL database persistence store.');
+      console.log(`Successfully connected to PostgreSQL persistence store via ${this.detectedSource}.`);
     } catch (err: any) {
-      console.warn('PostgreSQL connection fallback to persistent local store:', err.message);
+      this.isPostgresConnected = false;
+      this.lastPostgresError = err?.message || String(err);
+      console.warn('PostgreSQL connection fallback to persistent local store:', this.lastPostgresError);
     }
   }
 

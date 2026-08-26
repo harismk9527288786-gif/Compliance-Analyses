@@ -67,7 +67,15 @@ const healthHandler = (req: express.Request, res: express.Response) => {
     status: 'ok',
     service: 'MTC Compliance Checker API',
     version: '2.4.0',
-    database: db.isPostgresConnected ? 'postgresql (supabase/connected)' : 'local/memory store',
+    database: db.isPostgresConnected
+      ? 'postgresql (supabase/connected)'
+      : 'in-memory / fallback store',
+    postgres: {
+      connected: db.isPostgresConnected,
+      configured: db.dbConfigured,
+      detectedSource: db.detectedSource,
+      lastError: db.lastPostgresError,
+    },
     authenticated: !!req.user,
     timestamp: new Date().toISOString(),
   });
