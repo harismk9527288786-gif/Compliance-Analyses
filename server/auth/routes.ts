@@ -12,7 +12,7 @@ import { requireAuth, requireRole, AUTH_COOKIE_NAME } from './middleware';
 
 export const authRouter = express.Router();
 
-const isProduction = process.env.NODE_ENV === 'production';
+const isProduction = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
 const SESSION_TTL_HOURS = parseInt(process.env.SESSION_TTL_HOURS || '168', 10); // 7 days default
 const SESSION_TTL_MS = SESSION_TTL_HOURS * 60 * 60 * 1000;
 
@@ -37,7 +37,9 @@ function setSessionCookie(res: express.Response, sessionId: string) {
  */
 authRouter.post('/register', authLimiter, async (req, res) => {
   try {
-    const { name, email, password, role, organizationName } = req.body;
+    // `role` is intentionally not destructured from the body — see the role
+    // assignment below. Accepting it here was a privilege-escalation hole.
+    const { name, email, password, organizationName } = req.body;
 
     if (!name || typeof name !== 'string' || !name.trim()) {
       return res.status(400).json({ error: 'Please enter your full name.' });
@@ -60,6 +62,7 @@ authRouter.post('/register', authLimiter, async (req, res) => {
 
     // Determine organization
     let org: OrganizationRecord;
+    let isNewOrganization = false;
     const orgs = db.getOrganizations();
 
     if (organizationName && typeof organizationName === 'string' && organizationName.trim()) {
@@ -82,6 +85,7 @@ authRouter.post('/register', authLimiter, async (req, res) => {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       });
+      isNewOrganization = true;
     } else {
       // Default to the first seed organization if not specified
       org = orgs[0] || db.createOrganization({
@@ -97,8 +101,17 @@ authRouter.post('/register', authLimiter, async (req, res) => {
       });
     }
 
-    const validRoles: AuthRole[] = ['ADMIN', 'QUALITY_ENGINEER', 'REVIEWER', 'VIEWER'];
-    const assignedRole: AuthRole = (role && validRoles.includes(role as AuthRole)) ? (role as AuthRole) : 'QUALITY_ENGINEER';
+    // Role is deliberately NOT taken from the request body. This endpoint is
+    // unauthenticated, so honouring a client-supplied `role` let anyone POST
+    // {"role":"ADMIN"} and mint themselves an administrator account inside the
+    // existing tenant. Privilege assignment belongs to the authenticated paths:
+    // POST /invite (admin invites a member at a chosen role) and
+    // PATCH /users/:id/role (admin changes a role).
+    //
+    // Someone who registers a brand-new organization owns it, so they become
+    // its ADMIN. Anyone joining an already-existing organization gets the same
+    // default as before, and can be promoted later by an admin.
+    const assignedRole: AuthRole = isNewOrganization ? 'ADMIN' : 'QUALITY_ENGINEER';
 
     const passwordHash = await hashPassword(cleanPassword);
     const userId = `user-${Date.now()}-${generateRandomToken(4)}`;
@@ -194,7 +207,7 @@ authRouter.post('/login', authLimiter, async (req, res) => {
         details: { reason: 'User not found' },
       });
 
-      return res.status(401).json({ error: 'No account found with this email address. Please check your email or click "Create Account".' });
+      return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
     if (!user.is_active) {
@@ -226,7 +239,7 @@ authRouter.post('/login', authLimiter, async (req, res) => {
         objectName: 'Failed Login Attempt',
         details: { reason: 'Invalid password' },
       });
-      return res.status(401).json({ error: 'Incorrect password. Please verify your password or use "Forgot password".' });
+      return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
     const organization = db.getOrganization(user.organization_id);
@@ -401,7 +414,8 @@ authRouter.post('/reset-password', passwordResetLimiter, async (req, res) => {
     if (!token || typeof token !== 'string' || !token.trim()) {
       return res.status(400).json({ error: 'Password reset token is missing or invalid.' });
     }
-    if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
+    const cleanNewPassword = typeof newPassword === 'string' ? newPassword.trim() : '';
+    if (cleanNewPassword.length < 6) {
       return res.status(400).json({ error: 'New password must be at least 6 characters long.' });
     }
 
@@ -418,7 +432,7 @@ authRouter.post('/reset-password', passwordResetLimiter, async (req, res) => {
     }
 
     // Hash new password
-    const newPasswordHash = await hashPassword(newPassword);
+    const newPasswordHash = await hashPassword(cleanNewPassword);
     db.updateUser(user.id, { password_hash: newPasswordHash });
 
     // Invalidate reset token and all active sessions
@@ -529,7 +543,8 @@ authRouter.post('/accept-invite', async (req, res) => {
     if (!name || typeof name !== 'string' || !name.trim()) {
       return res.status(400).json({ error: 'Please enter your full name.' });
     }
-    if (!password || typeof password !== 'string' || password.length < 6) {
+    const cleanPassword = typeof password === 'string' ? password.trim() : '';
+    if (cleanPassword.length < 6) {
       return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
     }
 
@@ -545,7 +560,7 @@ authRouter.post('/accept-invite', async (req, res) => {
       return res.status(400).json({ error: 'Organization associated with invitation not found.' });
     }
 
-    const passwordHash = await hashPassword(password);
+    const passwordHash = await hashPassword(cleanPassword);
     const userId = `user-${Date.now()}-${generateRandomToken(4)}`;
     const cleanName = name.trim();
 

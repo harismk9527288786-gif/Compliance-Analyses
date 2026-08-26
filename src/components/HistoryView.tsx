@@ -44,22 +44,32 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   const [deletingAnalysisId, setDeletingAnalysisId] = useState<string | null>(null);
 
   // Aggregate stats
-  const totalRecords = analyses.length;
-  const totalPass = analyses.filter((a) => (a.deviationCount || 0) === 0 && (a.documentationGapCount || 0) === 0 && (a.passCount || 0) > 0).length;
-  const totalDeviations = analyses.filter((a) => (a.deviationCount || 0) > 0).length;
-  const totalGaps = analyses.filter((a) => (a.documentationGapCount || 0) > 0 && (a.deviationCount || 0) === 0).length;
+  const list = Array.isArray(analyses) ? analyses : [];
+  const totalRecords = list.length;
+  const totalPass = list.filter((a) => a && (a.deviationCount || 0) === 0 && (a.documentationGapCount || 0) === 0 && (a.passCount || 0) > 0).length;
+  const totalDeviations = list.filter((a) => a && (a.deviationCount || 0) > 0).length;
+  const totalGaps = list.filter((a) => a && (a.documentationGapCount || 0) > 0 && (a.deviationCount || 0) === 0).length;
 
   // Unique suppliers
-  const suppliers = Array.from(new Set(analyses.map((a) => a.supplierName).filter(Boolean)));
+  const suppliers = Array.from(new Set(list.map((a) => a?.supplierName).filter(Boolean)));
 
-  const filteredAnalyses = analyses.filter((a) => {
+  const filteredAnalyses = list.filter((a) => {
+    if (!a) return false;
+    const q = (searchQuery || '').toLowerCase();
+    const title = (a.title || '').toLowerCase();
+    const mtcNumber = (a.mtcNumber || '').toLowerCase();
+    const supplierName = (a.supplierName || '').toLowerCase();
+    const materialGrade = (a.materialGrade || '').toLowerCase();
+    const poNumber = (a.poNumber || '').toLowerCase();
+    const heats = Array.isArray(a.heats) ? a.heats : [];
+
     const matchesSearch =
-      a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      a.mtcNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      a.supplierName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      a.materialGrade.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (a.poNumber && a.poNumber.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (a.heats && a.heats.some((h) => h.toLowerCase().includes(searchQuery.toLowerCase())));
+      title.includes(q) ||
+      mtcNumber.includes(q) ||
+      supplierName.includes(q) ||
+      materialGrade.includes(q) ||
+      poNumber.includes(q) ||
+      heats.some((h) => String(h || '').toLowerCase().includes(q));
 
     if (!matchesSearch) return false;
     if (selectedSupplier !== 'all' && a.supplierName !== selectedSupplier) return false;

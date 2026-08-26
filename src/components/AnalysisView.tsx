@@ -77,7 +77,9 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
   const hasGaps = analysis.documentationGapCount > 0;
 
   // Filter findings
-  const filteredFindings = findings.filter((f) => {
+  const list = Array.isArray(findings) ? findings : [];
+  const filteredFindings = list.filter((f) => {
+    if (!f) return false;
     const matchesStatus =
       statusTab === 'all'
         ? true
@@ -85,12 +87,19 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
         ? f.status === 'DEVIATION' || f.status === 'DOCUMENTATION_GAP'
         : f.status === 'PASS';
 
+    const q = (searchQuery || '').toLowerCase();
+    const displayName = (f.displayName || '').toLowerCase();
+    const field = (f.field || '').toLowerCase();
+    const requirementText = (f.requirementText || '').toLowerCase();
+    const supplierRawValue = (f.supplierRawValue || '').toLowerCase();
+    const heatNo = (f.heatNo || '').toLowerCase();
+
     const matchesSearch =
-      f.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      f.field.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      f.requirementText.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      f.supplierRawValue.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (f.heatNo && f.heatNo.toLowerCase().includes(searchQuery.toLowerCase()));
+      displayName.includes(q) ||
+      field.includes(q) ||
+      requirementText.includes(q) ||
+      supplierRawValue.includes(q) ||
+      heatNo.includes(q);
 
     return matchesStatus && matchesSearch;
   });

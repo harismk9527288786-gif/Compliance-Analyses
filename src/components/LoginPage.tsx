@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { User as UserType, Organization } from '../types';
 import { DottedGlowBackground } from './DottedGlowBackground';
-import { apiFetch } from '../utils/api';
+import { apiFetch, formatErrorMessage } from '../utils/api';
 
 interface LoginPageProps {
   onLoginSuccess: (user: UserType, organization?: Organization) => void;
@@ -119,7 +119,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
       if (!res.ok) {
         setIsSubmitting(false);
-        setErrorMessage(data.error || 'Invalid email or password.');
+        setErrorMessage(formatErrorMessage(data.error || data, 'Invalid email or password.'));
         return;
       }
 
@@ -133,7 +133,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       onLoginSuccess(data.user, data.organization);
     } catch (err: any) {
       setIsSubmitting(false);
-      setErrorMessage('Unable to connect to the authentication server. Please check your network connection.');
+      setErrorMessage(formatErrorMessage(err, 'Unable to connect to the authentication server. Please check your network connection.'));
     }
   };
 
@@ -184,7 +184,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
       if (!res.ok) {
         setIsSubmitting(false);
-        setErrorMessage(data.error || 'Failed to create account.');
+        setErrorMessage(formatErrorMessage(data.error || data, 'Failed to create account.'));
         return;
       }
 
@@ -196,7 +196,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       }, 350);
     } catch (err: any) {
       setIsSubmitting(false);
-      setErrorMessage('Unable to connect to authentication server. Please check your connection.');
+      setErrorMessage(formatErrorMessage(err, 'Unable to connect to authentication server. Please check your connection.'));
     }
   };
 
@@ -240,7 +240,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
       if (!res.ok) {
         setIsSubmitting(false);
-        setErrorMessage(data.error || 'Invalid or expired invitation token.');
+        setErrorMessage(formatErrorMessage(data.error || data, 'Invalid or expired invitation token.'));
         return;
       }
 
@@ -250,7 +250,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       }, 350);
     } catch (err: any) {
       setIsSubmitting(false);
-      setErrorMessage('Failed to activate invitation. Please try again.');
+      setErrorMessage(formatErrorMessage(err, 'Failed to activate invitation. Please try again.'));
     }
   };
 
@@ -283,11 +283,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         setResetStep('reset');
         setModalMessage('Password reset token generated. Set your new password below:');
       } else {
-        setModalMessage(data.message || 'If an account exists, reset instructions have been generated.');
+        setModalMessage(formatErrorMessage(data.message || data, 'If an account exists, reset instructions have been generated.'));
       }
     } catch (err) {
       setIsSubmitting(false);
-      setModalError('Failed to process password reset request.');
+      setModalError(formatErrorMessage(err, 'Failed to process password reset request.'));
     }
   };
 
@@ -323,7 +323,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       setIsSubmitting(false);
 
       if (!res.ok) {
-        setModalError(data.error || 'Failed to reset password.');
+        setModalError(formatErrorMessage(data.error || data, 'Failed to reset password.'));
         return;
       }
 
@@ -335,7 +335,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       }, 1200);
     } catch (err) {
       setIsSubmitting(false);
-      setModalError('Failed to reset password. Please try again.');
+      setModalError(formatErrorMessage(err, 'Failed to reset password. Please try again.'));
     }
   };
 

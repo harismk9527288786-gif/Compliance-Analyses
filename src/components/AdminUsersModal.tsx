@@ -14,7 +14,7 @@ import {
   UserX,
 } from 'lucide-react';
 import { User, UserRole } from '../types';
-import { apiFetch } from '../utils/api';
+import { apiFetch, formatErrorMessage } from '../utils/api';
 
 interface AdminUsersModalProps {
   currentUser: User;
@@ -94,7 +94,7 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({ currentUser, o
       setIsInviting(false);
 
       if (!res.ok) {
-        setErrorMessage(data.error || 'Failed to send invitation.');
+        setErrorMessage(formatErrorMessage(data.error || data, 'Failed to send invitation.'));
         return;
       }
 
@@ -105,7 +105,7 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({ currentUser, o
       fetchUsersAndInvites();
     } catch (e: any) {
       setIsInviting(false);
-      setErrorMessage('Network error while creating invitation.');
+      setErrorMessage(formatErrorMessage(e, 'Network error while creating invitation.'));
     }
   };
 

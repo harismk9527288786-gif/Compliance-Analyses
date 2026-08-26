@@ -11,7 +11,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { RequirementSet, User } from '../types';
-import { apiFetch } from '../utils/api';
+import { apiFetch, formatErrorMessage } from '../utils/api';
 
 interface NewComparisonProps {
   requirementSets: RequirementSet[];
@@ -90,7 +90,7 @@ export const NewComparison: React.FC<NewComparisonProps> = ({
         });
         if (!uploadRes.ok) {
           const err = await uploadRes.json();
-          throw new Error(err.error || 'Certificate extraction could not process uploaded document.');
+          throw new Error(formatErrorMessage(err.error || err, 'Certificate extraction could not process uploaded document.'));
         }
         const data = await uploadRes.json();
         mtcDocId = data.document.id;
@@ -108,7 +108,7 @@ export const NewComparison: React.FC<NewComparisonProps> = ({
         });
         if (!uploadRes.ok) {
           const err = await uploadRes.json();
-          throw new Error(err.error || 'Failed to extract requirements from uploaded Material Data Sheet.');
+          throw new Error(formatErrorMessage(err.error || err, 'Failed to extract requirements from uploaded Material Data Sheet.'));
         }
         const data = await uploadRes.json();
         mdsDocId = data.document.id;
@@ -140,14 +140,14 @@ export const NewComparison: React.FC<NewComparisonProps> = ({
 
       if (!analysisRes.ok) {
         const err = await analysisRes.json();
-        throw new Error(err.error || 'Verification engine encountered a processing error.');
+        throw new Error(formatErrorMessage(err.error || err, 'Verification engine encountered a processing error.'));
       }
 
       const result = await analysisRes.json();
       onAnalysisCreated(result.analysis.id);
     } catch (e: any) {
       setIsProcessing(false);
-      setErrorMsg(e.message || 'Verification could not proceed due to an unexpected parsing error.');
+      setErrorMsg(formatErrorMessage(e, 'Verification could not proceed due to an unexpected parsing error.'));
     }
   };
 

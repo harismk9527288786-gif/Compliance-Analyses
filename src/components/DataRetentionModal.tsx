@@ -153,10 +153,10 @@ export const DataRetentionModal: React.FC<DataRetentionModalProps> = ({
             <div className="space-y-1">
               <div className="font-bold text-white flex items-center gap-2">
                 <span>Active Organization:</span>
-                <span className="text-emerald-400 font-mono">{currentOrg.name} ({currentOrg.code})</span>
+                <span className="text-emerald-400 font-mono">{currentOrg?.name || 'My Organization'} ({currentOrg?.code || 'ORG'})</span>
               </div>
               <div className="text-[11px] text-slate-400">
-                Active Verification Records: <span className="text-white font-mono font-bold">{totalAnalysesCount} analyses</span>
+                Active Verification Records: <span className="text-white font-mono font-bold">{totalAnalysesCount || 0} analyses</span>
               </div>
             </div>
 

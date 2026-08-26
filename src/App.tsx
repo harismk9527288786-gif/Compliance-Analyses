@@ -28,7 +28,7 @@ import {
   AuditEvent,
   FindingStatus,
 } from './types';
-import { apiFetch } from './utils/api';
+import { apiFetch, formatErrorMessage } from './utils/api';
 import { DottedGlowBackground } from './components/DottedGlowBackground';
 import { FileCheck2, RefreshCw } from 'lucide-react';
 
@@ -40,9 +40,16 @@ export default function App() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const addToast = (toast: ToastMessage) => {
-    setToasts((prev) => [...prev, toast]);
+    const safeToast: ToastMessage = {
+      ...toast,
+      title: typeof toast.title === 'string' ? toast.title : formatErrorMessage(toast.title, 'Notification'),
+      description: toast.description
+        ? (typeof toast.description === 'string' ? toast.description : formatErrorMessage(toast.description, ''))
+        : undefined,
+    };
+    setToasts((prev) => [...prev, safeToast]);
     setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== toast.id));
+      setToasts((prev) => prev.filter((t) => t.id !== safeToast.id));
     }, 4500);
   };
 
@@ -390,7 +397,7 @@ export default function App() {
           id: `toast-${Date.now()}`,
           type: 'error',
           title: 'Failed to Delete Record',
-          description: errData.error || 'Server rejected the deletion request.',
+          description: formatErrorMessage(errData.error || errData, 'Server rejected the deletion request.'),
         });
       }
     } catch (e) {
@@ -399,7 +406,7 @@ export default function App() {
         id: `toast-${Date.now()}`,
         type: 'error',
         title: 'Connection Error',
-        description: 'Failed to communicate with the server.',
+        description: formatErrorMessage(e, 'Failed to communicate with the server.'),
       });
     }
   };
@@ -437,7 +444,7 @@ export default function App() {
           id: `toast-${Date.now()}`,
           type: 'error',
           title: 'Failed to Clear Analyses',
-          description: errData.error || 'Server rejected the clear request.',
+          description: formatErrorMessage(errData.error || errData, 'Server rejected the clear request.'),
         });
       }
     } catch (e) {
@@ -446,7 +453,7 @@ export default function App() {
         id: `toast-${Date.now()}`,
         type: 'error',
         title: 'Connection Error',
-        description: 'Failed to communicate with the server.',
+        description: formatErrorMessage(e, 'Failed to communicate with the server.'),
       });
     }
   };
@@ -477,7 +484,7 @@ export default function App() {
           id: `toast-${Date.now()}`,
           type: 'error',
           title: 'Failed to Save Draft',
-          description: errData.error || 'Permission error saving feedback draft.',
+          description: formatErrorMessage(errData.error || errData, 'Permission error saving feedback draft.'),
         });
       }
     } catch (e) {
@@ -533,7 +540,7 @@ export default function App() {
           id: `toast-${Date.now()}`,
           type: 'error',
           title: 'Failed to Delete Specification',
-          description: errData.error || 'Server rejected the deletion request.',
+          description: formatErrorMessage(errData.error || errData, 'Server rejected the deletion request.'),
         });
       }
     } catch (e) {
@@ -567,7 +574,7 @@ export default function App() {
           id: `toast-${Date.now()}`,
           type: 'error',
           title: 'Failed to Clear Library',
-          description: errData.error || 'Server rejected the clear request.',
+          description: formatErrorMessage(errData.error || errData, 'Server rejected the clear request.'),
         });
       }
     } catch (e) {

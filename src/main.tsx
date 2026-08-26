@@ -33,10 +33,21 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     window.location.reload();
   };
 
-  handleReset = () => {
-    localStorage.clear();
-    sessionStorage.clear();
-    window.location.href = '/';
+  handleReset = async () => {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+      // Clear cookies
+      document.cookie.split(";").forEach((c) => {
+        document.cookie = c
+          .replace(/^ +/, "")
+          .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+      });
+      // Call server logout to invalidate backend session
+      await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    } finally {
+      window.location.href = '/';
+    }
   };
 
   render() {
@@ -81,7 +92,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
               MTC Quality Workstation
             </h1>
             <p style={{ fontSize: '13px', color: '#94a3b8', margin: '0 0 20px', lineHeight: '1.5' }}>
-              The application encountered an unexpected state. You can reload the workstation or reset your session cache.
+              The application encountered a render issue. You can reload the workstation or reset your session to return to the sign-in portal.
             </p>
 
             {this.state.error && (
@@ -98,11 +109,15 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
                 overflowX: 'auto',
                 maxHeight: '120px'
               }}>
-                {this.state.error.message}
+                {typeof this.state.error?.message === 'string'
+                  ? this.state.error.message
+                  : typeof this.state.error === 'object'
+                  ? JSON.stringify(this.state.error)
+                  : String(this.state.error || 'Unknown runtime error')}
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
               <button
                 onClick={this.handleReload}
                 style={{
@@ -133,7 +148,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
                   transition: 'background-color 0.2s'
                 }}
               >
-                Clear Cache &amp; Restart
+                Reset Session &amp; Sign In
               </button>
             </div>
           </div>

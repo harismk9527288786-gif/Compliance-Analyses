@@ -164,14 +164,16 @@ export class DatabaseStore {
     auditLogs: [],
   };
 
-  private saveTimeout: NodeJS.Timeout | null = null;
+  private initPromise: Promise<void> | null = null;
+  private pendingWritePromise: Promise<void> | null = null;
   private pgPool: pg.Pool | null = null;
+  private lastSyncedAtTime = 0;
   public isPostgresConnected = false;
 
   constructor() {
     this.loadFromDisk();
     this.ensureSeedData();
-    this.initPostgres().catch((err) => {
+    this.initPromise = this.initPostgres().catch((err) => {
       console.warn('Optional PostgreSQL initialization notice:', err.message);
     });
 
@@ -182,13 +184,31 @@ export class DatabaseStore {
   }
 
   private async initPostgres(): Promise<void> {
-    const dbUrl = process.env.DATABASE_URL;
+    const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRES_URL_NON_POOLING;
     if (!dbUrl) return;
 
     try {
+      const isProduction = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
+      const needsSsl =
+        isProduction ||
+        dbUrl.includes('sslmode=require') ||
+        dbUrl.includes('ssl=true') ||
+        dbUrl.includes('postgres.') ||
+        dbUrl.includes('supabase') ||
+        dbUrl.includes('neon.tech') ||
+        dbUrl.includes('render.com') ||
+        dbUrl.includes('vercel-storage');
+
       this.pgPool = new pg.Pool({
         connectionString: dbUrl,
-        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
+        ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
+        max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 10000,
+      });
+
+      this.pgPool.on('error', (err) => {
+        console.warn('PostgreSQL pool background client warning:', err.message);
       });
 
       await this.pgPool.query(`
@@ -199,6 +219,42 @@ export class DatabaseStore {
         );
       `);
 
+      const res = await this.pgPool.query('SELECT data FROM mtc_database_store WHERE id = $1', ['main_store']);
+      if (res.rows.length > 0 && res.rows[0].data) {
+        const parsed = res.rows[0].data;
+        this.data = {
+          organizations: { ...(this.data.organizations || {}), ...(parsed.organizations || {}) },
+          users: { ...(this.data.users || {}), ...(parsed.users || {}) },
+          sessions: { ...(this.data.sessions || {}), ...(parsed.sessions || {}) },
+          invitations: { ...(this.data.invitations || {}), ...(parsed.invitations || {}) },
+          passwordResetTokens: { ...(this.data.passwordResetTokens || {}), ...(parsed.passwordResetTokens || {}) },
+          documents: { ...(this.data.documents || {}), ...(parsed.documents || {}) },
+          requirementSets: { ...(this.data.requirementSets || {}), ...(parsed.requirementSets || {}) },
+          certificates: { ...(this.data.certificates || {}), ...(parsed.certificates || {}) },
+          analyses: { ...(this.data.analyses || {}), ...(parsed.analyses || {}) },
+          findings: { ...(this.data.findings || {}), ...(parsed.findings || {}) },
+          feedbackDrafts: { ...(this.data.feedbackDrafts || {}), ...(parsed.feedbackDrafts || {}) },
+          auditLogs: parsed.auditLogs || this.data.auditLogs || [],
+        };
+        this.persistToDisk();
+      } else {
+        await this.persistToPostgres();
+      }
+      this.isPostgresConnected = true;
+      this.lastSyncedAtTime = Date.now();
+      console.log('Successfully connected to PostgreSQL database persistence store.');
+    } catch (err: any) {
+      console.warn('PostgreSQL connection fallback to persistent local store:', err.message);
+    }
+  }
+
+  public async syncFromPostgres(force = false): Promise<void> {
+    if (!this.pgPool || !this.isPostgresConnected) return;
+    const now = Date.now();
+    if (!force && now - this.lastSyncedAtTime < 500) {
+      return;
+    }
+    try {
       const res = await this.pgPool.query('SELECT data FROM mtc_database_store WHERE id = $1', ['main_store']);
       if (res.rows.length > 0 && res.rows[0].data) {
         const parsed = res.rows[0].data;
@@ -216,17 +272,23 @@ export class DatabaseStore {
           feedbackDrafts: parsed.feedbackDrafts || {},
           auditLogs: parsed.auditLogs || [],
         };
-      } else {
-        await this.persistToPostgres();
+        this.lastSyncedAtTime = now;
       }
-      this.isPostgresConnected = true;
-      console.log('Successfully connected to Render PostgreSQL Database.');
     } catch (err: any) {
-      console.warn('PostgreSQL connection fallback to local persistent disk store:', err.message);
+      console.warn('PostgreSQL sync notice:', err.message);
     }
   }
 
-  private async persistToPostgres(): Promise<void> {
+  public async ensureReady(): Promise<void> {
+    if (this.initPromise) {
+      await this.initPromise;
+    }
+    if (this.pgPool && this.isPostgresConnected) {
+      await this.syncFromPostgres();
+    }
+  }
+
+  public async persistToPostgres(): Promise<void> {
     if (!this.pgPool) return;
     try {
       await this.pgPool.query(
@@ -235,6 +297,7 @@ export class DatabaseStore {
          ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
         ['main_store', JSON.stringify(this.data)]
       );
+      this.lastSyncedAtTime = Date.now();
     } catch (err: any) {
       console.error('Failed to sync data with PostgreSQL:', err.message);
     }
@@ -273,25 +336,46 @@ export class DatabaseStore {
 
   public persistToDisk(): void {
     try {
-      if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
+      if (!process.env.VERCEL) {
+        if (!fs.existsSync(DATA_DIR)) {
+          fs.mkdirSync(DATA_DIR, { recursive: true });
+        }
+        fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
       }
-      fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
-    } catch (e) {
-      console.error('Failed to write database to disk:', e);
+    } catch (e: any) {
+      if (e.code !== 'EROFS') {
+        console.error('Failed to write database to disk:', e.message);
+      }
     }
-    if (this.pgPool) {
-      this.persistToPostgres().catch(() => {});
+  }
+
+  public async persist(): Promise<void> {
+    this.persistToDisk();
+    if (this.pgPool && this.isPostgresConnected) {
+      await this.persistToPostgres();
+    }
+  }
+
+  public hasPendingWrites(): boolean {
+    return this.pendingWritePromise !== null;
+  }
+
+  public async flushWrites(): Promise<void> {
+    this.persistToDisk();
+    if (this.pendingWritePromise) {
+      await this.pendingWritePromise;
+    } else if (this.pgPool && this.isPostgresConnected) {
+      await this.persistToPostgres();
     }
   }
 
   private scheduleSave(): void {
-    if (this.saveTimeout) {
-      clearTimeout(this.saveTimeout);
+    this.persistToDisk();
+    if (this.pgPool && this.isPostgresConnected) {
+      this.pendingWritePromise = this.persistToPostgres().finally(() => {
+        this.pendingWritePromise = null;
+      });
     }
-    this.saveTimeout = setTimeout(() => {
-      this.persistToDisk();
-    }, 100);
   }
 
   private ensureSeedData(): void {
@@ -302,10 +386,15 @@ export class DatabaseStore {
       }
     }
 
-    // 2. Seed Users
+    // 2. Seed Users — only create records that are missing entirely.
+    // Never touch an existing record: the previous version re-seeded any user
+    // whose password_hash no longer matched the built-in demo hash, which meant
+    // every restart silently reverted real password changes (and name/role
+    // edits) back to the "password123" demo values, so a freshly changed
+    // password would stop working on the next boot.
     for (const user of SEED_USERS) {
-      if (!this.data.users[user.id] || !this.data.users[user.id].password_hash?.startsWith('scrypt$9ce9625d882cadfc116b50d0aadc67df')) {
-        this.data.users[user.id] = { ...user, password_hash: DEFAULT_PASSWORD_HASH };
+      if (!this.data.users[user.id]) {
+        this.data.users[user.id] = { ...user };
       }
     }
 
@@ -469,7 +558,7 @@ export class DatabaseStore {
 
   public createOrganization(org: OrganizationRecord): OrganizationRecord {
     this.data.organizations[org.id] = { ...org };
-    this.scheduleSave();
+    this.persistToDisk();
     return org;
   }
 
@@ -495,7 +584,7 @@ export class DatabaseStore {
 
   public createUser(user: UserRecord): UserRecord {
     this.data.users[user.id] = { ...user };
-    this.scheduleSave();
+    this.persistToDisk();
     return user;
   }
 
@@ -508,7 +597,7 @@ export class DatabaseStore {
       updated_at: new Date().toISOString(),
     };
     this.data.users[id] = updated;
-    this.scheduleSave();
+    this.persistToDisk();
     return updated;
   }
 
@@ -920,5 +1009,4 @@ export class DatabaseStore {
 }
 
 export const db = new DatabaseStore();
-export const USERS = db.getUsers();
-export const ORGANIZATIONS = db.getOrganizations();
+export default db;

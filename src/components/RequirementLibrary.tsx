@@ -46,12 +46,20 @@ export const RequirementLibrary: React.FC<RequirementLibraryProps> = ({
   const selectedSet = requirementSets.find((s) => s.id === selectedSetId) || requirementSets[0];
 
   const filteredRequirements = (selectedSet?.requirements || []).filter((req) => {
+    if (!req) return false;
     const matchesCategory = categoryFilter === 'all' || req.category === categoryFilter;
+    const q = (searchQuery || '').toLowerCase();
+    const displayName = (req.displayName || '').toLowerCase();
+    const field = (req.field || '').toLowerCase();
+    const description = (req.description || '').toLowerCase();
+    const clauseReference = (req.clauseReference || '').toLowerCase();
+
     const matchesSearch =
-      req.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      req.field.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (req.description && req.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (req.clauseReference && req.clauseReference.toLowerCase().includes(searchQuery.toLowerCase()));
+      displayName.includes(q) ||
+      field.includes(q) ||
+      description.includes(q) ||
+      clauseReference.includes(q);
+
     return matchesCategory && matchesSearch;
   });
 

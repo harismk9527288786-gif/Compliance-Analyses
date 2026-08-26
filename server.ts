@@ -4,7 +4,6 @@ import express from 'express';
 import path from 'path';
 import multer from 'multer';
 import cookieParser from 'cookie-parser';
-import { createServer as createViteServer } from 'vite';
 import { db } from './server/db';
 import { authRouter } from './server/auth/routes';
 import { authenticate, requireAuth, requireRole } from './server/auth/middleware';
@@ -29,24 +28,54 @@ const upload = multer({
   limits: { fileSize: 25 * 1024 * 1024 },
 });
 
-async function startServer() {
-  const app = express();
-  const PORT = parseInt(process.env.PORT || '3000', 10);
+export const app = express();
 
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-  app.use(cookieParser());
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
 
-  // Security Middleware Headers
-  app.use((req, res, next) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-    res.setHeader('X-XSS-Protection', '1; mode=block');
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cookieParser());
+
+// Security Middleware Headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  next();
+});
+
+// Database Readiness & Synchronization Middleware (Ensures latest PG state before any route)
+app.use(async (req, res, next) => {
+  try {
+    await db.ensureReady();
     next();
-  });
+  } catch (err: any) {
+    console.warn('DB readiness middleware notice:', err?.message || err);
+    next();
+  }
+});
 
-  // Session Authentication Middleware (attaches req.user, req.organization, req.session)
-  app.use(authenticate);
+// Flush pending database writes before response completion (Crucial for Vercel Serverless)
+app.use((req, res, next) => {
+  const origJson = res.json.bind(res);
+  res.json = function (body: any) {
+    if (db.hasPendingWrites()) {
+      db.flushWrites()
+        .then(() => origJson(body))
+        .catch((err) => {
+          console.error('Failed to flush DB writes before sending response:', err);
+          origJson(body);
+        });
+      return res;
+    }
+    return origJson(body);
+  };
+  next();
+});
+
+// Session Authentication Middleware (attaches req.user, req.organization, req.session)
+app.use(authenticate);
 
   // --- API ROUTES ---
 
@@ -414,12 +443,22 @@ async function startServer() {
       }
 
       if (!reqSet) {
-        reqSet = PILOT_MDS_REQUIREMENT_SET;
+        if (requirementSetId) {
+          return res.status(404).json({ error: 'Requirement set not found in your organization.' });
+        }
+        if (mdsDocumentId) {
+          return res.status(404).json({ error: 'MDS document not found in your organization.' });
+        }
+        return res.status(400).json({ error: 'Either requirementSetId or mdsDocumentId is required.' });
       }
 
       // 2. Resolve Certificate Evidence
       let certRecord: CertificateRecord | undefined;
       const mtcDoc = mtcDocumentId ? db.getDocument(orgId, mtcDocumentId) : undefined;
+
+      if (mtcDocumentId && !mtcDoc) {
+        return res.status(404).json({ error: 'MTC document not found in your organization.' });
+      }
 
       if (mtcDoc && mtcDoc.rawText && !mtcDoc.filename.includes('WW2606229-3')) {
         const extracted = await extractSupplierEvidenceWithAI(mtcDoc.rawText, mtcDoc.filename);
@@ -666,6 +705,13 @@ async function startServer() {
       // Re-aggregate counts on analysis record
       const analysis = db.getAnalysis(orgId, analysisId);
       if (analysis) {
+        if (analysis.status === 'approved' || analysis.status === 'rejected') {
+          analysis.approvedBy = undefined;
+          analysis.approvedByName = undefined;
+          analysis.approvedAt = undefined;
+          analysis.finalStatus = undefined;
+          analysis.approvalNotes = undefined;
+        }
         analysis.passCount = findingsList.filter((f) => f.status === 'PASS').length;
         analysis.deviationCount = findingsList.filter((f) => f.status === 'DEVIATION').length;
         analysis.documentationGapCount = findingsList.filter((f) => f.status === 'DOCUMENTATION_GAP').length;
@@ -798,7 +844,7 @@ async function startServer() {
   });
 
   // Automated Test Suite Runner Endpoint
-  app.post('/api/test-suite/run', requireAuth, (req, res) => {
+  app.post('/api/test-suite/run', requireAuth, requireRole(['ADMIN', 'QUALITY_ENGINEER', 'REVIEWER']), (req, res) => {
     try {
       const results = runAllTestCases();
       const passedCount = results.filter((r) => r.status === 'passed').length;
@@ -825,26 +871,102 @@ async function startServer() {
     });
   });
 
-  // Vite Middleware for SPA development & static serving in production
+  // ---------------------------------------------------------------------------
+  // Frontend serving & API routing fallback
+  // ---------------------------------------------------------------------------
   const distPath = path.join(process.cwd(), 'dist');
-  const hasDist = fs.existsSync(path.join(distPath, 'index.html'));
+  const entryPoint = process.argv[1] || '';
+  const isBuiltEntry = /\.(cjs|mjs|js)$/i.test(entryPoint);
+  const isProduction = process.env.NODE_ENV === 'production' || isBuiltEntry || !!process.env.VERCEL;
 
-  if (process.env.NODE_ENV === 'production' || hasDist) {
-    app.use(express.static(distPath, { maxAge: '1d', index: false }));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+  // Unknown /api/* paths must answer with JSON, never with the SPA shell.
+  app.use('/api', (req, res) => {
+    res.status(404).json({ error: `Unknown API endpoint: ${req.method} ${req.originalUrl}` });
+  });
+
+  // API error handler. Must stay registered after the API routes.
+  app.use('/api', (err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (res.headersSent) {
+      return next(err);
+    }
+    const status = Number(err?.status || err?.statusCode) || 500;
+    const isMalformedBody = err instanceof SyntaxError && status === 400;
+
+    console.error(`[api error] ${req.method} ${req.originalUrl}:`, err?.message || err);
+
+    res.status(isMalformedBody ? 400 : status).json({
+      error: isMalformedBody
+        ? 'Malformed JSON in request body.'
+        : process.env.NODE_ENV === 'production'
+          ? 'Internal server error.'
+          : `Internal server error: ${err?.message || String(err)}`,
     });
-  } else {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
+  });
+
+  if (!process.env.VERCEL) {
+    if (isProduction) {
+      if (fs.existsSync(path.join(distPath, 'index.html'))) {
+        console.log('Serving prebuilt frontend from dist/ (production mode)');
+
+        app.use(
+          express.static(distPath, {
+            index: false,
+            setHeaders: (res, filePath) => {
+              const name = path.basename(filePath);
+              if (name === 'sw.js' || name === 'index.html' || name === 'manifest.json') {
+                res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+              } else if (/-[A-Za-z0-9_-]{8,}\.[a-z]+$/.test(name)) {
+                res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+              } else {
+                res.setHeader('Cache-Control', 'public, max-age=3600');
+              }
+            },
+          })
+        );
+
+        app.get('*', (req, res) => {
+          res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+          res.sendFile(path.join(distPath, 'index.html'));
+        });
+      }
+    } else {
+      (async () => {
+        try {
+          const { createServer: createViteServer } = await import('vite');
+          const vite = await createViteServer({
+            server: { middlewareMode: true },
+            appType: 'spa',
+          });
+          app.use(vite.middlewares);
+          console.log('Vite dev middleware active — serving live source with HMR');
+        } catch (e: any) {
+          console.warn('Vite dev server init warning:', e.message);
+        }
+      })();
+    }
   }
 
+export async function startServer() {
+  const PORT = parseInt(process.env.PORT || '3000', 10);
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`MTC Compliance Checker server running on http://0.0.0.0:${PORT}`);
   });
 }
 
-startServer();
+// Auto-start only when executed directly, not when imported as serverless function
+const isDirectExecution =
+  !process.env.VERCEL &&
+  !process.env.AWS_LAMBDA_FUNCTION_NAME &&
+  (entryPoint.includes('server') ||
+    entryPoint.includes('tsx') ||
+    process.argv[1]?.endsWith('server.cjs') ||
+    process.argv[1]?.endsWith('server.ts'));
+
+if (isDirectExecution) {
+  startServer().catch((err) => {
+    console.error('[fatal] Server failed to start:', err);
+    process.exit(1);
+  });
+}
+
+export default app;

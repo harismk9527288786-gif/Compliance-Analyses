@@ -15,13 +15,21 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({ auditLogs }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [actionFilter, setActionFilter] = useState<string>('all');
 
-  const filteredLogs = auditLogs.filter((log) => {
+  const list = Array.isArray(auditLogs) ? auditLogs : [];
+  const filteredLogs = list.filter((log) => {
+    if (!log) return false;
     const matchesAction = actionFilter === 'all' || log.action === actionFilter;
+    const q = (searchQuery || '').toLowerCase();
+    const actorName = (log.actorName || '').toLowerCase();
+    const action = (log.action || '').toLowerCase();
+    const objectType = (log.objectType || '').toLowerCase();
+    const objectName = (log.objectName || '').toLowerCase();
+
     const matchesSearch =
-      log.actorName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.objectType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (log.objectName && log.objectName.toLowerCase().includes(searchQuery.toLowerCase()));
+      actorName.includes(q) ||
+      action.includes(q) ||
+      objectType.includes(q) ||
+      objectName.includes(q);
 
     return matchesAction && matchesSearch;
   });

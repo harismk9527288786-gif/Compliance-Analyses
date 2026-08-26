@@ -52,28 +52,38 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const firstName = currentUser?.name ? currentUser.name.split(' ')[0] : 'Quality Specialist';
 
   // Aggregate metrics
-  const totalReviews = analyses.length;
-  const totalPass = analyses.reduce((acc, a) => acc + (a.passCount || 0), 0);
-  const totalDeviations = analyses.reduce((acc, a) => acc + (a.deviationCount || 0), 0);
-  const totalGaps = analyses.reduce((acc, a) => acc + (a.documentationGapCount || 0), 0);
+  const list = Array.isArray(analyses) ? analyses : [];
+  const totalReviews = list.length;
+  const totalPass = list.reduce((acc, a) => acc + (a?.passCount || 0), 0);
+  const totalDeviations = list.reduce((acc, a) => acc + (a?.deviationCount || 0), 0);
+  const totalGaps = list.reduce((acc, a) => acc + (a?.documentationGapCount || 0), 0);
   const totalNeedsAttention = totalDeviations + totalGaps;
   const totalChecks = totalPass + totalNeedsAttention;
 
   // Filter analyses requiring attention
-  const attentionItems = analyses.filter(
+  const attentionItems = list.filter(
     (a) =>
-      a.deviationCount > 0 ||
-      a.documentationGapCount > 0 ||
-      a.status === 'rejected'
+      a &&
+      ((a.deviationCount || 0) > 0 ||
+        (a.documentationGapCount || 0) > 0 ||
+        a.status === 'rejected')
   );
 
-  const filteredAnalyses = analyses.filter((a) => {
+  const filteredAnalyses = list.filter((a) => {
+    if (!a) return false;
+    const q = (searchQuery || '').toLowerCase();
+    const title = (a.title || '').toLowerCase();
+    const mtcNumber = (a.mtcNumber || '').toLowerCase();
+    const supplierName = (a.supplierName || '').toLowerCase();
+    const materialGrade = (a.materialGrade || '').toLowerCase();
+    const poNumber = (a.poNumber || '').toLowerCase();
+
     const matchesSearch =
-      a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      a.mtcNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      a.supplierName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      a.materialGrade.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (a.poNumber && a.poNumber.toLowerCase().includes(searchQuery.toLowerCase()));
+      title.includes(q) ||
+      mtcNumber.includes(q) ||
+      supplierName.includes(q) ||
+      materialGrade.includes(q) ||
+      poNumber.includes(q);
 
     if (!matchesSearch) return false;
     if (statusFilter === 'deviations') return (a.deviationCount || 0) > 0;

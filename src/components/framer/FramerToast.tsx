@@ -41,10 +41,12 @@ export const FramerToast: React.FC<FramerToastProps> = ({ toasts, onDismiss }) =
               </div>
 
               <div className="flex-1 min-w-0">
-                <div className="text-xs font-bold text-white">{t.title}</div>
+                <div className="text-xs font-bold text-white">
+                  {typeof t.title === 'string' ? t.title : String(t.title || '')}
+                </div>
                 {t.description && (
                   <div className="text-[11px] text-slate-300 mt-0.5 leading-snug">
-                    {t.description}
+                    {typeof t.description === 'string' ? t.description : String(t.description || '')}
                   </div>
                 )}
               </div>
