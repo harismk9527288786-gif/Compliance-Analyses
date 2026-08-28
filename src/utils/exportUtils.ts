@@ -1148,71 +1148,77 @@ export function exportAnalysisToPDF(
 
   y += statusHeight + 3.5;
 
-  // --- 3. Technical Summary: Carbon Equivalent (CE) Conformance ---
-  let cVal = 0, mnVal = 0, crVal = 0, moVal = 0, vVal = 0, niVal = 0, cuVal = 0;
-  let reportedCE = '0.357 wt%';
-  findings.forEach((f) => {
-    const num = parseFloat(String(f.supplierNumericValue || f.supplierRawValue || '0'));
-    if (isNaN(num)) return;
-    const fld = (f.field || f.displayName || '').toUpperCase();
-    if (fld === 'C' || fld === 'CARBON' || fld.startsWith('CARBON (C)')) cVal = num;
-    else if (fld === 'MN' || fld === 'MANGANESE' || fld.startsWith('MANGANESE (MN)')) mnVal = num;
-    else if (fld === 'CR' || fld === 'CHROMIUM') crVal = num;
-    else if (fld === 'MO' || fld === 'MOLYBDENUM') moVal = num;
-    else if (fld === 'V' || fld === 'VANADIUM') vVal = num;
-    else if (fld === 'NI' || fld === 'NICKEL') niVal = num;
-    else if (fld === 'CU' || fld === 'COPPER') cuVal = num;
-    if (fld === 'CE' || f.displayName?.toLowerCase().includes('carbon equivalent')) {
-      reportedCE = f.supplierRawValue || `${num.toFixed(3)} wt%`;
-    }
-  });
+  // --- 3. Technical Summary: Carbon Equivalent (CE) Conformance (Only if CE requirement exists) ---
+  const hasCERequirement = findings.some(
+    (f) => f.field === 'CE' || f.displayName?.toLowerCase().includes('carbon equivalent')
+  );
 
-  const calcCEVal = cVal > 0 ? (cVal + mnVal / 6 + (crVal + moVal + vVal) / 5 + (niVal + cuVal) / 15) : 0.390;
-  const calcCEStr = `${calcCEVal.toFixed(3)} wt%`;
+  if (hasCERequirement) {
+    let cVal = 0, mnVal = 0, crVal = 0, moVal = 0, vVal = 0, niVal = 0, cuVal = 0;
+    let reportedCE = '0.357 wt%';
+    findings.forEach((f) => {
+      const num = f.supplierNormalizedValue !== undefined ? Number(f.supplierNormalizedValue) : parseFloat(String(f.supplierRawValue || '0'));
+      if (isNaN(num)) return;
+      const fld = (f.field || f.displayName || '').toUpperCase();
+      if (fld === 'C' || fld === 'CARBON' || fld.startsWith('CARBON (C)')) cVal = num;
+      else if (fld === 'MN' || fld === 'MANGANESE' || fld.startsWith('MANGANESE (MN)')) mnVal = num;
+      else if (fld === 'CR' || fld === 'CHROMIUM') crVal = num;
+      else if (fld === 'MO' || fld === 'MOLYBDENUM') moVal = num;
+      else if (fld === 'V' || fld === 'VANADIUM') vVal = num;
+      else if (fld === 'NI' || fld === 'NICKEL') niVal = num;
+      else if (fld === 'CU' || fld === 'COPPER') cuVal = num;
+      if (fld === 'CE' || f.displayName?.toLowerCase().includes('carbon equivalent')) {
+        reportedCE = f.supplierRawValue || `${num.toFixed(3)} wt%`;
+      }
+    });
 
-  const ceBoxH = 14.5;
-  doc.setDrawColor(...BORDER_COLOR);
-  doc.setFillColor(...BG_ROW_ALT);
-  doc.roundedRect(margin, y, contentWidth, ceBoxH, 1, 1, 'FD');
+    const calcCEVal = cVal > 0 ? (cVal + mnVal / 6 + (crVal + moVal + vVal) / 5 + (niVal + cuVal) / 15) : 0.390;
+    const calcCEStr = `${calcCEVal.toFixed(3)} wt%`;
 
-  // Title
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.2);
-  doc.setTextColor(...PRIMARY_NAVY);
-  doc.text('Carbon Equivalent (CE) Conformance', margin + 3, y + 4.2);
+    const ceBoxH = 14.5;
+    doc.setDrawColor(...BORDER_COLOR);
+    doc.setFillColor(...BG_ROW_ALT);
+    doc.roundedRect(margin, y, contentWidth, ceBoxH, 1, 1, 'FD');
 
-  // CE Metrics
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(6.5);
-  doc.setTextColor(...MUTED_TEXT);
-  doc.text('Calculated:', margin + 3, y + 9.0);
-  doc.text('MTC Reported:', margin + 42, y + 9.0);
-  doc.text('Maximum Allowable:', margin + 82, y + 9.0);
+    // Title
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.2);
+    doc.setTextColor(...PRIMARY_NAVY);
+    doc.text('Carbon Equivalent (CE) Conformance', margin + 3, y + 4.2);
 
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...BODY_TEXT);
-  doc.text(calcCEStr, margin + 19, y + 9.0);
-  doc.text(reportedCE.includes('wt%') || reportedCE.includes('%') ? reportedCE : `${reportedCE} wt%`, margin + 61, y + 9.0);
-  doc.text('0.43 wt% MAX', margin + 110, y + 9.0);
+    // CE Metrics
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.5);
+    doc.setTextColor(...MUTED_TEXT);
+    doc.text('Calculated:', margin + 3, y + 9.0);
+    doc.text('MTC Reported:', margin + 42, y + 9.0);
+    doc.text('Maximum Allowable:', margin + 82, y + 9.0);
 
-  // Small Technical Formula Box
-  const formulaBoxX = pageWidth - margin - 52;
-  const formulaBoxY = y + 2.0;
-  doc.setDrawColor(...BORDER_COLOR);
-  doc.setFillColor(238, 242, 246); // subtle light slate/blue
-  doc.roundedRect(formulaBoxX, formulaBoxY, 49, 10.0, 0.6, 0.6, 'FD');
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...BODY_TEXT);
+    doc.text(calcCEStr, margin + 19, y + 9.0);
+    doc.text(reportedCE.includes('wt%') || reportedCE.includes('%') ? reportedCE : `${reportedCE} wt%`, margin + 61, y + 9.0);
+    doc.text('0.43 wt% MAX', margin + 110, y + 9.0);
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(5.6);
-  doc.setTextColor(...PRIMARY_NAVY);
-  doc.text('IIW CE FORMULA (ISO 15156 / NACE):', formulaBoxX + 2, formulaBoxY + 3.6);
+    // Small Technical Formula Box
+    const formulaBoxX = pageWidth - margin - 52;
+    const formulaBoxY = y + 2.0;
+    doc.setDrawColor(...BORDER_COLOR);
+    doc.setFillColor(238, 242, 246); // subtle light slate/blue
+    doc.roundedRect(formulaBoxX, formulaBoxY, 49, 10.0, 0.6, 0.6, 'FD');
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(5.3);
-  doc.setTextColor(...BODY_TEXT);
-  doc.text('CE = C + Mn/6 + (Cr+Mo+V)/5 + (Ni+Cu)/15', formulaBoxX + 2, formulaBoxY + 7.2);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(5.6);
+    doc.setTextColor(...PRIMARY_NAVY);
+    doc.text('IIW CE FORMULA (ISO 15156 / NACE):', formulaBoxX + 2, formulaBoxY + 3.6);
 
-  y += ceBoxH + 3.5;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(5.3);
+    doc.setTextColor(...BODY_TEXT);
+    doc.text('CE = C + Mn/6 + (Cr+Mo+V)/5 + (Ni+Cu)/15', formulaBoxX + 2, formulaBoxY + 7.2);
+
+    y += ceBoxH + 3.5;
+  }
 
   // =========================================================================
   // MAIN COMPLIANCE TABLE
@@ -1237,7 +1243,7 @@ export function exportAnalysisToPDF(
     const heatLines = doc.splitTextToSize(String(f.heatNo || 'General'), cols.heat.w - 3);
     const reqLines = doc.splitTextToSize(String(f.requirementText || 'N/A'), cols.requirement.w - 3);
     const valLines = doc.splitTextToSize(String(f.supplierRawValue || 'Not Identified'), cols.supplier.w - 3);
-    const remLines = doc.splitTextToSize(String(f.clauseReference || f.reason || (f.status === 'PASS' ? 'Conforming' : 'Requires Review')), cols.remarks.w - 3);
+    const remLines = doc.splitTextToSize(String(f.requirementClause || f.reason || (f.status === 'PASS' ? 'Conforming' : 'Requires Review')), cols.remarks.w - 3);
 
     const maxLineCount = Math.max(
       srLines.length,

@@ -9,8 +9,10 @@ import { authRouter } from './server/auth/routes';
 import { authenticate, requireAuth, requireRole } from './server/auth/middleware';
 import { sanitizeUser } from './server/auth/types';
 import { validateUploadedDocument, parseDocumentContent } from './server/pdfService';
-import { extractRequirementsWithAI, extractSupplierEvidenceWithAI } from './server/gemini';
+import { extractRequirementsWithAI, extractSupplierEvidenceWithAI, extractMTCIdentity } from './server/gemini';
+export { extractRequirementsWithAI, extractSupplierEvidenceWithAI, extractMTCIdentity } from './server/gemini';
 import { evaluateCompliance } from './src/engine/rules';
+export { evaluateCompliance } from './src/engine/rules';
 import { PILOT_MDS_REQUIREMENT_SET, PILOT_SUPPLIER_MTC } from './src/engine/pilotData';
 import { runAllTestCases } from './src/engine/testSuite';
 import {
@@ -414,25 +416,41 @@ app.use('/api/auth', authRouter);
       } else if (mdsDocumentId) {
         const mdsDoc = db.getDocument(orgId, mdsDocumentId);
         if (mdsDoc) {
-          const extractedReqs = await extractRequirementsWithAI(
+          const { identity, requirements } = await extractRequirementsWithAI(
             mdsDoc.rawText || mdsDoc.contentSummary || '',
             mdsDoc.filename
           );
-          reqSet = {
-            id: `reqset-${Date.now()}`,
-            clientName: clientName || 'Client Requirements',
-            materialGrade: materialGrade || 'ASTM A105N',
-            mdsNumber: 'EXTRACTED-MDS',
-            revision: 'Rev 1',
-            title: `Extracted Requirements from ${mdsDoc.filename}`,
-            effectiveDate: new Date().toISOString().split('T')[0],
-            status: 'draft',
-            organizationId: orgId,
-            requirements: (extractedReqs.length > 0
-              ? extractedReqs
-              : PILOT_MDS_REQUIREMENT_SET.requirements) as any,
-            sourceDocumentId: mdsDoc.id,
-          };
+
+          if (!identity.isConfident) {
+            // If MDS identity cannot be confidently established, return REVIEW REQUIRED rather than using a previous/default rule set
+            reqSet = {
+              id: `reqset-${Date.now()}`,
+              clientName: clientName || 'Specification Verification Required',
+              materialGrade: 'UNIDENTIFIED SPECIFICATION (REVIEW REQUIRED)',
+              mdsNumber: identity.mdsNumber || 'MDS-UNIDENTIFIED',
+              revision: identity.revision || 'N/A',
+              title: `Unverified Specification (${mdsDoc.filename}) - Review Required`,
+              effectiveDate: new Date().toISOString().split('T')[0],
+              status: 'draft',
+              organizationId: orgId,
+              requirements: requirements as any,
+              sourceDocumentId: mdsDoc.id,
+            };
+          } else {
+            reqSet = {
+              id: `reqset-${Date.now()}`,
+              clientName: clientName || identity.clientName || 'Client Specification',
+              materialGrade: materialGrade || identity.materialGrade,
+              mdsNumber: identity.mdsNumber,
+              revision: identity.revision,
+              title: identity.title || `${identity.clientName || 'Client MDS'} - ${identity.materialGrade} (${identity.mdsNumber} ${identity.revision})`,
+              effectiveDate: new Date().toISOString().split('T')[0],
+              status: 'approved',
+              organizationId: orgId,
+              requirements: requirements as any,
+              sourceDocumentId: mdsDoc.id,
+            };
+          }
           db.setRequirementSet(orgId, reqSet.id, reqSet);
         }
       }
@@ -447,32 +465,103 @@ app.use('/api/auth', authRouter);
         return res.status(400).json({ error: 'Either requirementSetId or mdsDocumentId is required.' });
       }
 
-      // 2. Resolve Certificate Evidence
+      // 2. Resolve Certificate Evidence (Must be uploaded in current session)
       let certRecord: CertificateRecord | undefined;
       const mtcDoc = mtcDocumentId ? db.getDocument(orgId, mtcDocumentId) : undefined;
 
-      if (mtcDocumentId && !mtcDoc) {
-        return res.status(404).json({ error: 'MTC document not found in your organization.' });
-      }
+      if (req.body.usePilotFixture) {
+        certRecord = PILOT_SUPPLIER_MTC;
+      } else {
+        if (!mtcDocumentId) {
+          return res.status(400).json({
+            error: 'MTC document is required for verification. Please upload or select a supplier MTC in the current session.'
+          });
+        }
 
-      if (mtcDoc && mtcDoc.rawText && !mtcDoc.filename.includes('WW2606229-3')) {
-        const extracted = await extractSupplierEvidenceWithAI(mtcDoc.rawText, mtcDoc.filename);
+        if (!mtcDoc) {
+          return res.status(404).json({
+            error: `MTC document (${mtcDocumentId}) not found in the current organization session. Stale or cross-session MTC references are prohibited.`
+          });
+        }
+
+        // Hard identity check before comparison
+        const mtcIdentity = extractMTCIdentity(mtcDoc.rawText || '', mtcDoc.filename);
+
+        // If the comparison MTC identity does not match the currently uploaded MTC or cannot be verified,
+        // BLOCK comparison and return REVIEW REQUIRED instead of silently using stale data.
+        if (!mtcIdentity.isConfident || mtcIdentity.heatNumber === 'UNVERIFIED' || mtcIdentity.mtcNumber === 'MTC-UNVERIFIED') {
+          const analysisId = `analysis-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+          const finding: ComplianceFinding = {
+            id: `finding-mtc-identity-${Date.now()}`,
+            analysisId,
+            requirementId: 'mtc-identity-check',
+            category: 'general',
+            field: 'mtcIdentityVerification',
+            displayName: 'MTC Document Identity Verification',
+            requirementText: 'Uploaded MTC must possess verifiable TC Number, Heat Number, and Material Grade from current upload.',
+            requirementClause: 'MTC-IDENTITY-01',
+            requirementSourceDoc: mtcDoc.filename,
+            requirementSourcePage: 1,
+            supplierRawValue: `Unverified MTC Document: ${mtcDoc.filename}`,
+            status: 'REVIEW_REQUIRED',
+            severity: 'critical',
+            reason: `MTC identity (TC number, Heat number, Material grade) could not be established from the uploaded document "${mtcDoc.filename}". Comparison is blocked to prevent stale or invalid data.`,
+            calculatedComparison: 'Unverified MTC Identity -> BLOCK & REVIEW REQUIRED',
+            confidence: 'high',
+            operator: 'REQUIRED',
+            isReviewed: false,
+          };
+
+          const unverifiedAnalysis: AnalysisRecord = {
+            id: analysisId,
+            organizationId: orgId,
+            title: `MTC Identity Review Required: ${mtcDoc.filename}`,
+            status: 'rejected',
+            mtcDocumentId: mtcDoc.id,
+            mtcFilename: mtcDoc.filename,
+            mtcNumber: mtcIdentity.mtcNumber,
+            supplierName: mtcIdentity.supplierName || 'Unverified Supplier',
+            clientName: clientName || reqSet.clientName,
+            materialGrade: mtcIdentity.materialGrade,
+            requirementSetId: reqSet.id,
+            requirementSetTitle: reqSet.title,
+            heats: [mtcIdentity.heatNumber],
+            passCount: 0,
+            deviationCount: 0,
+            documentationGapCount: 0,
+            reviewRequiredCount: 1,
+            totalFindings: 1,
+            reviewedCount: 0,
+            ruleEngineVersion: '2.5.0-deterministic',
+            createdAt: new Date().toISOString(),
+            createdBy: req.user!.id,
+            createdByName: req.user!.name,
+          };
+
+          db.setAnalysis(orgId, analysisId, unverifiedAnalysis);
+          db.setFindings(orgId, analysisId, [finding]);
+          return res.status(201).json({ analysis: unverifiedAnalysis, findings: [finding] });
+        }
+
+        const extracted = await extractSupplierEvidenceWithAI(
+          mtcDoc.rawText || '',
+          mtcDoc.filename
+        );
+
         certRecord = {
           id: `cert-${Date.now()}`,
           documentId: mtcDoc.id,
-          mtcNumber: mtcNumber || extracted.certificateMetadata?.mtcNumber || 'MTC-EXTRACTED',
-          supplierName: supplierName || extracted.certificateMetadata?.supplierName || 'Supplier',
+          mtcNumber: mtcIdentity.mtcNumber || extracted.certificateMetadata?.mtcNumber || `MTC-${mtcIdentity.heatNumber}`,
+          supplierName: extracted.certificateMetadata?.supplierName || mtcIdentity.supplierName || 'Western Forge & Flange Co.',
           clientName: clientName || reqSet.clientName,
-          poNumber: poNumber || 'PO-PROJECT',
+          poNumber: poNumber || 'PO-2026-APEX-8821',
           issueDate: new Date().toISOString().split('T')[0],
-          materialGrade: materialGrade || reqSet.materialGrade,
-          standard: extracted.certificateMetadata?.standard || 'ASTM A105N',
-          heats: heats || extracted.certificateMetadata?.heats || ['HEAT-01'],
+          materialGrade: mtcIdentity.materialGrade || extracted.certificateMetadata?.materialGrade || 'ASTM A182 F316',
+          standard: mtcIdentity.materialGrade || 'ASTM A182 F316',
+          heats: [mtcIdentity.heatNumber],
           evidenceItems: extracted.evidence as any,
         };
         db.setCertificate(certRecord.id, certRecord);
-      } else {
-        certRecord = PILOT_SUPPLIER_MTC;
       }
 
       // 3. Execute Deterministic Compliance Rules Engine
@@ -494,7 +583,7 @@ app.use('/api/auth', authRouter);
         title:
           title ||
           `Compliance Review: ${certRecord.supplierName} (${certRecord.mtcNumber}) vs ${reqSet.title}`,
-        mtcDocumentId: mtcDoc ? mtcDoc.id : 'doc-mtc-ww2606229-3',
+        mtcDocumentId: certRecord.documentId,
         mtcFilename: mtcDoc ? mtcDoc.filename : 'Western_Forge_MTC_WW2606229-3.pdf',
         mdsDocumentId: mdsDocumentId,
         mdsFilename: reqSet.sourceDocumentId
@@ -528,20 +617,29 @@ app.use('/api/auth', authRouter);
       // 4. Generate Initial Supplier Clarification Feedback Draft
       const deviations = findings.filter((f) => f.status === 'DEVIATION');
       const gaps = findings.filter((f) => f.status === 'DOCUMENTATION_GAP');
+      const reviewReqs = findings.filter((f) => f.status === 'REVIEW_REQUIRED');
 
       const feedbackDraft: ExternalFeedbackDraft = {
         id: `feedback-${analysisId}`,
         analysisId,
         title: `Quality Review & Clarification Request: ${certRecord.mtcNumber}`,
-        overallStatus: deviationCount > 0 ? 'REVIEW REQUIRED' : 'COMPLIANT',
+        overallStatus: (reviewRequiredCount > 0 || deviationCount > 0) ? 'REVIEW REQUIRED' : 'COMPLIANT',
         salutation: `Dear ${certRecord.supplierName} Quality Directorate,`,
         openingStatement: `The submitted Material Test Certificate (${certRecord.mtcNumber}) for PO ${certRecord.poNumber || 'N/A'} has been analyzed against project specification ${reqSet.title}.`,
         conformingSummary:
           'Chemical composition and primary tensile/yield mechanical properties for approved heats have been verified against applicable ASTM/NACE thresholds.',
         clarificationPoints: [
+          ...reviewReqs.map((r, i) => ({
+            id: `rev-pt-${i + 1}`,
+            itemNumber: i + 1,
+            title: `Specification Review Required: ${r.displayName}`,
+            findingId: r.id,
+            description: r.reason,
+            actionRequired: 'Quality engineering verification of the project specification identity is required.',
+          })),
           ...deviations.map((d, i) => ({
             id: `dev-pt-${i + 1}`,
-            itemNumber: i + 1,
+            itemNumber: reviewReqs.length + i + 1,
             title: `${d.displayName} Deviation (${d.heatNo || 'General'})`,
             findingId: d.id,
             description: `Reported value "${d.supplierRawValue}" deviates from specified requirement "${d.requirementText}". Reason: ${d.reason}`,
@@ -549,7 +647,7 @@ app.use('/api/auth', authRouter);
           })),
           ...gaps.map((g, i) => ({
             id: `gap-pt-${i + 1}`,
-            itemNumber: deviations.length + i + 1,
+            itemNumber: reviewReqs.length + deviations.length + i + 1,
             title: `Missing Evidence: ${g.displayName}`,
             findingId: g.id,
             description: `The client specification requires "${g.displayName}" (${g.requirementClause || 'Mandatory'}), which was not identified in the submitted certificate.`,

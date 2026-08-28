@@ -60,10 +60,37 @@ export function evaluateSingleRequirement(
   cert: CertificateRecord,
   heatNo?: string
 ): ComplianceFinding {
+  // Special check: Unverified MDS Specification Identity
+  if (req.field === 'mdsSpecificationIdentity' || req.field === 'mdsIdentityVerification') {
+    return {
+      id: `finding-${req.id}-${heatNo || 'gen'}-${Date.now()}`,
+      analysisId,
+      requirementId: req.id,
+      category: 'general',
+      field: req.field,
+      displayName: req.displayName,
+      heatNo,
+      requirementText: req.description || 'MDS Specification Identity Verification',
+      requirementClause: req.clauseReference || 'SPEC-ID-01',
+      requirementSourceDoc: req.sourceDocument,
+      requirementSourcePage: req.sourcePage || 1,
+      supplierRawValue: 'UNIDENTIFIED SPECIFICATION',
+      confidence: 'low',
+      operator: 'REQUIRED',
+      calculatedComparison: 'Unverified MDS Identity -> REVIEW REQUIRED',
+      status: 'REVIEW_REQUIRED',
+      severity: 'critical',
+      reason: req.description || 'MDS standard, material grade, or revision could not be confidently established from document. Technical quality engineering review required.',
+      metallurgicalExplanation: 'Cannot map engineering limits without validated specification identity. Default or fallback rule sets are prohibited.',
+      isReviewed: false,
+    };
+  }
+
   // Find matching evidence items
   const matchedEvidence = cert.evidenceItems.filter((e) => {
-    const fieldMatch = e.field.toLowerCase() === req.field.toLowerCase() ||
-      e.displayName.toLowerCase() === req.displayName.toLowerCase();
+    const fieldMatch =
+      e.field.toLowerCase() === req.field.toLowerCase() ||
+      Boolean(e.displayName && req.displayName && e.displayName.toLowerCase() === req.displayName.toLowerCase());
     if (!fieldMatch) return false;
     if (heatNo && e.heatNo && e.heatNo !== 'GENERAL' && e.heatNo !== heatNo) {
       return false;
@@ -90,15 +117,23 @@ export function evaluateSingleRequirement(
   }
 
   // Operator evaluation
-  switch (req.operator) {
+  const op = String(req.operator || '').trim().toUpperCase();
+  switch (op) {
     case 'MIN':
+    case '>=':
+    case '>':
       return evaluateMinOperator(analysisId, req, evidence, heatNo);
     case 'MAX':
+    case '<=':
+    case '<':
       return evaluateMaxOperator(analysisId, req, evidence, heatNo);
     case 'RANGE':
+    case 'BETWEEN':
       return evaluateRangeOperator(analysisId, req, evidence, heatNo);
     case 'EQUALS':
     case 'MATCH':
+    case '==':
+    case '=':
       return evaluateMatchOperator(analysisId, req, evidence, heatNo);
     case 'REQUIRED':
       return evaluateRequiredOperator(analysisId, req, evidence, heatNo);
@@ -107,6 +142,18 @@ export function evaluateSingleRequirement(
     case 'AGGREGATE':
       return evaluateAggregateOperator(analysisId, req, cert, evidence, heatNo);
     default:
+      if (
+        (req.minValue !== undefined || (req as any).requiredMin !== undefined) &&
+        (req.maxValue !== undefined || (req as any).requiredMax !== undefined)
+      ) {
+        return evaluateRangeOperator(analysisId, req, evidence, heatNo);
+      }
+      if (req.minValue !== undefined || (req as any).requiredMin !== undefined) {
+        return evaluateMinOperator(analysisId, req, evidence, heatNo);
+      }
+      if (req.maxValue !== undefined || (req as any).requiredMax !== undefined) {
+        return evaluateMaxOperator(analysisId, req, evidence, heatNo);
+      }
       return evaluateMatchOperator(analysisId, req, evidence, heatNo);
   }
 }
@@ -117,7 +164,7 @@ function evaluateMinOperator(
   evidence: SupplierEvidence,
   heatNo?: string
 ): ComplianceFinding {
-  const reqMin = req.minValue ?? 0;
+  const reqMin = req.minValue ?? (req as any).requiredMin ?? 0;
   const parsed = parseEngineeringValue(evidence.rawValue);
 
   if (!parsed) {
@@ -149,7 +196,7 @@ function evaluateMinOperator(
     field: req.field,
     displayName: req.displayName,
     heatNo,
-    requirementText: `Minimum ${reqMin} ${req.unit || ''}`,
+    requirementText: (req as any).requirementText || req.description || `Minimum ${reqMin} ${req.unit || ''}`,
     requiredMin: reqMin,
     requiredUnit: req.unit,
     requirementClause: req.clauseReference,
@@ -177,7 +224,7 @@ function evaluateMaxOperator(
   evidence: SupplierEvidence,
   heatNo?: string
 ): ComplianceFinding {
-  const reqMax = req.maxValue ?? Infinity;
+  const reqMax = req.maxValue ?? (req as any).requiredMax ?? Infinity;
   const parsed = parseEngineeringValue(evidence.rawValue);
 
   if (!parsed) {
@@ -209,7 +256,7 @@ function evaluateMaxOperator(
     field: req.field,
     displayName: req.displayName,
     heatNo,
-    requirementText: `Maximum ${reqMax} ${req.unit || ''}`,
+    requirementText: (req as any).requirementText || req.description || `Maximum ${reqMax} ${req.unit || ''}`,
     requiredMax: reqMax,
     requiredUnit: req.unit,
     requirementClause: req.clauseReference,
@@ -237,8 +284,8 @@ function evaluateRangeOperator(
   evidence: SupplierEvidence,
   heatNo?: string
 ): ComplianceFinding {
-  const reqMin = req.minValue ?? 0;
-  const reqMax = req.maxValue ?? Infinity;
+  const reqMin = req.minValue ?? (req as any).requiredMin ?? 0;
+  const reqMax = req.maxValue ?? (req as any).requiredMax ?? Infinity;
   const parsed = parseEngineeringValue(evidence.rawValue);
 
   if (!parsed) {
@@ -260,7 +307,7 @@ function evaluateRangeOperator(
   
   let reason = '';
   if (isPass) {
-    reason = `Supplier value ${normalizedVal} ${req.unit || ''} falls within the specified range [${reqMin} - ${reqMax} ${req.unit || ''}].`;
+    reason = `Supplier value ${normalizedVal} ${req.unit || ''} conforms to specified acceptable range of ${reqMin} - ${reqMax} ${req.unit || ''}.`;
   } else if (normalizedVal < reqMin) {
     reason = `Supplier value ${normalizedVal} ${req.unit || ''} is below the lower range limit of ${reqMin} ${req.unit || ''}.`;
   } else {
@@ -276,7 +323,7 @@ function evaluateRangeOperator(
     field: req.field,
     displayName: req.displayName,
     heatNo,
-    requirementText: `${reqMin} – ${reqMax} ${req.unit || ''}`,
+    requirementText: (req as any).requirementText || req.description || `${reqMin} - ${reqMax} ${req.unit || ''}`,
     requiredMin: reqMin,
     requiredMax: reqMax,
     requiredUnit: req.unit,
@@ -312,15 +359,36 @@ function evaluateMatchOperator(
   const cleanTarget = reqTarget.replace(/[\s\-_/]/g, '');
   const cleanEvidence = rawEv.replace(/[\s\-_/]/g, '');
 
-  const isMatch =
-    cleanEvidence.includes(cleanTarget) ||
-    cleanTarget.includes(cleanEvidence) ||
+  const targetOptions = reqTarget.split(/\s+or\s+|\s*\/\s*|\|/i).map((t) => t.trim().replace(/[\s\-_/]/g, ''));
+  const matchesAnyOption = targetOptions.some(
+    (opt) => opt.length > 2 && (cleanEvidence.includes(opt) || opt.includes(cleanEvidence))
+  );
+
+  let isMatch =
+    (cleanTarget.length > 1 && (cleanEvidence.includes(cleanTarget) || cleanTarget.includes(cleanEvidence))) ||
+    matchesAnyOption ||
     rawEv.includes('pass') ||
     rawEv.includes('conforms') ||
     rawEv.includes('satisfactory') ||
-    rawEv.includes('normalized') ||
     (rawEv.includes('3.1') && reqTarget.includes('3.1')) ||
     (rawEv.includes('nace') && reqTarget.includes('nace'));
+
+  // Strict metallurgical verification for Heat Treatment Condition
+  if (req.field === 'heatTreatmentCondition') {
+    const isSolutionAnneal = rawEv.includes('solution') || rawEv.includes('water cool');
+    const requiresSolutionAnneal = reqTarget.includes('solution');
+    const isNormalizeAndTemper = rawEv.includes('normaliz') && (rawEv.includes('temper') || rawEv.includes('air cool'));
+    const isFullAnneal = rawEv.includes('anneal') && !isSolutionAnneal && (rawEv.includes('furnace') || !rawEv.includes('water'));
+
+    if (isSolutionAnneal && !requiresSolutionAnneal) {
+      isMatch = false;
+    } else if (reqTarget.includes('furnace cool') || reqTarget.includes('normalize & temper') || reqTarget.includes('normalize')) {
+      isMatch = Boolean(
+        (isNormalizeAndTemper && (reqTarget.includes('normaliz') || reqTarget.includes('temper'))) ||
+        (isFullAnneal && reqTarget.includes('anneal'))
+      );
+    }
+  }
 
   const status: FindingStatus = isMatch ? 'PASS' : 'DEVIATION';
   const severity: FindingSeverity = isMatch ? 'info' : 'major';

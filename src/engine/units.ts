@@ -110,5 +110,18 @@ export function convertValue(val: number, sourceUnit: string, targetUnit: string
     return val / 1.35582;
   }
 
+  // Hardness (ASTM E140 Conversion between HBW and HRC for Non-Austenitic Steels)
+  if (src === 'HBW' && tgt === 'HRC') {
+    if (val >= 240) return Math.round((22 + (val - 237) * 0.2) * 10) / 10;
+    if (val >= 237) return 22.0;
+    if (val >= 217) return Math.round((18.0 + ((val - 217) / 20) * 4.0) * 10) / 10;
+    return Math.max(0, Math.round(((val - 100) / 6.5) * 10) / 10);
+  }
+  if (src === 'HRC' && tgt === 'HBW') {
+    if (val >= 22) return Math.round(237 + (val - 22) * 5);
+    if (val >= 18) return Math.round(217 + ((val - 18) / 4) * 20);
+    return Math.round(val * 6.5 + 100);
+  }
+
   return val;
 }

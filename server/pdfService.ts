@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import zlib from 'zlib';
 
 export interface ExtractedPDFDocument {
   text: string;
@@ -81,28 +82,98 @@ export async function parseDocumentContent(
   let text = '';
   const pages: { pageNumber: number; text: string }[] = [];
 
-  // Extract clean text streams
-  try {
-    // Look for PDF text objects or raw text
-    const textMatches = rawString.match(/\(([^()]+)\)Tj/g) || [];
-    if (textMatches.length > 0) {
-      text = textMatches
-        .map((m) => m.replace(/^\(/, '').replace(/\)Tj$/, ''))
-        .join(' ');
-    } else {
-      // Fallback clean ASCII/UTF-8 extraction
-      text = rawString.replace(/[^\x20-\x7E\n\r\t°]/g, ' ').replace(/\s{2,}/g, ' ');
+  const isPdf = buffer.toString('ascii', 0, 5) === '%PDF-' || filename.toLowerCase().endsWith('.pdf');
+
+  if (isPdf) {
+    let extractedPdfText = '';
+    try {
+      const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+      const uint8 = new Uint8Array(buffer);
+      const loadingTask = pdfjsLib.getDocument({ data: uint8 });
+      const pdfDoc = await loadingTask.promise;
+      for (let i = 1; i <= pdfDoc.numPages; i++) {
+        const page = await pdfDoc.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map((item: any) => item.str).join(' ');
+        pages.push({ pageNumber: i, text: pageText });
+        extractedPdfText += pageText + '\n';
+      }
+    } catch (pdfJsErr) {
+      console.warn('PDF.js text parsing error, attempting stream parser:', pdfJsErr);
     }
-  } catch (e) {
-    text = rawString.replace(/[^\x20-\x7E\n\r\t°]/g, ' ');
+
+    if (extractedPdfText.trim().length > 30) {
+      text = extractedPdfText.replace(/\s{2,}/g, ' ').trim();
+    } else {
+      try {
+        const binaryStr = buffer.toString('binary');
+        const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+        let match: RegExpExecArray | null;
+
+        while ((match = streamRegex.exec(binaryStr)) !== null) {
+          const streamBytes = Buffer.from(match[1], 'binary');
+          let uncompressed: Buffer | null = null;
+          try {
+            uncompressed = zlib.inflateSync(streamBytes);
+          } catch {
+            try {
+              uncompressed = zlib.inflateRawSync(streamBytes);
+            } catch {
+              uncompressed = null;
+            }
+          }
+
+          const streamContent = uncompressed ? uncompressed.toString('utf8') : match[1];
+
+          // Extract (text) Tj
+          const tjMatches = streamContent.match(/\(([^()]+)\)\s*Tj/g);
+          if (tjMatches) {
+            for (const m of tjMatches) {
+              extractedPdfText += m.replace(/^\(/, '').replace(/\)\s*Tj$/, '') + ' ';
+            }
+          }
+
+          // Extract [(array)] TJ
+          const arrayTjMatches = streamContent.match(/\[(.*?)\]\s*TJ/g);
+          if (arrayTjMatches) {
+            for (const arr of arrayTjMatches) {
+              const inner = arr.match(/\(([^()]+)\)/g);
+              if (inner) {
+                for (const item of inner) {
+                  extractedPdfText += item.slice(1, -1) + ' ';
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('PDF stream extraction notice:', e);
+      }
+
+      if (extractedPdfText.trim().length > 30) {
+        text = extractedPdfText.replace(/\s{2,}/g, ' ').trim();
+      } else {
+        // Fallback clean ASCII/UTF-8 extraction
+        const textMatches = rawString.match(/\(([^()]+)\)Tj/g) || [];
+        if (textMatches.length > 0) {
+          text = textMatches
+            .map((m) => m.replace(/^\(/, '').replace(/\)Tj$/, ''))
+            .join(' ');
+        } else {
+          text = rawString.replace(/[^\x20-\x7E\n\r\t°]/g, ' ').replace(/\s{2,}/g, ' ');
+        }
+      }
+    }
+  } else {
+    // Non-PDF text buffer
+    text = rawString;
   }
 
-  if (!text || text.length < 50) {
-    text = `Material Document: ${filename}\nExtracted content stream for quality compliance verification.\n` + rawString.slice(0, 500);
-  }
+  // Prepend filename so document identity is always preserved in content stream
+  const fullDocumentText = `Document: ${filename}\n${text}`.trim();
 
-  // Synthesize realistic pages
-  const pageChunks = text.match(/[\s\S]{1,2000}/g) || [text];
+  // Divide into realistic pages
+  const pageChunks = fullDocumentText.match(/[\s\S]{1,1800}/g) || [fullDocumentText];
   pageChunks.forEach((chunk, idx) => {
     pages.push({
       pageNumber: idx + 1,
@@ -111,7 +182,7 @@ export async function parseDocumentContent(
   });
 
   return {
-    text,
+    text: fullDocumentText,
     pageCount: pages.length,
     pages,
     tables: [],

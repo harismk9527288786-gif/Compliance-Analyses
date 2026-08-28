@@ -35,7 +35,15 @@ import { FileCheck2, RefreshCw } from 'lucide-react';
 export default function App() {
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    try {
+      return typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('analysis')
+        ? 'analysis_detail'
+        : 'dashboard';
+    } catch (_) {
+      return 'dashboard';
+    }
+  });
   const [users, setUsers] = useState<User[]>([]);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -82,7 +90,13 @@ export default function App() {
   const [auditLogs, setAuditLogs] = useState<AuditEvent[]>([]);
 
   // Selected state for active analysis & modals
-  const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(null);
+  const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(() => {
+    try {
+      return typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('analysis') : null;
+    } catch (_) {
+      return null;
+    }
+  });
   const [selectedAnalysis, setSelectedAnalysis] = useState<AnalysisRecord | null>(null);
   const [activeFindings, setActiveFindings] = useState<ComplianceFinding[]>([]);
   const [activeFeedbackDraft, setActiveFeedbackDraft] = useState<ExternalFeedbackDraft | undefined>(undefined);
@@ -212,6 +226,13 @@ export default function App() {
     setSelectedAnalysisId(id);
     setFindingStatusTab(initialTab);
     setActiveTab('analysis_detail');
+    try {
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        url.searchParams.set('analysis', id);
+        window.history.pushState({}, '', url.toString());
+      }
+    } catch (_) {}
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -677,6 +698,13 @@ export default function App() {
             onBack={() => {
               setSelectedAnalysisId(null);
               setActiveTab('dashboard');
+              try {
+                if (typeof window !== 'undefined') {
+                  const url = new URL(window.location.href);
+                  url.searchParams.delete('analysis');
+                  window.history.pushState({}, '', url.toString());
+                }
+              } catch (_) {}
             }}
             onSelectFinding={setInspectingFinding}
             onOpenReportModal={() => setShowReportModal(true)}

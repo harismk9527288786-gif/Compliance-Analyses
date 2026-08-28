@@ -84,7 +84,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
       statusTab === 'all'
         ? true
         : statusTab === 'issues'
-        ? f.status === 'DEVIATION' || f.status === 'DOCUMENTATION_GAP'
+        ? f.status === 'DEVIATION' || f.status === 'DOCUMENTATION_GAP' || f.status === 'REVIEW_REQUIRED'
         : f.status === 'PASS';
 
     const q = (searchQuery || '').toLowerCase();
@@ -104,25 +104,40 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
     return matchesStatus && matchesSearch;
   });
 
-  // Calculate Carbon Equivalent for Heat A228
-  const cFinding = findings.find((f) => f.field === 'C' && f.heatNo === 'A228');
-  const mnFinding = findings.find((f) => f.field === 'Mn' && f.heatNo === 'A228');
-  const ceFinding = findings.find((f) => f.field === 'CE' && f.heatNo === 'A228');
+  // Calculate Carbon Equivalent dynamically ONLY if CE is an applicable requirement
+  const ceFinding = findings.find(
+    (f) => f.field === 'CE' || f.displayName?.toLowerCase().includes('carbon equivalent')
+  );
 
-  const chemistryA228 = {
-    C: Number(cFinding?.supplierNormalizedValue || 0.21),
-    Mn: Number(mnFinding?.supplierNormalizedValue || 0.88),
-    P: Number(findings.find((f) => f.field === 'P' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.012),
-    S: Number(findings.find((f) => f.field === 'S' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.008),
-    Si: Number(findings.find((f) => f.field === 'Si' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.24),
-    Cr: Number(findings.find((f) => f.field === 'Cr' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.08),
-    Mo: Number(findings.find((f) => f.field === 'Mo' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.02),
-    Ni: Number(findings.find((f) => f.field === 'Ni' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.05),
-    Cu: Number(findings.find((f) => f.field === 'Cu' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.12),
-    V: Number(findings.find((f) => f.field === 'V' && f.heatNo === 'A228')?.supplierNormalizedValue || 0.01),
-  };
+  let ceCalcResult: ReturnType<typeof calculateCarbonEquivalent> | null = null;
+  if (ceFinding) {
+    const targetHeat = ceFinding.heatNo || (analysis.heats && analysis.heats[0]) || 'GENERAL';
+    const heatFindings = findings.filter(
+      (f) => !f.heatNo || f.heatNo === targetHeat || f.heatNo === 'GENERAL'
+    );
+    const getVal = (fieldName: string) => {
+      const f = heatFindings.find((item) => item.field.toUpperCase() === fieldName.toUpperCase());
+      return Number(f?.supplierNormalizedValue || 0);
+    };
 
-  const ceCalcResult = calculateCarbonEquivalent(chemistryA228, 0.43, Number(ceFinding?.supplierNormalizedValue || 0.37));
+    const chem = {
+      C: getVal('C'),
+      Mn: getVal('Mn'),
+      P: getVal('P'),
+      S: getVal('S'),
+      Si: getVal('Si'),
+      Cr: getVal('Cr'),
+      Mo: getVal('Mo'),
+      Ni: getVal('Ni'),
+      Cu: getVal('Cu'),
+      V: getVal('V'),
+    };
+    ceCalcResult = calculateCarbonEquivalent(
+      chem,
+      ceFinding.requiredMax ?? 0.43,
+      Number(ceFinding.supplierNormalizedValue || undefined)
+    );
+  }
 
   // Escape key handler for dialogs
   useEffect(() => {
@@ -246,6 +261,11 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
                   <ShieldAlert className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
                   <span>REJECTED NON-CONFORMANT</span>
                 </span>
+              ) : (analysis.reviewRequiredCount || 0) > 0 ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-amber-950 text-amber-300 border border-amber-600">
+                  <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
+                  <span>REVIEW REQUIRED ({analysis.reviewRequiredCount})</span>
+                </span>
               ) : hasDeviations ? (
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-rose-950 text-rose-300 border border-rose-600">
                   <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
@@ -331,25 +351,31 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
         </div>
       </section>
 
-      {/* 3. CARBON EQUIVALENT METALLURGICAL VERIFICATION RAIL */}
-      <section
-        aria-label="Carbon Equivalent Verification"
-        className="bg-slate-900 rounded-xl p-4 sm:p-5 text-slate-200 border border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
-      >
-        <div className="space-y-1">
-          <div className="font-bold text-emerald-400 flex items-center gap-1.5 font-mono text-xs">
-            <CheckCircle2 className="w-4 h-4 stroke-[2.5]" aria-hidden="true" />
-            <span>Carbon Equivalent (CE) - Conformance Verified</span>
+      {/* 3. CARBON EQUIVALENT METALLURGICAL VERIFICATION RAIL (Rendered ONLY if CE is an active requirement) */}
+      {ceFinding && ceCalcResult && (
+        <section
+          aria-label="Carbon Equivalent Verification"
+          className="bg-slate-900 rounded-xl p-4 sm:p-5 text-slate-200 border border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+        >
+          <div className="space-y-1">
+            <div className={`font-bold flex items-center gap-1.5 font-mono text-xs ${ceCalcResult.isCompliantWithLimit ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {ceCalcResult.isCompliantWithLimit ? (
+                <CheckCircle2 className="w-4 h-4 stroke-[2.5]" aria-hidden="true" />
+              ) : (
+                <AlertTriangle className="w-4 h-4 stroke-[2.5]" aria-hidden="true" />
+              )}
+              <span>Carbon Equivalent (CE) - {ceCalcResult.isCompliantWithLimit ? 'Conformance Verified' : 'Deviation Detected'}</span>
+            </div>
+            <p className="text-[11px] text-slate-300 font-mono">
+              Calculated: <strong className="text-white">{ceCalcResult.calculatedCE} wt%</strong> | MTC Reported: <strong className="text-white">{ceCalcResult.reportedCE ?? 'N/A'} wt%</strong> | Maximum Allowable: <strong className="text-white">&le; {ceFinding.requiredMax ?? 0.43} wt%</strong>
+            </p>
           </div>
-          <p className="text-[11px] text-slate-300 font-mono">
-            Calculated: <strong className="text-white">{ceCalcResult.calculatedCE} wt%</strong> | MTC Reported: <strong className="text-white">{ceCalcResult.reportedCE} wt%</strong> | Maximum Allowable: <strong className="text-white">&le; 0.43 wt%</strong>
-          </p>
-        </div>
 
-        <div className="text-[11px] text-slate-300 font-mono bg-slate-950 px-3 py-1.5 rounded border border-slate-800">
-          IIW Formula: C + Mn/6 + (Cr+Mo+V)/5 + (Ni+Cu)/15
-        </div>
-      </section>
+          <div className="text-[11px] text-slate-300 font-mono bg-slate-950 px-3 py-1.5 rounded border border-slate-800">
+            IIW Formula: C + Mn/6 + (Cr+Mo+V)/5 + (Ni+Cu)/15
+          </div>
+        </section>
+      )}
 
       {/* 4. TECHNICAL FINDINGS TABLE WITH FILTER TABS */}
       <section
@@ -385,7 +411,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
               }`}
             >
               <AlertTriangle className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
-              <span>Issues ({analysis.deviationCount + analysis.documentationGapCount})</span>
+              <span>Issues ({analysis.deviationCount + analysis.documentationGapCount + (analysis.reviewRequiredCount || 0)})</span>
             </button>
             <button
               type="button"
@@ -442,6 +468,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
                   const isPass = f.status === 'PASS';
                   const isDeviation = f.status === 'DEVIATION';
                   const isGap = f.status === 'DOCUMENTATION_GAP';
+                  const isReviewReq = f.status === 'REVIEW_REQUIRED';
 
                   return (
                     <tr
@@ -494,6 +521,11 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold font-mono bg-rose-100 text-rose-900 border border-rose-300">
                             <AlertTriangle className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
                             <span>DEVIATION</span>
+                          </span>
+                        ) : isReviewReq ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-100 text-amber-900 border border-amber-300">
+                            <AlertTriangle className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
+                            <span>REVIEW REQUIRED</span>
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-100 text-amber-900 border border-amber-300">

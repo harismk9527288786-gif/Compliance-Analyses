@@ -66,6 +66,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       a &&
       ((a.deviationCount || 0) > 0 ||
         (a.documentationGapCount || 0) > 0 ||
+        (a.reviewRequiredCount || 0) > 0 ||
         a.status === 'rejected')
   );
 
@@ -86,20 +87,24 @@ export const Dashboard: React.FC<DashboardProps> = ({
       poNumber.includes(q);
 
     if (!matchesSearch) return false;
+    if (statusFilter === 'all') return true;
     if (statusFilter === 'deviations') return (a.deviationCount || 0) > 0;
     if (statusFilter === 'gaps') return (a.documentationGapCount || 0) > 0;
-    if (statusFilter === 'pass') return a.status === 'approved' || ((a.deviationCount || 0) === 0 && (a.documentationGapCount || 0) === 0);
+    if (statusFilter === 'pass') return a.status === 'approved' || ((a.deviationCount || 0) === 0 && (a.documentationGapCount || 0) === 0 && (a.reviewRequiredCount || 0) === 0);
     return true;
   });
 
   const getAttentionSummary = (a: AnalysisRecord) => {
+    if ((a.reviewRequiredCount || 0) > 0) {
+      return 'MDS specification identity or requirements require engineering review.';
+    }
     if (a.deviationCount > 0) {
       return a.heats?.includes('YBA')
         ? 'Heat YBA: Normalizing temp (890°C) is below MDS limit (900°C - 960°C); Tensile Elongation (29%) < 30% min.'
-        : 'Mechanical or chemical parameters deviate from specified limits.';
+        : 'Mechanical, chemical, or test parameters deviate from specified limits.';
     }
     if (a.documentationGapCount > 0) {
-      return 'Supplementary NDE testing documentation (100% UT/MPT per ASTM A388/A275) not attached.';
+      return 'Supplementary test documentation (e.g. NDE / Heat treatment) not identified in MTC.';
     }
     return 'Quality non-conformance recorded.';
   };
@@ -425,7 +430,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                    {isDeviation ? (
+                    {(item.reviewRequiredCount || 0) > 0 ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold font-mono bg-amber-100 text-amber-900 border border-amber-300">
+                        <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
+                        <span>REVIEW REQUIRED ({item.reviewRequiredCount})</span>
+                      </span>
+                    ) : isDeviation ? (
                       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-bold font-mono bg-rose-100 text-rose-900 border border-rose-300">
                         <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
                         <span>DEVIATION ({item.deviationCount})</span>
