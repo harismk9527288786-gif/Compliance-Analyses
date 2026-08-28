@@ -285,7 +285,11 @@ export interface AnalysisRecord {
   approvalNotes?: string;
 
   aiModelUsed?: string;
+  /** False when Gemini AI was unavailable and deterministic regex fallback was used for evidence extraction.
+   *  In that case the engineer should verify extracted values manually. */
+  aiExtractionUsed?: boolean;
   ruleEngineVersion: string;
+
 
   expiresAt?: string;
   retentionDaysRemaining?: number;

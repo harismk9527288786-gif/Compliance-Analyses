@@ -151,16 +151,30 @@ export function extractMTCIdentity(documentText: string, filename: string): MTCI
   }
 
   // 3. Material Grade from MTC document text
+  // IMPORTANT: Match only in structured header context (preceded by a label like "Grade:", "Material:",
+  // "Specification:", or at the beginning of a line). This prevents false positives where phrases
+  // like "Not applicable for A105N" or "Substitute for A350 LF2" trigger incorrect grade identification.
   let materialGrade = '';
-  if (/F316L?\b|UNS\s*S31603|UNS\s*S31600|AISI\s*316/i.test(documentText)) {
+  const gradeContext = /(?:(?:Material|Grade|Specification|Alloy|Matl|Mat'l|Type)\s*[:=\s]\s*|^\s*)([^\n\r]{0,60})/gim;
+  const allLines = documentText.split(/[\r\n]+/);
+  const headerLines = allLines.slice(0, 60).join('\n'); // Only look in first 60 lines for grade info
+
+  if (/(?:Material|Grade|Specification|Alloy)\s*[:=]\s*[^\n\r]*F316L?\b|UNS\s*S3160[03]|AISI\s*316/i.test(headerLines)) {
     materialGrade = 'ASTM A182 F316';
-  } else if (/F6a\b|UNS\s*S41000/i.test(documentText)) {
+  } else if (/(?:Material|Grade|Specification|Alloy)\s*[:=]\s*[^\n\r]*F6a?\b|UNS\s*S41000/i.test(headerLines)) {
     materialGrade = 'ASTM A182 Grade F6a Class 1 (UNS S41000)';
-  } else if (/A105N?\b/i.test(documentText)) {
+  } else if (/(?:Material|Grade|Specification|Alloy)\s*[:=]\s*[^\n\r]*A105N?\b/i.test(headerLines)) {
     materialGrade = 'ASTM A105N';
-  } else if (/LF2\b/i.test(documentText)) {
+  } else if (/(?:Material|Grade|Specification|Alloy)\s*[:=]\s*[^\n\r]*LF2\b/i.test(headerLines)) {
     materialGrade = 'ASTM A350 LF2';
+  } else {
+    // Fallback: full-text scan but only for isolated grade tokens (not inside negation phrases)
+    // Negative lookbehind: skip if preceded by "not", "non", "except", "other than", "applicable for"
+    if (/(?<!not\s+applicable\s+for\s+)(?<!except\s+)(?<!non[- ])F316L?\b/i.test(documentText)) materialGrade = 'ASTM A182 F316';
+    else if (/A105N?\b/i.test(documentText) && !/not\s+applicable\s+for\s+A105N?/i.test(documentText)) materialGrade = 'ASTM A105N';
+    else if (/LF2\b/i.test(documentText) && !/not\s+applicable\s+for\s+.*LF2/i.test(documentText)) materialGrade = 'ASTM A350 LF2';
   }
+
 
   // 4. Supplier / Manufacturer Name
   let supplierName = 'Western Forge & Flange Co.';
@@ -1035,14 +1049,16 @@ ${documentText.slice(0, 15000)}`;
 /**
  * AI-assisted extraction of supplier evidence from MTC text.
  * Always resolves the actual MTC heat number (e.g. FK2407-061) instead of HEAT-1.
+ * Returns aiExtractionUsed=true when Gemini successfully extracted data; false when deterministic fallback was used.
  */
 export async function extractSupplierEvidenceWithAI(
   documentText: string,
   filename: string
-): Promise<{ certificateMetadata: Partial<CertificateRecord>; evidence: Partial<SupplierEvidence>[] }> {
+): Promise<{ certificateMetadata: Partial<CertificateRecord>; evidence: Partial<SupplierEvidence>[]; aiExtractionUsed: boolean }> {
   const ai = getGenAI();
   if (!ai) {
-    return fallbackSupplierEvidenceExtraction(documentText, filename);
+    console.warn('[MTC Engine] Gemini API unavailable — using deterministic regex fallback. Results may be incomplete. Ensure GEMINI_API_KEY is set.');
+    return { ...fallbackSupplierEvidenceExtraction(documentText, filename), aiExtractionUsed: false };
   }
 
   try {
@@ -1075,6 +1091,7 @@ ${documentText.slice(0, 15000)}`;
       }
 
       return {
+        aiExtractionUsed: true,
         certificateMetadata: {
           ...meta,
           heats,
@@ -1089,11 +1106,12 @@ ${documentText.slice(0, 15000)}`;
       };
     }
   } catch (error) {
-    console.warn('Gemini MTC extraction notice, using deterministic fallback:', error);
+    console.warn('[MTC Engine] Gemini MTC extraction failed — using deterministic regex fallback:', error);
   }
 
-  return fallbackSupplierEvidenceExtraction(documentText, filename);
+  return { ...fallbackSupplierEvidenceExtraction(documentText, filename), aiExtractionUsed: false };
 }
+
 
 /**
  * Deterministic supplier evidence extraction from MTC text and filename.

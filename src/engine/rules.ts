@@ -190,7 +190,20 @@ function evaluateMinOperator(
   }
 
   const normalizedVal = req.unit ? convertValue(parsed.value, parsed.unit || req.unit, req.unit) : parsed.value;
+
+  // Guard: hardness unit conversions below the ASTM E140 range return NaN — cannot evaluate
+  if (isNaN(normalizedVal)) {
+    return createReviewRequiredFinding(
+      analysisId,
+      req,
+      evidence,
+      heatNo,
+      `Hardness value "${evidence.rawValue}" is below the ASTM E140 valid conversion range and cannot be compared to the ${req.unit} minimum of ${reqMin}. Raw test value must be reported in the same scale as the specification.`
+    );
+  }
+
   const isPass = normalizedVal >= reqMin;
+
 
   const status: FindingStatus = isPass ? 'PASS' : 'DEVIATION';
   const severity: FindingSeverity = isPass ? 'info' : (normalizedVal < reqMin * 0.9 ? 'critical' : 'major');
@@ -250,8 +263,33 @@ function evaluateMaxOperator(
     );
   }
 
+  // If supplier value carries an explicit 'greater-than' operator (e.g. "> 450 MPa"),
+  // the value is strictly above the stated number — cannot confirm it is within maximum.
+  if (parsed.relationalOperator === '>' || parsed.relationalOperator === '>=') {
+    return createReviewRequiredFinding(
+      analysisId,
+      req,
+      evidence,
+      heatNo,
+      `Supplier evidence states value is greater than ${parsed.value} ${req.unit || ''}, which cannot confirm it is within maximum of ${reqMax} ${req.unit || ''}. Explicit test value required.`
+    );
+  }
+
   const normalizedVal = req.unit ? convertValue(parsed.value, parsed.unit || req.unit, req.unit) : parsed.value;
+
+  // Guard: hardness unit conversions below the ASTM E140 range return NaN — cannot evaluate
+  if (isNaN(normalizedVal)) {
+    return createReviewRequiredFinding(
+      analysisId,
+      req,
+      evidence,
+      heatNo,
+      `Hardness value "${evidence.rawValue}" is below the ASTM E140 valid conversion range and cannot be compared to the ${req.unit} limit of ${reqMax}. Raw test value must be reported in the same scale as the specification.`
+    );
+  }
+
   const isPass = normalizedVal <= reqMax;
+
 
   const status: FindingStatus = isPass ? 'PASS' : 'DEVIATION';
   const severity: FindingSeverity = isPass ? 'info' : 'critical';

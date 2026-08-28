@@ -125,13 +125,17 @@ export function convertValue(val: number, sourceUnit: string, targetUnit: string
     if (val >= 240) return Math.round((22 + (val - 237) * 0.2) * 10) / 10;
     if (val >= 237) return 22.0;
     if (val >= 217) return Math.round((18.0 + ((val - 217) / 20) * 4.0) * 10) / 10;
-    return Math.max(0, Math.round(((val - 100) / 6.5) * 10) / 10);
+    // Below 217 HBW is outside the valid ASTM E140 HRC conversion range.
+    // Return NaN instead of clamping to 0, so callers can detect and flag the value as non-convertible.
+    return NaN;
   }
   if (src === 'HRC' && tgt === 'HBW') {
     if (val >= 22) return Math.round(237 + (val - 22) * 5);
     if (val >= 18) return Math.round(217 + ((val - 18) / 4) * 20);
-    return Math.round(val * 6.5 + 100);
+    // Below 18 HRC is outside the valid ASTM E140 range.
+    return NaN;
   }
+
 
   return val;
 }

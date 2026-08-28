@@ -119,15 +119,16 @@ app.use('/api/auth', authRouter);
 
         const parsed = await parseDocumentContent(req.file.buffer, req.file.originalname);
 
-        // Fallback: If server-side PDF extraction yielded empty text or ran in a constrained environment,
-        // use high-fidelity client-extracted text if provided in the upload request.
-        if ((!parsed.text || parsed.text.trim().length < 30) && req.body.extractedText && typeof req.body.extractedText === 'string') {
-          const clientText = req.body.extractedText.trim();
-          if (clientText.length >= 30) {
-            parsed.text = clientText;
-            parsed.isScanned = false;
-          }
+        // SECURITY: Client-supplied extractedText is intentionally NOT used as a fallback.
+        // Accepting unverified text from the client is a compliance evidence manipulation vector —
+        // a malicious user could supply fabricated chemistry/mechanical values that bypass AI extraction.
+        // If server-side extraction yields insufficient text (scanned/image PDF), the analysis engine
+        // will produce DOCUMENTATION_GAP findings for missing evidence, which is the correct behaviour.
+        if (!parsed.text || parsed.text.trim().length < 30) {
+          parsed.isScanned = true;
+          // Keep parsed.text as-is (possibly empty) — do NOT substitute client text
         }
+
 
         const docId = `doc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
@@ -578,7 +579,7 @@ app.use('/api/auth', authRouter);
           mtcNumber: mtcIdentity.mtcNumber || extracted.certificateMetadata?.mtcNumber || `MTC-${finalHeat}`,
           supplierName: mtcIdentity.supplierName || extracted.certificateMetadata?.supplierName || 'Western Forge & Flange Co.',
           clientName: clientName || reqSet.clientName,
-          poNumber: poNumber || 'PO-2026-APEX-8821',
+          poNumber: poNumber || undefined,
           issueDate: new Date().toISOString().split('T')[0],
           materialGrade: finalGrade,
           standard: finalGrade,
@@ -726,7 +727,8 @@ app.use('/api/auth', authRouter);
         totalFindings: findings.length,
         reviewedCount: 0,
         ruleEngineVersion: 'MTC-CoreEngine v2.5.0',
-        aiModelUsed: 'gemini-3.7-flash',
+        aiModelUsed: extracted.aiExtractionUsed ? 'gemini-3.7-flash' : 'deterministic-regex-fallback',
+        aiExtractionUsed: extracted.aiExtractionUsed,
       };
 
       db.setAnalysis(orgId, analysisId, analysis);

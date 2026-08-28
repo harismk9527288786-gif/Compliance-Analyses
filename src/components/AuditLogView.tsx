@@ -195,14 +195,22 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({ auditLogs }) => {
                       </div>
                     </td>
                     <td className="py-3 px-4 text-right font-mono text-[11px] text-slate-600">
-                      {log.details ? (
-                        <span className="truncate max-w-xs block text-right">
-                          {typeof log.details === 'object' ? JSON.stringify(log.details) : String(log.details)}
-                        </span>
-                      ) : (
-                        '—'
-                      )}
+                      {log.details ? (() => {
+                        // Whitelist safe keys only — never render raw blob (may contain tokens, PII, or stack traces)
+                        const SAFE_KEYS = ['passCount', 'deviationCount', 'documentationGapCount', 'total',
+                          'count', 'finalStatus', 'notes', 'reason', 'comment', 'previousStatus',
+                          'newStatus', 'mtcNumber', 'checksum', 'size', 'type', 'timestamp'];
+                        const safeEntries = Object.entries(log.details as Record<string, unknown>)
+                          .filter(([k]) => SAFE_KEYS.includes(k))
+                          .map(([k, v]) => `${k}: ${String(v)}`);
+                        return safeEntries.length > 0 ? (
+                          <span className="truncate max-w-xs block text-right">
+                            {safeEntries.join(' | ')}
+                          </span>
+                        ) : <span className="text-slate-400">—</span>;
+                      })() : '—'}
                     </td>
+
                   </tr>
                 ))
               )}

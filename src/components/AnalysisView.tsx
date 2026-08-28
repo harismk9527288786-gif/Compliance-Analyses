@@ -21,7 +21,7 @@ import {
   ExternalFeedbackDraft,
 } from '../types';
 import { exportAnalysisToExcel, exportAnalysisToPDF } from '../utils/exportUtils';
-import { calculateCarbonEquivalent } from '../engine/ce';
+
 
 interface AnalysisViewProps {
   analysis: AnalysisRecord;
@@ -104,40 +104,28 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
     return matchesStatus && matchesSearch;
   });
 
-  // Calculate Carbon Equivalent dynamically ONLY if CE is an applicable requirement
+  // Carbon Equivalent: use the value stored in the AGGREGATE finding at analysis time.
+  // Do NOT recalculate from chemistry elements here — if the engine formula is ever updated,
+  // a live recalculation would produce a different CE than the one that was used to generate
+  // the archived compliance verdict, breaking auditability.
   const ceFinding = findings.find(
     (f) => f.field === 'CE' || f.displayName?.toLowerCase().includes('carbon equivalent')
   );
 
-  let ceCalcResult: ReturnType<typeof calculateCarbonEquivalent> | null = null;
-  if (ceFinding) {
-    const targetHeat = ceFinding.heatNo || (analysis.heats && analysis.heats[0]) || 'GENERAL';
-    const heatFindings = findings.filter(
-      (f) => !f.heatNo || f.heatNo === targetHeat || f.heatNo === 'GENERAL'
-    );
-    const getVal = (fieldName: string) => {
-      const f = heatFindings.find((item) => item.field.toUpperCase() === fieldName.toUpperCase());
-      return Number(f?.supplierNormalizedValue || 0);
-    };
+  // Build a display object from the stored finding (no re-computation)
+  const ceCalcResult = ceFinding ? {
+    calculatedCE: ceFinding.supplierNormalizedValue ?? null,
+    maxLimit: ceFinding.requiredMax ?? 0.43,
+    isCompliantWithLimit: ceFinding.status === 'PASS',
+    formula: 'CE = C + Mn/6 + (Cr + Mo + V)/5 + (Ni + Cu)/15',
+    breakdown: ceFinding.metallurgicalExplanation || ceFinding.calculatedComparison || '',
+    missingCriticalElements: ceFinding.status === 'DOCUMENTATION_GAP' ? ['see finding'] : [],
+    elementsUsed: {},
+    reportedCE: undefined,
+    discrepancyWithReported: undefined,
+    isDiscrepancySignificant: false,
+  } : null;
 
-    const chem = {
-      C: getVal('C'),
-      Mn: getVal('Mn'),
-      P: getVal('P'),
-      S: getVal('S'),
-      Si: getVal('Si'),
-      Cr: getVal('Cr'),
-      Mo: getVal('Mo'),
-      Ni: getVal('Ni'),
-      Cu: getVal('Cu'),
-      V: getVal('V'),
-    };
-    ceCalcResult = calculateCarbonEquivalent(
-      chem,
-      ceFinding.requiredMax ?? 0.43,
-      Number(ceFinding.supplierNormalizedValue || undefined)
-    );
-  }
 
   // Escape key handler for dialogs
   useEffect(() => {
@@ -254,6 +242,20 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* AI Extraction Fallback Warning — shown when Gemini was unavailable */}
+      {analysis.aiExtractionUsed === false && (
+        <div className="bg-amber-950/80 border border-amber-600/80 rounded-xl p-4 sm:p-5 text-amber-200 flex items-start gap-3 shadow-sm" role="alert">
+          <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
+          <div className="space-y-1">
+            <h3 className="font-bold text-white text-sm">AI Extraction Unavailable — Manual Verification Required</h3>
+            <p className="text-xs text-amber-200 leading-relaxed">
+              The Gemini AI extraction service was unavailable when this MTC was processed. Evidence values were extracted using a deterministic regex fallback, which may miss values not matching expected patterns. <strong className="text-white">All extracted chemistry, mechanical, and NDE values must be manually cross-checked against the original MTC document before this record can be approved.</strong>
+            </p>
+          </div>
+        </div>
+      )}
+
 
       {/* 2. TECHNICAL VERIFICATION HEADER CARD (Industrial dark slate, crisp high contrast) */}
       <section

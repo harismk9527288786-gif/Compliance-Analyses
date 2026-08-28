@@ -2650,14 +2650,21 @@ function extractMTCIdentity(documentText, filename) {
     }
   }
   let materialGrade = "";
-  if (/F316L?\b|UNS\s*S31603|UNS\s*S31600|AISI\s*316/i.test(documentText)) {
+  const gradeContext = /(?:(?:Material|Grade|Specification|Alloy|Matl|Mat'l|Type)\s*[:=\s]\s*|^\s*)([^\n\r]{0,60})/gim;
+  const allLines = documentText.split(/[\r\n]+/);
+  const headerLines = allLines.slice(0, 60).join("\n");
+  if (/(?:Material|Grade|Specification|Alloy)\s*[:=]\s*[^\n\r]*F316L?\b|UNS\s*S3160[03]|AISI\s*316/i.test(headerLines)) {
     materialGrade = "ASTM A182 F316";
-  } else if (/F6a\b|UNS\s*S41000/i.test(documentText)) {
+  } else if (/(?:Material|Grade|Specification|Alloy)\s*[:=]\s*[^\n\r]*F6a?\b|UNS\s*S41000/i.test(headerLines)) {
     materialGrade = "ASTM A182 Grade F6a Class 1 (UNS S41000)";
-  } else if (/A105N?\b/i.test(documentText)) {
+  } else if (/(?:Material|Grade|Specification|Alloy)\s*[:=]\s*[^\n\r]*A105N?\b/i.test(headerLines)) {
     materialGrade = "ASTM A105N";
-  } else if (/LF2\b/i.test(documentText)) {
+  } else if (/(?:Material|Grade|Specification|Alloy)\s*[:=]\s*[^\n\r]*LF2\b/i.test(headerLines)) {
     materialGrade = "ASTM A350 LF2";
+  } else {
+    if (/(?<!not\s+applicable\s+for\s+)(?<!except\s+)(?<!non[- ])F316L?\b/i.test(documentText)) materialGrade = "ASTM A182 F316";
+    else if (/A105N?\b/i.test(documentText) && !/not\s+applicable\s+for\s+A105N?/i.test(documentText)) materialGrade = "ASTM A105N";
+    else if (/LF2\b/i.test(documentText) && !/not\s+applicable\s+for\s+.*LF2/i.test(documentText)) materialGrade = "ASTM A350 LF2";
   }
   let supplierName = "Western Forge & Flange Co.";
   if (/WENZHOU\s*WINWAY/i.test(documentText)) {
@@ -3453,7 +3460,8 @@ ${documentText.slice(0, 15e3)}`;
 async function extractSupplierEvidenceWithAI(documentText, filename) {
   const ai = getGenAI();
   if (!ai) {
-    return fallbackSupplierEvidenceExtraction(documentText, filename);
+    console.warn("[MTC Engine] Gemini API unavailable \u2014 using deterministic regex fallback. Results may be incomplete. Ensure GEMINI_API_KEY is set.");
+    return { ...fallbackSupplierEvidenceExtraction(documentText, filename), aiExtractionUsed: false };
   }
   try {
     const prompt = `You are a certified metallurgical quality inspector.
@@ -3480,6 +3488,7 @@ ${documentText.slice(0, 15e3)}`;
         heats = [heatMatch ? heatMatch[0].toUpperCase() : "FK2407-061"];
       }
       return {
+        aiExtractionUsed: true,
         certificateMetadata: {
           ...meta,
           heats
@@ -3494,9 +3503,9 @@ ${documentText.slice(0, 15e3)}`;
       };
     }
   } catch (error) {
-    console.warn("Gemini MTC extraction notice, using deterministic fallback:", error);
+    console.warn("[MTC Engine] Gemini MTC extraction failed \u2014 using deterministic regex fallback:", error);
   }
-  return fallbackSupplierEvidenceExtraction(documentText, filename);
+  return { ...fallbackSupplierEvidenceExtraction(documentText, filename), aiExtractionUsed: false };
 }
 function fallbackSupplierEvidenceExtraction(text, filename) {
   const identity = extractMTCIdentity(text, filename);
@@ -3633,12 +3642,12 @@ function convertValue(val, sourceUnit, targetUnit) {
     if (val >= 240) return Math.round((22 + (val - 237) * 0.2) * 10) / 10;
     if (val >= 237) return 22;
     if (val >= 217) return Math.round((18 + (val - 217) / 20 * 4) * 10) / 10;
-    return Math.max(0, Math.round((val - 100) / 6.5 * 10) / 10);
+    return NaN;
   }
   if (src === "HRC" && tgt === "HBW") {
     if (val >= 22) return Math.round(237 + (val - 22) * 5);
     if (val >= 18) return Math.round(217 + (val - 18) / 4 * 20);
-    return Math.round(val * 6.5 + 100);
+    return NaN;
   }
   return val;
 }
@@ -3806,6 +3815,15 @@ function evaluateMinOperator(analysisId, req, evidence, heatNo) {
     );
   }
   const normalizedVal = req.unit ? convertValue(parsed.value, parsed.unit || req.unit, req.unit) : parsed.value;
+  if (isNaN(normalizedVal)) {
+    return createReviewRequiredFinding(
+      analysisId,
+      req,
+      evidence,
+      heatNo,
+      `Hardness value "${evidence.rawValue}" is below the ASTM E140 valid conversion range and cannot be compared to the ${req.unit} minimum of ${reqMin}. Raw test value must be reported in the same scale as the specification.`
+    );
+  }
   const isPass = normalizedVal >= reqMin;
   const status = isPass ? "PASS" : "DEVIATION";
   const severity = isPass ? "info" : normalizedVal < reqMin * 0.9 ? "critical" : "major";
@@ -3853,7 +3871,25 @@ function evaluateMaxOperator(analysisId, req, evidence, heatNo) {
       `Could not parse numeric value from supplier evidence: "${evidence.rawValue}"`
     );
   }
+  if (parsed.relationalOperator === ">" || parsed.relationalOperator === ">=") {
+    return createReviewRequiredFinding(
+      analysisId,
+      req,
+      evidence,
+      heatNo,
+      `Supplier evidence states value is greater than ${parsed.value} ${req.unit || ""}, which cannot confirm it is within maximum of ${reqMax} ${req.unit || ""}. Explicit test value required.`
+    );
+  }
   const normalizedVal = req.unit ? convertValue(parsed.value, parsed.unit || req.unit, req.unit) : parsed.value;
+  if (isNaN(normalizedVal)) {
+    return createReviewRequiredFinding(
+      analysisId,
+      req,
+      evidence,
+      heatNo,
+      `Hardness value "${evidence.rawValue}" is below the ASTM E140 valid conversion range and cannot be compared to the ${req.unit} limit of ${reqMax}. Raw test value must be reported in the same scale as the specification.`
+    );
+  }
   const isPass = normalizedVal <= reqMax;
   const status = isPass ? "PASS" : "DEVIATION";
   const severity = isPass ? "info" : "critical";
@@ -4933,12 +4969,8 @@ app.post(
         return res.status(400).json({ error: validation.error });
       }
       const parsed = await parseDocumentContent(req.file.buffer, req.file.originalname);
-      if ((!parsed.text || parsed.text.trim().length < 30) && req.body.extractedText && typeof req.body.extractedText === "string") {
-        const clientText = req.body.extractedText.trim();
-        if (clientText.length >= 30) {
-          parsed.text = clientText;
-          parsed.isScanned = false;
-        }
+      if (!parsed.text || parsed.text.trim().length < 30) {
+        parsed.isScanned = true;
       }
       const docId = `doc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       const docRecord = {
@@ -5310,24 +5342,24 @@ app.post("/api/analyses", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINEER"]
         console.log(`[TRACE-1 CREATE UNVERIFIED] Analysis created: id=${analysisId2}, orgId=${orgId}, status=${unverifiedAnalysis.status}, totalOrgInDb=${totalInOrg2}`);
         return res.status(201).json({ analysis: unverifiedAnalysis, findings: [finding] });
       }
-      const extracted = await extractSupplierEvidenceWithAI(
+      const extracted2 = await extractSupplierEvidenceWithAI(
         mtcDoc.rawText || "",
         mtcDoc.filename
       );
-      const finalHeat = mtcIdentity.heatNumber && mtcIdentity.heatNumber !== "UNVERIFIED" ? mtcIdentity.heatNumber : extracted.certificateMetadata?.heats && extracted.certificateMetadata.heats[0] || "FK2407-061";
-      const finalGrade = mtcIdentity.materialGrade && mtcIdentity.materialGrade !== "UNVERIFIED GRADE" ? mtcIdentity.materialGrade : extracted.certificateMetadata?.materialGrade || "ASTM A182 F316";
+      const finalHeat = mtcIdentity.heatNumber && mtcIdentity.heatNumber !== "UNVERIFIED" ? mtcIdentity.heatNumber : extracted2.certificateMetadata?.heats && extracted2.certificateMetadata.heats[0] || "FK2407-061";
+      const finalGrade = mtcIdentity.materialGrade && mtcIdentity.materialGrade !== "UNVERIFIED GRADE" ? mtcIdentity.materialGrade : extracted2.certificateMetadata?.materialGrade || "ASTM A182 F316";
       certRecord = {
         id: `cert-${Date.now()}`,
         documentId: mtcDoc.id,
-        mtcNumber: mtcIdentity.mtcNumber || extracted.certificateMetadata?.mtcNumber || `MTC-${finalHeat}`,
-        supplierName: mtcIdentity.supplierName || extracted.certificateMetadata?.supplierName || "Western Forge & Flange Co.",
+        mtcNumber: mtcIdentity.mtcNumber || extracted2.certificateMetadata?.mtcNumber || `MTC-${finalHeat}`,
+        supplierName: mtcIdentity.supplierName || extracted2.certificateMetadata?.supplierName || "Western Forge & Flange Co.",
         clientName: clientName || reqSet.clientName,
-        poNumber: poNumber || "PO-2026-APEX-8821",
+        poNumber: poNumber || void 0,
         issueDate: (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
         materialGrade: finalGrade,
         standard: finalGrade,
         heats: [finalHeat],
-        evidenceItems: extracted.evidence
+        evidenceItems: extracted2.evidence
       };
       db.setCertificate(certRecord.id, certRecord);
     }
@@ -5452,7 +5484,8 @@ app.post("/api/analyses", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINEER"]
       totalFindings: findings.length,
       reviewedCount: 0,
       ruleEngineVersion: "MTC-CoreEngine v2.5.0",
-      aiModelUsed: "gemini-3.7-flash"
+      aiModelUsed: extracted.aiExtractionUsed ? "gemini-3.7-flash" : "deterministic-regex-fallback",
+      aiExtractionUsed: extracted.aiExtractionUsed
     };
     db.setAnalysis(orgId, analysisId, analysis);
     db.setFindings(orgId, analysisId, findings);

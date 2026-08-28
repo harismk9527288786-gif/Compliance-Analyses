@@ -347,14 +347,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="flex items-start justify-between">
             <div className="space-y-1">
               <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
-                Conforming Checks
+                Conforming Clauses
               </span>
               <div className="text-2xl font-bold font-mono text-emerald-700">
                 {viewScope === 'pending' ? activePass : totalPass}
               </div>
               <p className="text-[11px] text-slate-500 font-medium">
-                {viewScope === 'pending' ? 'Verified metallurgical clauses passing MDS limits' : 'Satisfies all MDS chemical & mechanical limits'}
+                {viewScope === 'pending' ? 'Individual spec clauses passing MDS limits (not certificate count)' : 'Total spec clauses passing across all certificates'}
               </p>
+
             </div>
             <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 border border-emerald-200 group-hover:scale-105 transition-transform">
               <CheckCircle2 className="w-5 h-5 stroke-[2.5]" aria-hidden="true" />
