@@ -65,6 +65,7 @@ export const NewComparison: React.FC<NewComparisonProps> = ({
   };
 
   const handleRunComparison = async (usePilotFixture = false) => {
+    if (isProcessing) return;
     setIsProcessing(true);
     setErrorMsg(null);
     setCurrentStepText(processingSteps[0]);
@@ -253,16 +254,8 @@ export const NewComparison: React.FC<NewComparisonProps> = ({
               <p className="text-[11px] text-slate-500">PDF or text certificate file</p>
             </div>
 
-            <div
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={handleMtcDrop}
-              className={`border-2 border-dashed rounded-lg p-5 text-center transition-colors flex flex-col items-center justify-center min-h-[140px] ${
-                mtcFile
-                  ? 'border-emerald-600 bg-emerald-50/30'
-                  : 'border-slate-300 hover:border-slate-400 bg-slate-50/50'
-              }`}
-            >
-              {mtcFile ? (
+            {mtcFile ? (
+              <div className="border-2 border-dashed rounded-lg p-5 text-center transition-colors flex flex-col items-center justify-center min-h-[140px] border-emerald-600 bg-emerald-50/30">
                 <div className="space-y-1.5">
                   <FileCheck2 className="w-6 h-6 text-emerald-700 mx-auto" aria-hidden="true" />
                   <div className="text-xs font-bold text-slate-900 truncate max-w-[200px]">
@@ -279,22 +272,30 @@ export const NewComparison: React.FC<NewComparisonProps> = ({
                     Change File
                   </button>
                 </div>
-              ) : (
-                <div className="space-y-1.5">
-                  <Upload className="w-6 h-6 text-slate-400 mx-auto" aria-hidden="true" />
-                  <div className="text-xs font-semibold text-slate-700">Drag & drop Supplier MTC PDF</div>
-                  <label className="inline-block px-3 py-1 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 cursor-pointer shadow-2xs">
+              </div>
+            ) : (
+              <label
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleMtcDrop}
+                className="border-2 border-dashed border-slate-300 hover:border-emerald-500 hover:bg-emerald-50/20 bg-slate-50/50 rounded-lg p-5 text-center transition-all flex flex-col items-center justify-center min-h-[140px] cursor-pointer group focus-within:ring-2 focus-within:ring-emerald-500"
+              >
+                <input
+                  type="file"
+                  accept=".pdf,.txt,.json"
+                  className="sr-only"
+                  onChange={(e) => e.target.files && setMtcFile(e.target.files[0])}
+                />
+                <div className="space-y-2 pointer-events-none">
+                  <Upload className="w-6 h-6 text-slate-400 group-hover:text-emerald-600 transition-colors mx-auto" aria-hidden="true" />
+                  <div className="text-xs font-semibold text-slate-700 group-hover:text-slate-900">
+                    Drag & drop Supplier MTC PDF
+                  </div>
+                  <span className="inline-block px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-md group-hover:border-emerald-500 group-hover:text-emerald-800 shadow-2xs transition-colors">
                     Browse File
-                    <input
-                      type="file"
-                      accept=".pdf,.txt,.json"
-                      className="hidden"
-                      onChange={(e) => e.target.files && setMtcFile(e.target.files[0])}
-                    />
-                  </label>
+                  </span>
                 </div>
-              )}
-            </div>
+              </label>
+            )}
 
             <div className="text-[11px] text-slate-500 font-mono">
               *If omitted, the pre-loaded Western Forge MTC is analyzed.
@@ -345,39 +346,44 @@ export const NewComparison: React.FC<NewComparisonProps> = ({
                   </div>
                 </div>
               </div>
+            ) : mdsFile ? (
+              <div className="border-2 border-dashed border-blue-500 bg-blue-50/30 rounded-lg p-5 text-center flex flex-col items-center justify-center min-h-[140px]">
+                <div className="space-y-1.5">
+                  <FileText className="w-6 h-6 text-blue-700 mx-auto" aria-hidden="true" />
+                  <div className="text-xs font-bold text-slate-900 truncate max-w-[200px]">
+                    {mdsFile.name}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMdsFile(null)}
+                    className="text-[11px] text-rose-700 hover:text-rose-800 font-bold cursor-pointer"
+                  >
+                    Change File
+                  </button>
+                </div>
+              </div>
             ) : (
-              <div
+              <label
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={handleMdsDrop}
-                className="border-2 border-dashed border-slate-300 rounded-lg p-5 text-center flex flex-col items-center justify-center min-h-[140px]"
+                className="border-2 border-dashed border-slate-300 hover:border-blue-500 hover:bg-blue-50/20 bg-slate-50/50 rounded-lg p-5 text-center transition-all flex flex-col items-center justify-center min-h-[140px] cursor-pointer group focus-within:ring-2 focus-within:ring-blue-500"
               >
-                {mdsFile ? (
-                  <div className="space-y-1">
-                    <FileText className="w-6 h-6 text-blue-700 mx-auto" aria-hidden="true" />
-                    <div className="text-xs font-bold text-slate-900 truncate max-w-[200px]">
-                      {mdsFile.name}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setMdsFile(null)}
-                      className="text-[11px] text-rose-700 hover:text-rose-800 font-bold cursor-pointer"
-                    >
-                      Change File
-                    </button>
+                <input
+                  type="file"
+                  accept=".pdf,.txt,.json"
+                  className="sr-only"
+                  onChange={(e) => e.target.files && setMdsFile(e.target.files[0])}
+                />
+                <div className="space-y-2 pointer-events-none">
+                  <Upload className="w-6 h-6 text-slate-400 group-hover:text-blue-600 transition-colors mx-auto" aria-hidden="true" />
+                  <div className="text-xs font-semibold text-slate-700 group-hover:text-slate-900">
+                    Drag & drop Custom MDS PDF
                   </div>
-                ) : (
-                  <label className="cursor-pointer text-xs text-slate-700 hover:text-slate-900">
-                    <Upload className="w-5 h-5 text-slate-400 mx-auto mb-1" aria-hidden="true" />
-                    <span className="font-semibold">Upload Custom MDS PDF</span>
-                    <input
-                      type="file"
-                      accept=".pdf,.txt,.json"
-                      className="hidden"
-                      onChange={(e) => e.target.files && setMdsFile(e.target.files[0])}
-                    />
-                  </label>
-                )}
-              </div>
+                  <span className="inline-block px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-md group-hover:border-blue-500 group-hover:text-blue-800 shadow-2xs transition-colors">
+                    Browse File
+                  </span>
+                </div>
+              </label>
             )}
 
             <div className="text-[11px] text-slate-500 font-mono">

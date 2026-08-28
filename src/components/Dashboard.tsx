@@ -16,6 +16,8 @@ import {
   FileSpreadsheet,
   Download,
   Clock,
+  History,
+  Loader2,
 } from 'lucide-react';
 import { AnalysisRecord, RequirementSet, User } from '../types';
 import { exportFleetToExcel } from '../utils/exportUtils';
@@ -24,12 +26,14 @@ interface DashboardProps {
   analyses: AnalysisRecord[];
   requirementSets: RequirementSet[];
   currentUser?: User;
+  isLoadingPilot?: boolean;
   onSelectAnalysis: (id: string, initialTab?: 'all' | 'issues' | 'pass') => void;
   onOpenNewComparison: () => void;
   onLoadPilotCase: () => void;
   onOpenTestSuite?: () => void;
   onOpenLibrary?: () => void;
   onOpenRetentionPolicy?: () => void;
+  onOpenHistory?: () => void;
   onClearAllAnalyses?: () => void;
   onDeleteAnalysis?: (id: string) => void;
 }
@@ -37,22 +41,39 @@ interface DashboardProps {
 export const Dashboard: React.FC<DashboardProps> = ({
   analyses,
   currentUser,
+  isLoadingPilot = false,
   onSelectAnalysis,
   onOpenNewComparison,
   onLoadPilotCase,
   onOpenRetentionPolicy,
+  onOpenHistory,
   onClearAllAnalyses,
   onDeleteAnalysis,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pass' | 'deviations' | 'gaps'>('all');
+  const [viewScope, setViewScope] = useState<'pending' | 'all'>('pending');
   const [showClearConfirmModal, setShowClearConfirmModal] = useState(false);
   const [deletingAnalysisId, setDeletingAnalysisId] = useState<string | null>(null);
 
   const firstName = currentUser?.name ? currentUser.name.split(' ')[0] : 'Quality Specialist';
 
-  // Aggregate metrics
+  // Partition analyses into active review queue vs signed-off history
   const list = Array.isArray(analyses) ? analyses : [];
+  const signedOffAnalyses = list.filter((a) => a && a.status === 'approved');
+  const activeAnalyses = list.filter((a) => a && a.status !== 'approved');
+
+  // Active queue metrics (signed-off records do NOT alarm active dashboard metrics)
+  const activeReviews = activeAnalyses.length;
+  const activeRejected = activeAnalyses.filter((a) => a && a.status === 'rejected').length;
+  const activePass = activeAnalyses.reduce((acc, a) => acc + (a?.passCount || 0), 0);
+  const activeDeviations = activeAnalyses.reduce((acc, a) => acc + (a?.deviationCount || 0), 0);
+  const activeGaps = activeAnalyses.reduce((acc, a) => acc + (a?.documentationGapCount || 0), 0);
+  const activeReviewRequired = activeAnalyses.reduce((acc, a) => acc + (a?.reviewRequiredCount || 0), 0);
+  const activeNeedsAttention = activeDeviations + activeGaps + activeReviewRequired;
+  const activeChecks = activePass + activeNeedsAttention;
+
+  // Overall dataset aggregates (for history and global exports)
   const totalReviews = list.length;
   const totalPass = list.reduce((acc, a) => acc + (a?.passCount || 0), 0);
   const totalDeviations = list.reduce((acc, a) => acc + (a?.deviationCount || 0), 0);
@@ -60,8 +81,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const totalNeedsAttention = totalDeviations + totalGaps;
   const totalChecks = totalPass + totalNeedsAttention;
 
-  // Filter analyses requiring attention
-  const attentionItems = list.filter(
+  // Filter analyses requiring attention from ACTIVE queue only (signed-off records excluded)
+  const attentionItems = activeAnalyses.filter(
     (a) =>
       a &&
       ((a.deviationCount || 0) > 0 ||
@@ -70,7 +91,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
         a.status === 'rejected')
   );
 
-  const filteredAnalyses = list.filter((a) => {
+  // Target collection for the table based on selected scope
+  const targetAnalyses = viewScope === 'pending' ? activeAnalyses : list;
+
+  const filteredAnalyses = targetAnalyses.filter((a) => {
     if (!a) return false;
     const q = (searchQuery || '').toLowerCase();
     const title = (a.title || '').toLowerCase();
@@ -208,57 +232,92 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <button
                 type="button"
                 onClick={onLoadPilotCase}
-                className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors cursor-pointer border border-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+                disabled={isLoadingPilot}
+                className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-60 disabled:cursor-not-allowed text-slate-200 transition-colors cursor-pointer border border-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
               >
-                <FileText className="w-3.5 h-3.5 text-slate-300" aria-hidden="true" />
-                <span>Load Benchmark MTC (ASTM A105N)</span>
+                {isLoadingPilot ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 text-emerald-400 animate-spin" aria-hidden="true" />
+                    <span>Loading Benchmark MTC...</span>
+                  </>
+                ) : (
+                  <>
+                    <FileText className="w-3.5 h-3.5 text-slate-300" aria-hidden="true" />
+                    <span>Load Benchmark MTC (ASTM A105N)</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
 
-          {/* 3-Second Overall Compliance Verdict Badge */}
+          {/* 3-Second Overall Compliance Verdict Badge for Active Review Queue */}
           <div className="bg-slate-950/90 rounded-lg p-4 border border-slate-800 w-full sm:w-auto sm:min-w-[280px] space-y-3">
             <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 border-b border-slate-800 pb-2">
-              <span className="uppercase tracking-wider font-semibold">Active Fleet Verdict</span>
-              <span className="font-bold text-slate-300">{totalReviews} Records</span>
+              <span className="uppercase tracking-wider font-semibold">Active Review Queue</span>
+              <span className="font-bold text-slate-300">
+                {activeReviews} Pending {signedOffAnalyses.length > 0 && `(${signedOffAnalyses.length} Signed Off)`}
+              </span>
             </div>
 
             <div className="space-y-2">
-              {totalReviews === 0 ? (
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-900 text-slate-300 border border-slate-700 text-xs font-bold font-mono">
-                  <Cpu className="w-4 h-4 stroke-[2.5] text-emerald-400 shrink-0" aria-hidden="true" />
-                  <span>READY FOR VERIFICATION</span>
-                </div>
-              ) : totalDeviations > 0 ? (
+              {activeReviews === 0 ? (
+                signedOffAnalyses.length > 0 ? (
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-emerald-950/80 text-emerald-300 border border-emerald-700 text-xs font-bold font-mono">
+                    <CheckCircle2 className="w-4 h-4 stroke-[2.5] text-emerald-400 shrink-0" aria-hidden="true" />
+                    <span>ALL REVIEWS SIGNED OFF & ARCHIVED</span>
+                  </div>
+                ) : (
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-900 text-slate-300 border border-slate-700 text-xs font-bold font-mono">
+                    <Cpu className="w-4 h-4 stroke-[2.5] text-emerald-400 shrink-0" aria-hidden="true" />
+                    <span>READY FOR VERIFICATION</span>
+                  </div>
+                )
+              ) : activeRejected > 0 ? (
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-rose-950/80 text-rose-300 border border-rose-700 text-xs font-bold font-mono">
                   <AlertTriangle className="w-4 h-4 stroke-[2.5] text-rose-400 shrink-0" aria-hidden="true" />
-                  <span>ACTION REQUIRED: {totalDeviations} DEVIATION{totalDeviations > 1 ? 'S' : ''}</span>
+                  <span>ACTION REQUIRED: {activeRejected} REJECTED NON-CONFORMANCE{activeRejected > 1 ? 'S' : ''}</span>
                 </div>
-              ) : totalGaps > 0 ? (
+              ) : activeDeviations > 0 ? (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-rose-950/80 text-rose-300 border border-rose-700 text-xs font-bold font-mono">
+                  <AlertTriangle className="w-4 h-4 stroke-[2.5] text-rose-400 shrink-0" aria-hidden="true" />
+                  <span>ACTION REQUIRED: {activeDeviations} ACTIVE DEVIATION{activeDeviations > 1 ? 'S' : ''}</span>
+                </div>
+              ) : activeGaps > 0 ? (
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-amber-950/80 text-amber-300 border border-amber-700 text-xs font-bold font-mono">
                   <FileQuestion className="w-4 h-4 stroke-[2.5] text-amber-400 shrink-0" aria-hidden="true" />
-                  <span>DOCUMENTATION GAP: {totalGaps} MISSING SPEC{totalGaps > 1 ? 'S' : ''}</span>
+                  <span>DOCUMENTATION GAP: {activeGaps} MISSING SPEC{activeGaps > 1 ? 'S' : ''}</span>
+                </div>
+              ) : activeReviewRequired > 0 ? (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-amber-950/80 text-amber-300 border border-amber-700 text-xs font-bold font-mono">
+                  <AlertTriangle className="w-4 h-4 stroke-[2.5] text-amber-400 shrink-0" aria-hidden="true" />
+                  <span>REVIEW REQUIRED: {activeReviewRequired} ITEM{activeReviewRequired > 1 ? 'S' : ''}</span>
                 </div>
               ) : (
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-emerald-950/80 text-emerald-300 border border-emerald-700 text-xs font-bold font-mono">
                   <CheckCircle2 className="w-4 h-4 stroke-[2.5] text-emerald-400 shrink-0" aria-hidden="true" />
-                  <span>ALL SPECIFICATIONS CONFORMANT</span>
+                  <span>ALL ACTIVE CONFORMANT</span>
                 </div>
               )}
 
               <div className="text-[11px] text-slate-400 font-mono space-y-1 pt-1">
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Conforming Checks:</span>
-                  <span className="text-emerald-400 font-bold">{totalPass} / {totalChecks}</span>
+                  <span className="text-slate-400">Active Conforming Checks:</span>
+                  <span className="text-emerald-400 font-bold">{activePass} / {activeChecks}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Deviations:</span>
-                  <span className="text-rose-400 font-bold">{totalDeviations}</span>
+                  <span className="text-slate-400">Active Deviations:</span>
+                  <span className="text-rose-400 font-bold">{activeDeviations}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Documentation Gaps:</span>
-                  <span className="text-amber-400 font-bold">{totalGaps}</span>
+                  <span className="text-slate-400">Active Documentation Gaps:</span>
+                  <span className="text-amber-400 font-bold">{activeGaps}</span>
                 </div>
+                {signedOffAnalyses.length > 0 && (
+                  <div className="flex justify-between pt-1 border-t border-slate-800/80 text-slate-400">
+                    <span className="text-slate-400">Signed-Off & In History:</span>
+                    <span className="text-emerald-400 font-bold">{signedOffAnalyses.length}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -273,32 +332,34 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <button
           type="button"
           onClick={() => {
-            const target =
-              analyses.find((a) => a.status === 'approved' || (a.passCount > 0 && a.deviationCount === 0)) ||
-              analyses.find((a) => a.passCount > 0) ||
-              analyses[0];
-            if (target) {
-              onSelectAnalysis(target.id, 'pass');
-            } else {
-              setStatusFilter(statusFilter === 'pass' ? 'all' : 'pass');
-            }
+            setStatusFilter(statusFilter === 'pass' ? 'all' : 'pass');
+            const el = document.getElementById('all-records-table');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
           }}
-          className="text-left bg-white rounded-xl p-5 border border-emerald-300 hover:border-emerald-500 hover:bg-emerald-50 transition-all cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 group"
+          className={`text-left bg-white rounded-xl p-5 border transition-all cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 group ${
+            statusFilter === 'pass'
+              ? 'border-emerald-600 ring-2 ring-emerald-600 bg-emerald-50/60'
+              : 'border-emerald-300 hover:border-emerald-500 hover:bg-emerald-50'
+          }`}
         >
           <div className="flex items-start justify-between">
             <div className="space-y-1">
               <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
                 Conforming Checks
               </span>
-              <div className="text-2xl font-bold font-mono text-emerald-700">{totalPass}</div>
-              <p className="text-[11px] text-slate-500 font-medium">Satisfies all MDS chemical & mechanical limits</p>
+              <div className="text-2xl font-bold font-mono text-emerald-700">
+                {viewScope === 'pending' ? activePass : totalPass}
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium">
+                {viewScope === 'pending' ? 'Verified metallurgical clauses passing MDS limits' : 'Satisfies all MDS chemical & mechanical limits'}
+              </p>
             </div>
             <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 border border-emerald-200 group-hover:scale-105 transition-transform">
               <CheckCircle2 className="w-5 h-5 stroke-[2.5]" aria-hidden="true" />
             </div>
           </div>
           <div className="mt-3 pt-2.5 border-t border-slate-200 flex items-center justify-between text-xs font-bold text-emerald-800">
-            <span>View Conforming Checks</span>
+            <span>{statusFilter === 'pass' ? '✓ Showing Conforming Only' : 'Filter Conforming Records'}</span>
             <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" aria-hidden="true" />
           </div>
         </button>
@@ -307,41 +368,47 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <button
           type="button"
           onClick={() => {
-            const target =
-              attentionItems[0] ||
-              analyses.find((a) => a.deviationCount > 0 || a.documentationGapCount > 0) ||
-              analyses[0];
-            if (target) {
-              onSelectAnalysis(target.id, 'issues');
-            } else {
-              setStatusFilter(statusFilter === 'deviations' ? 'all' : 'deviations');
-            }
+            setStatusFilter(statusFilter === 'deviations' ? 'all' : 'deviations');
+            const el = document.getElementById('all-records-table');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
           }}
-          className="text-left bg-white rounded-xl p-5 border border-rose-300 hover:border-rose-500 hover:bg-rose-50 transition-all cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 group"
+          className={`text-left bg-white rounded-xl p-5 border transition-all cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 group ${
+            statusFilter === 'deviations'
+              ? 'border-rose-600 ring-2 ring-rose-600 bg-rose-50/60'
+              : 'border-rose-300 hover:border-rose-500 hover:bg-rose-50'
+          }`}
         >
           <div className="flex items-start justify-between">
             <div className="space-y-1">
               <span className="text-[11px] font-bold uppercase tracking-wider text-rose-800">
                 Quality Deviations & Gaps
               </span>
-              <div className="text-2xl font-bold font-mono text-rose-700">{totalNeedsAttention}</div>
-              <p className="text-[11px] text-slate-500 font-medium">Out-of-spec values or missing NDE reports</p>
+              <div className="text-2xl font-bold font-mono text-rose-700">
+                {viewScope === 'pending' ? activeNeedsAttention : totalNeedsAttention}
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium">
+                {viewScope === 'pending' ? `${activeDeviations} out-of-spec, ${activeGaps} missing specs across pending queue` : 'Out-of-spec values or missing NDE reports'}
+              </p>
             </div>
             <div className="w-9 h-9 rounded-lg bg-rose-100 text-rose-800 flex items-center justify-center shrink-0 border border-rose-200 group-hover:scale-105 transition-transform">
               <AlertTriangle className="w-5 h-5 stroke-[2.5]" aria-hidden="true" />
             </div>
           </div>
           <div className="mt-3 pt-2.5 border-t border-slate-200 flex items-center justify-between text-xs font-bold text-rose-700">
-            <span>View Issues Breakdown</span>
+            <span>{statusFilter === 'deviations' ? '✓ Showing Issues Only' : 'Filter Issues Breakdown'}</span>
             <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" aria-hidden="true" />
           </div>
         </button>
 
-        {/* Metric 3: Total Certificates */}
+        {/* Metric 3: Total / Active Certificates */}
         <button
           type="button"
-          onClick={() => setStatusFilter('all')}
-          className={`text-left bg-white rounded-xl p-5 border transition-all cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 ${
+          onClick={() => {
+            setStatusFilter('all');
+            const el = document.getElementById('all-records-table');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+          }}
+          className={`text-left bg-white rounded-xl p-5 border transition-all cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 group ${
             statusFilter === 'all'
               ? 'border-slate-900 ring-2 ring-slate-900 bg-slate-50'
               : 'border-slate-300 hover:border-slate-400 hover:bg-slate-50'
@@ -350,18 +417,24 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="flex items-start justify-between">
             <div className="space-y-1">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
-                Total Evaluated MTCs
+                {viewScope === 'pending' ? 'Active Review Queue' : 'Total Evaluated MTCs'}
               </span>
-              <div className="text-2xl font-bold font-mono text-slate-900">{totalReviews}</div>
-              <p className="text-[11px] text-slate-500 font-medium">Across all approved mill suppliers</p>
+              <div className="text-2xl font-bold font-mono text-slate-900">
+                {viewScope === 'pending' ? activeReviews : totalReviews}
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium">
+                {signedOffAnalyses.length > 0
+                  ? `${signedOffAnalyses.length} signed off & in History`
+                  : 'Across all approved mill suppliers'}
+              </p>
             </div>
             <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-800 flex items-center justify-center shrink-0 border border-slate-300">
               <FileText className="w-5 h-5 stroke-[2.5]" aria-hidden="true" />
             </div>
           </div>
           <div className="mt-3 pt-2.5 border-t border-slate-200 flex items-center justify-between text-xs font-bold text-slate-800">
-            <span>{statusFilter === 'all' ? 'All Records Active' : 'Reset View to All'}</span>
-            <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>{statusFilter === 'all' ? '✓ All Queue Records Active' : 'Reset View to All'}</span>
+            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" aria-hidden="true" />
           </div>
         </button>
       </section>
@@ -467,13 +540,59 @@ export const Dashboard: React.FC<DashboardProps> = ({
       )}
 
       {/* 4. VERIFICATION LOGS & TRACEABILITY TABLE */}
-      <section aria-label="Verification Records Table" className="bg-white rounded-xl border border-slate-300 shadow-xs p-5 space-y-4">
+      <section id="all-records-table" aria-label="Verification Records Table" className="bg-white rounded-xl border border-slate-300 shadow-xs p-5 space-y-4">
+        {/* Signed-Off Archive Notice Banner */}
+        {signedOffAnalyses.length > 0 && (
+          <div className="bg-emerald-50/90 border border-emerald-200 rounded-lg p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-emerald-100 border border-emerald-300 flex items-center justify-center text-emerald-700 shrink-0">
+                <ShieldCheck className="w-4 h-4 stroke-[2.5]" aria-hidden="true" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-emerald-950">
+                  {signedOffAnalyses.length} Material Certificate{signedOffAnalyses.length > 1 ? 's' : ''} Technically Signed Off & Archived
+                </p>
+                <p className="text-[11px] text-emerald-800">
+                  {viewScope === 'pending'
+                    ? 'Active Dashboard shows unreviewed/pending queue only. Signed-off certificates are stored in History.'
+                    : 'Showing all records including signed-off historical certificates.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+              <button
+                type="button"
+                onClick={() => setViewScope(viewScope === 'pending' ? 'all' : 'pending')}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 transition-colors cursor-pointer shadow-2xs"
+              >
+                {viewScope === 'pending' ? `Show All (${list.length})` : `Show Active Queue (${activeAnalyses.length})`}
+              </button>
+              {onOpenHistory && (
+                <button
+                  type="button"
+                  onClick={onOpenHistory}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                >
+                  <History className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>View History</span>
+                  <ArrowRight className="w-3 h-3" aria-hidden="true" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Table Toolbar */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h2 className="text-base font-bold text-slate-900">Certificate Verification Records</h2>
+            <h2 className="text-base font-bold text-slate-900">
+              {viewScope === 'pending' ? 'Active Certificate Verification Queue' : 'All Certificate Verification Records'}
+            </h2>
             <p className="text-xs text-slate-500 font-medium">
-              Deterministic rule evaluation log against client material data sheets (MDS)
+              {viewScope === 'pending'
+                ? 'Shipments awaiting engineering review and technical sign-off'
+                : 'Deterministic rule evaluation log against client material data sheets (MDS)'}
             </p>
           </div>
 
@@ -491,7 +610,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     : 'text-slate-700 hover:text-slate-900'
                 }`}
               >
-                All ({analyses.length})
+                {viewScope === 'pending' ? `Pending (${activeAnalyses.length})` : `All (${list.length})`}
               </button>
               <button
                 type="button"
@@ -505,7 +624,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 }`}
               >
                 <AlertTriangle className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
-                <span>Issues ({totalNeedsAttention})</span>
+                <span>Issues ({viewScope === 'pending' ? activeNeedsAttention : (activeNeedsAttention)})</span>
               </button>
               <button
                 type="button"
@@ -519,7 +638,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 }`}
               >
                 <CheckCircle2 className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
-                <span>Conforming ({totalPass})</span>
+                <span>Conforming ({viewScope === 'pending' ? activePass : activePass})</span>
               </button>
             </div>
 
@@ -609,6 +728,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   >
                     <FileText className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
                     <span>Load Benchmark MTC (ASTM A105N)</span>
+                  </button>
+                </div>
+              )}
+              {analyses.length > 0 && (
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setStatusFilter('all');
+                      setViewScope('all');
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 cursor-pointer transition-colors"
+                  >
+                    <span>Reset Search & Filters</span>
                   </button>
                 </div>
               )}
@@ -723,16 +857,31 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       {/* 6. Actions */}
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onSelectAnalysis(analysis.id);
-                            }}
-                            className="px-3 py-1 rounded-md text-xs font-semibold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900"
-                          >
-                            Review
-                          </button>
+                          {isApproved ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSelectAnalysis(analysis.id);
+                              }}
+                              className="px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 transition-colors cursor-pointer flex items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
+                              title="View technical sign-off and archived concession notes"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" />
+                              <span>Signed Off</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSelectAnalysis(analysis.id);
+                              }}
+                              className="px-3 py-1 rounded-md text-xs font-semibold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900"
+                            >
+                              Review
+                            </button>
+                          )}
                           {onDeleteAnalysis && (
                             <button
                               type="button"

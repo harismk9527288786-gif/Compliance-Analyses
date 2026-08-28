@@ -37,9 +37,15 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<string>(() => {
     try {
-      return typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('analysis')
-        ? 'analysis_detail'
-        : 'dashboard';
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('analysis')) return 'analysis_detail';
+        const tab = params.get('tab');
+        if (tab && ['dashboard', 'history', 'library', 'audit'].includes(tab)) {
+          return tab;
+        }
+      }
+      return 'dashboard';
     } catch (_) {
       return 'dashboard';
     }
@@ -211,17 +217,62 @@ export default function App() {
     checkAuthStatus();
   }, []);
 
+  const [isLoadingPilot, setIsLoadingPilot] = useState<boolean>(false);
+
+  // Synchronized Tab Navigation with Browser History & URL Query Params
+  const navigateToTab = (tab: string, pushHistory = true) => {
+    setActiveTab(tab);
+    if (tab !== 'analysis_detail') {
+      setSelectedAnalysisId(null);
+      setSelectedAnalysis(null);
+      setActiveFindings([]);
+      setActiveFeedbackDraft(undefined);
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('analysis');
+        if (tab === 'dashboard') {
+          url.searchParams.delete('tab');
+        } else {
+          url.searchParams.set('tab', tab);
+        }
+        if (pushHistory) {
+          window.history.pushState({ tab, analysis: null }, '', url.toString());
+        } else {
+          window.history.replaceState({ tab, analysis: null }, '', url.toString());
+        }
+      } catch (_) {}
+    }
+    if (tab === 'dashboard' || tab === 'history') {
+      refreshAnalyses();
+    }
+  };
+
   // Listen to browser back/forward history navigation
   useEffect(() => {
     const handlePopState = () => {
       try {
         const params = new URLSearchParams(window.location.search);
         const analysisParam = params.get('analysis');
+        const tabParam = params.get('tab');
         if (analysisParam) {
           setSelectedAnalysisId(analysisParam);
           setActiveTab('analysis_detail');
+        } else if (tabParam && ['history', 'library', 'audit', 'dashboard'].includes(tabParam)) {
+          setSelectedAnalysisId(null);
+          setSelectedAnalysis(null);
+          setActiveFindings([]);
+          setActiveFeedbackDraft(undefined);
+          setActiveTab(tabParam);
+          if (tabParam === 'dashboard' || tabParam === 'history') {
+            refreshAnalyses();
+          }
         } else {
           setSelectedAnalysisId(null);
+          setSelectedAnalysis(null);
+          setActiveFindings([]);
+          setActiveFeedbackDraft(undefined);
           setActiveTab('dashboard');
           refreshAnalyses();
         }
@@ -249,6 +300,15 @@ export default function App() {
           setSelectedAnalysis(data.analysis);
           setActiveFindings(data.findings || []);
           setActiveFeedbackDraft(data.feedback);
+        } else if (res.status === 404) {
+          console.warn(`Analysis ${selectedAnalysisId} not found, redirecting to dashboard`);
+          addToast({
+            id: `toast-${Date.now()}`,
+            type: 'info',
+            title: 'Analysis Not Found',
+            description: 'The requested verification record was not found or was deleted.',
+          });
+          navigateToTab('dashboard', false);
         } else if (res.status === 401) {
           setIsAuthenticated(false);
         }
@@ -270,8 +330,9 @@ export default function App() {
     try {
       if (typeof window !== 'undefined') {
         const url = new URL(window.location.href);
+        url.searchParams.delete('tab');
         url.searchParams.set('analysis', id);
-        window.history.pushState({}, '', url.toString());
+        window.history.pushState({ tab: 'analysis_detail', analysis: id }, '', url.toString());
       }
     } catch (_) {}
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -279,7 +340,9 @@ export default function App() {
 
   // 1-Click Launch Benchmark Pilot Case
   const handleLoadPilotCase = async () => {
+    if (isLoadingPilot) return;
     try {
+      setIsLoadingPilot(true);
       const res = await apiFetch('/api/pilot-case', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -306,6 +369,14 @@ export default function App() {
       }
     } catch (e) {
       console.error('Failed to load pilot test case:', e);
+      addToast({
+        id: `toast-${Date.now()}`,
+        type: 'error',
+        title: 'Load Failed',
+        description: 'Unable to load benchmark case.',
+      });
+    } finally {
+      setIsLoadingPilot(false);
     }
   };
 
@@ -393,6 +464,12 @@ export default function App() {
         setAnalyses((prev) =>
           prev.map((a) => (a.id === analysisId ? data.analysis : a))
         );
+        addToast({
+          id: `toast-${Date.now()}`,
+          type: 'success',
+          title: 'Technical Sign-Off Completed',
+          description: 'Material certificate signed off. Deviations archived to History.',
+        });
         const auditRes = await apiFetch('/api/audit');
         if (auditRes.ok) {
           const auditData = await auditRes.json();
@@ -411,7 +488,7 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          reason,
+          rejectionReason: reason,
         }),
       });
       if (res.ok) {
@@ -420,6 +497,12 @@ export default function App() {
         setAnalyses((prev) =>
           prev.map((a) => (a.id === analysisId ? data.analysis : a))
         );
+        addToast({
+          id: `toast-${Date.now()}`,
+          type: 'info',
+          title: 'Material Certificate Rejected',
+          description: 'Formal non-conformance logged and archived.',
+        });
         const auditRes = await apiFetch('/api/audit');
         if (auditRes.ok) {
           const auditData = await auditRes.json();
@@ -440,11 +523,7 @@ export default function App() {
       if (res.ok) {
         setAnalyses((prev) => prev.filter((a) => a.id !== id));
         if (selectedAnalysisId === id) {
-          setSelectedAnalysisId(null);
-          setSelectedAnalysis(null);
-          setActiveFindings([]);
-          setActiveFeedbackDraft(undefined);
-          setActiveTab('dashboard');
+          navigateToTab('dashboard', true);
         }
         addToast({
           id: `toast-${Date.now()}`,
@@ -696,18 +775,7 @@ export default function App() {
       <Navbar
         activeTab={activeTab}
         setActiveTab={(tab) => {
-          setActiveTab(tab);
-          if (tab === 'dashboard') {
-            setSelectedAnalysisId(null);
-            refreshAnalyses();
-            try {
-              if (typeof window !== 'undefined') {
-                const url = new URL(window.location.href);
-                url.searchParams.delete('analysis');
-                window.history.pushState({}, '', url.toString());
-              }
-            } catch (_) {}
-          }
+          navigateToTab(tab, true);
         }}
         currentUser={currentUser}
         currentOrg={currentOrg}
@@ -759,17 +827,7 @@ export default function App() {
             currentUser={currentUser}
             initialStatusTab={findingStatusTab}
             onBack={() => {
-              setSelectedAnalysisId(null);
-              setSelectedAnalysis(null);
-              setActiveTab('dashboard');
-              refreshAnalyses();
-              try {
-                if (typeof window !== 'undefined') {
-                  const url = new URL(window.location.href);
-                  url.searchParams.delete('analysis');
-                  window.history.pushState({}, '', url.toString());
-                }
-              } catch (_) {}
+              navigateToTab('dashboard', true);
             }}
             onSelectFinding={setInspectingFinding}
             onOpenReportModal={() => setShowReportModal(true)}
@@ -817,9 +875,11 @@ export default function App() {
               setShowNewComparison(true);
             }}
             onLoadPilotCase={handleLoadPilotCase}
+            isLoadingPilot={isLoadingPilot}
             onOpenTestSuite={() => setShowTestSuiteModal(true)}
-            onOpenLibrary={() => setActiveTab('library')}
+            onOpenLibrary={() => navigateToTab('library', true)}
             onOpenRetentionPolicy={() => setShowRetentionModal(true)}
+            onOpenHistory={() => navigateToTab('history', true)}
             onClearAllAnalyses={handleClearAllAnalyses}
             onDeleteAnalysis={handleDeleteAnalysis}
           />

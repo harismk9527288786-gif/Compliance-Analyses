@@ -362,6 +362,38 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
             <span className="font-mono font-bold text-emerald-300">{(analysis.heats || []).join(', ') || 'N/A'}</span>
           </div>
         </div>
+
+        {/* Technical Sign-Off Concession Record */}
+        {isApproved && analysis.approvalNotes && (
+          <div className="p-3.5 bg-emerald-950/50 border border-emerald-700/80 rounded-lg text-xs space-y-1">
+            <div className="flex items-center gap-1.5 text-emerald-400 font-bold font-mono text-[11px] uppercase tracking-wider">
+              <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Technical Sign-Off & Concession Record</span>
+            </div>
+            <p className="text-slate-200 text-xs italic">
+              "{analysis.approvalNotes}"
+            </p>
+            <div className="text-[10px] text-slate-400 font-mono">
+              Formally approved by {analysis.approvedByName || currentUser.name} on {analysis.approvedAt ? new Date(analysis.approvedAt).toLocaleString() : 'N/A'}
+            </div>
+          </div>
+        )}
+
+        {/* Formal Rejection Record */}
+        {isRejected && analysis.rejectionReason && (
+          <div className="p-3.5 bg-rose-950/50 border border-rose-700/80 rounded-lg text-xs space-y-1">
+            <div className="flex items-center gap-1.5 text-rose-400 font-bold font-mono text-[11px] uppercase tracking-wider">
+              <ShieldAlert className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Formal Non-Conformance Rejection Record</span>
+            </div>
+            <p className="text-rose-200 text-xs italic">
+              "{analysis.rejectionReason}"
+            </p>
+            <div className="text-[10px] text-slate-400 font-mono">
+              Recorded by {analysis.rejectedByName || currentUser.name} on {analysis.rejectedAt ? new Date(analysis.rejectedAt).toLocaleString() : 'N/A'}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* 3. CARBON EQUIVALENT METALLURGICAL VERIFICATION RAIL (Rendered ONLY if CE is an active requirement) */}

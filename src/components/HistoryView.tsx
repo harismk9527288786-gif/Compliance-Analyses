@@ -15,6 +15,8 @@ import {
   Calendar,
   Layers,
   FileSpreadsheet,
+  ShieldCheck,
+  ShieldAlert,
 } from 'lucide-react';
 import { AnalysisRecord, RequirementSet, User } from '../types';
 import { exportFleetToExcel } from '../utils/exportUtils';
@@ -38,7 +40,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   onDeleteAnalysis,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pass' | 'deviations' | 'gaps'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'signed_off' | 'pass' | 'deviations' | 'gaps'>('all');
   const [selectedSupplier, setSelectedSupplier] = useState<string>('all');
   const [showClearConfirmModal, setShowClearConfirmModal] = useState(false);
   const [deletingAnalysisId, setDeletingAnalysisId] = useState<string | null>(null);
@@ -46,6 +48,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   // Aggregate stats
   const list = Array.isArray(analyses) ? analyses : [];
   const totalRecords = list.length;
+  const totalApproved = list.filter((a) => a && a.status === 'approved').length;
   const totalPass = list.filter((a) => a && (a.deviationCount || 0) === 0 && (a.documentationGapCount || 0) === 0 && (a.passCount || 0) > 0).length;
   const totalDeviations = list.filter((a) => a && (a.deviationCount || 0) > 0).length;
   const totalGaps = list.filter((a) => a && (a.documentationGapCount || 0) > 0 && (a.deviationCount || 0) === 0).length;
@@ -73,6 +76,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
 
     if (!matchesSearch) return false;
     if (selectedSupplier !== 'all' && a.supplierName !== selectedSupplier) return false;
+    if (statusFilter === 'signed_off') return a.status === 'approved';
     if (statusFilter === 'deviations') return (a.deviationCount || 0) > 0;
     if (statusFilter === 'gaps') return (a.documentationGapCount || 0) > 0;
     if (statusFilter === 'pass') return a.status === 'approved' || ((a.deviationCount || 0) === 0 && (a.documentationGapCount || 0) === 0);
@@ -191,9 +195,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
               : 'border-slate-300 hover:border-slate-400 hover:bg-slate-50'
           }`}
         >
-          <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider font-mono">Total Evaluations</span>
+          <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider font-mono">Total Certificates Archived</span>
           <div className="text-2xl font-bold font-mono text-slate-900">{totalRecords}</div>
-          <p className="text-[11px] text-slate-500">All MTC Certificates</p>
+          <p className="text-[11px] text-slate-500 font-medium">All MTC records</p>
         </button>
 
         <button
@@ -205,9 +209,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
               : 'border-slate-300 hover:border-emerald-400 hover:bg-emerald-50'
           }`}
         >
-          <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider font-mono">Conforming</span>
+          <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider font-mono">Conforming Certificates</span>
           <div className="text-2xl font-bold font-mono text-emerald-700">{totalPass}</div>
-          <p className="text-[11px] text-slate-500">Passed all MDS limits</p>
+          <p className="text-[11px] text-slate-500 font-medium">0 deviations across all clauses</p>
         </button>
 
         <button
@@ -219,9 +223,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
               : 'border-slate-300 hover:border-rose-400 hover:bg-rose-50'
           }`}
         >
-          <span className="text-[11px] font-bold text-rose-800 uppercase tracking-wider font-mono">Deviations</span>
+          <span className="text-[11px] font-bold text-rose-800 uppercase tracking-wider font-mono">Certificates with Deviations</span>
           <div className="text-2xl font-bold font-mono text-rose-700">{totalDeviations}</div>
-          <p className="text-[11px] text-slate-500">Out-of-specification</p>
+          <p className="text-[11px] text-slate-500 font-medium">Has 1+ out-of-spec parameters</p>
         </button>
 
         <button
@@ -233,9 +237,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
               : 'border-slate-300 hover:border-amber-400 hover:bg-amber-50'
           }`}
         >
-          <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider font-mono">Documentation Gaps</span>
+          <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider font-mono">Certificates with Missing Docs</span>
           <div className="text-2xl font-bold font-mono text-amber-700">{totalGaps}</div>
-          <p className="text-[11px] text-slate-500">Missing NDE / certs</p>
+          <p className="text-[11px] text-slate-500 font-medium">Missing NDE or test reports</p>
         </button>
       </section>
 
@@ -256,6 +260,20 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
               }`}
             >
               All Records ({analyses.length})
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={statusFilter === 'signed_off'}
+              onClick={() => setStatusFilter('signed_off')}
+              className={`px-3 py-1 rounded-md font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                statusFilter === 'signed_off'
+                  ? 'bg-emerald-700 text-white shadow-xs'
+                  : 'text-emerald-800 hover:text-emerald-900'
+              }`}
+            >
+              <ShieldCheck className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
+              <span>Signed Off ({totalApproved})</span>
             </button>
             <button
               type="button"
@@ -351,7 +369,20 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
             <div className="p-8 text-center space-y-2">
               <FileText className="w-8 h-8 text-slate-400 mx-auto" aria-hidden="true" />
               <p className="text-xs font-bold text-slate-800">No records found in archive</p>
-              <p className="text-[11px] text-slate-500">Try clearing active search filters.</p>
+              <p className="text-[11px] text-slate-500">No records match the active search or filter criteria.</p>
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setStatusFilter('all');
+                    setSelectedSupplier('all');
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 cursor-pointer transition-colors"
+                >
+                  <span>Reset Search & Filters</span>
+                </button>
+              </div>
             </div>
           ) : (
             <table role="table" className="w-full text-left border-collapse min-w-[760px]">
@@ -412,10 +443,17 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
 
                       <td className="py-3 px-3">
                         {isApproved ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold font-mono bg-emerald-100 text-emerald-900 border border-emerald-300">
-                            <CheckCircle2 className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
-                            <span>APPROVED</span>
-                          </span>
+                          <div>
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold font-mono bg-emerald-100 text-emerald-900 border border-emerald-300">
+                              <ShieldCheck className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
+                              <span>SIGNED OFF & APPROVED</span>
+                            </span>
+                            {analysis.approvedByName && (
+                              <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                By {analysis.approvedByName}
+                              </div>
+                            )}
+                          </div>
                         ) : hasDeviations ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold font-mono bg-rose-100 text-rose-900 border border-rose-300">
                             <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
@@ -435,21 +473,40 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                       </td>
 
                       <td className="py-3 px-3 text-[11px] text-slate-500 font-mono">
-                        {new Date(analysis.createdAt).toLocaleDateString()}
+                        <div>{new Date(analysis.createdAt).toLocaleDateString()}</div>
+                        {analysis.approvedAt && (
+                          <div className="text-[10px] text-emerald-700 font-medium font-mono">
+                            Signed: {new Date(analysis.approvedAt).toLocaleDateString()}
+                          </div>
+                        )}
                       </td>
 
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onSelectAnalysis(analysis.id);
-                            }}
-                            className="px-3 py-1 rounded-md text-xs font-semibold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900"
-                          >
-                            Inspect
-                          </button>
+                          {isApproved ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSelectAnalysis(analysis.id);
+                              }}
+                              className="px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 transition-colors cursor-pointer flex items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" />
+                              <span>Inspect Sign-Off</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSelectAnalysis(analysis.id);
+                              }}
+                              className="px-3 py-1 rounded-md text-xs font-semibold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900"
+                            >
+                              Inspect
+                            </button>
+                          )}
                           {onDeleteAnalysis && (
                             <button
                               type="button"
