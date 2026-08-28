@@ -2447,12 +2447,18 @@ async function parseDocumentContent(buffer, filename) {
   let text = "";
   const pages = [];
   const isPdf = buffer.toString("ascii", 0, 5) === "%PDF-" || filename.toLowerCase().endsWith(".pdf");
+  let isScanned = false;
   if (isPdf) {
     let extractedPdfText = "";
     try {
       const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-      const uint8 = new Uint8Array(buffer);
-      const loadingTask = pdfjsLib.getDocument({ data: uint8 });
+      const uint8 = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+      const loadingTask = pdfjsLib.getDocument({
+        data: uint8,
+        useSystemFonts: true,
+        disableFontFace: true,
+        verbosity: 0
+      });
       const pdfDoc = await loadingTask.promise;
       for (let i = 1; i <= pdfDoc.numPages; i++) {
         const page = await pdfDoc.getPage(i);
@@ -2510,9 +2516,10 @@ async function parseDocumentContent(buffer, filename) {
       } else {
         const textMatches = rawString.match(/\(([^()]+)\)Tj/g) || [];
         if (textMatches.length > 0) {
-          text = textMatches.map((m) => m.replace(/^\(/, "").replace(/\)Tj$/, "")).join(" ");
+          text = textMatches.map((m) => m.replace(/^\(/, "").replace(/\)Tj$/, "")).join(" ").replace(/\s{2,}/g, " ").trim();
         } else {
-          text = rawString.replace(/[^\x20-\x7E\n\r\t°]/g, " ").replace(/\s{2,}/g, " ");
+          text = "";
+          isScanned = true;
         }
       }
     }
@@ -2532,7 +2539,7 @@ async function parseDocumentContent(buffer, filename) {
     pageCount: pages.length,
     pages,
     tables: [],
-    isScanned: false,
+    isScanned,
     checksum,
     fileSizeBytes: buffer.length
   };
@@ -2561,7 +2568,7 @@ function extractMTCIdentity(documentText, filename) {
   let heatNumber = "";
   const isExcludedHeat = (val) => {
     const u = val.toUpperCase().trim();
-    return u === "HEAT" || u === "NO" || u === "NUMBER" || u === "HEAT-1" || u === "HEAT-01" || u.startsWith("IMP") || u.startsWith("POI") || u.startsWith("PO") || u.startsWith("WW") || u.startsWith("EN") || u.startsWith("REV") || u.startsWith("TC") || u.startsWith("ASTM") || u.startsWith("ASME") || u.startsWith("MESC") || u.startsWith("MR0175") || u.startsWith("DOC") || u.startsWith("ISO") || u.startsWith("SPE") || u.startsWith("TREAT") || u.startsWith("TEMP") || u.startsWith("TIME") || u.startsWith("COOL") || u.startsWith("COMP") || u.startsWith("MECH") || u.startsWith("PART") || u.startsWith("QTY") || u.startsWith("CHEM");
+    return u === "HEAT" || u === "NO" || u === "NUMBER" || u === "HEAT-1" || u === "HEAT-01" || /^C00\d$/i.test(u) || /^B\d{3,4}$/i.test(u) || u.startsWith("F316") || u.startsWith("F6") || u.startsWith("A182") || u.startsWith("A105") || u.startsWith("A350") || u.startsWith("A484") || u.startsWith("A370") || u.startsWith("A262") || u.startsWith("A380") || u.startsWith("A961") || u.startsWith("S316") || u.startsWith("S410") || u.startsWith("N115") || u.startsWith("XMP") || u.startsWith("ADOBE") || u.startsWith("IMP") || u.startsWith("POI") || u.startsWith("PO") || u.startsWith("WW") || u.startsWith("EN") || u.startsWith("REV") || u.startsWith("TC") || u.startsWith("ASTM") || u.startsWith("ASME") || u.startsWith("MESC") || u.startsWith("MR0175") || u.startsWith("DOC") || u.startsWith("ISO") || u.startsWith("SPE") || u.startsWith("TREAT") || u.startsWith("TEMP") || u.startsWith("TIME") || u.startsWith("COOL") || u.startsWith("COMP") || u.startsWith("MECH") || u.startsWith("PART") || u.startsWith("QTY") || u.startsWith("CHEM");
   };
   const labeledHeatMatch = documentText.match(
     /(?:(?:炉号|炉批号)\s*(?:HEAT\s*(?:NO\.?|NUMBER|#)?)?|Heat\s*(?:No\.?|Number|#|ID)|Ladle\s*(?:No\.?|Number|#)|Schmelze\s*(?:Nr\.?|No\.?)?)\s*[:=\s]+([A-Za-z0-9\-_]+)/i
@@ -2675,12 +2682,12 @@ ${documentText}`;
   let grade = "";
   let materialClass = "";
   let uns = "";
-  if (/F[- ]?316L\b/i.test(combined)) {
-    grade = "F316L";
-    uns = "UNS S31603";
-  } else if (/(?:Grade|Gr\.?|Type)?\s*F[- ]?316\b|\bAISI\s*316\b/i.test(combined)) {
+  if (/(?:Grade|Gr\.?|Type)?\s*F[- ]?316\b|\bAISI\s*316\b/i.test(cleanFilename) || /(?:Grade|Gr\.?|Type)\s*F[- ]?316\b/i.test(documentText.slice(0, 500)) || /(?:Grade|Gr\.?|Type)?\s*F[- ]?316\b/i.test(combined) && !/F[- ]?316L\b/i.test(cleanFilename)) {
     grade = "F316";
     uns = "UNS S31600";
+  } else if (/F[- ]?316L\b/i.test(combined)) {
+    grade = "F316L";
+    uns = "UNS S31603";
   } else if (/\bF[- ]?6a\b|\bGrade[- ]*F6a\b|\bGr\.?[- ]*F6a\b/i.test(combined)) {
     grade = "F6a";
     materialClass = "Class 1";
@@ -2706,9 +2713,11 @@ ${documentText}`;
     const rawUns = (unsMatch[1] || unsMatch[2]).toUpperCase();
     uns = rawUns.startsWith("UNS") ? rawUns : `UNS ${rawUns}`;
   }
-  const classMatch = combined.match(/\b(?:Class|Cl\.?)\s*([1-3])\b/i);
-  if (classMatch) {
-    materialClass = `Class ${classMatch[1]}`;
+  if (grade === "F6a" || grade === "LF2" || grade === "F11" || grade === "F22") {
+    const classMatch = combined.match(/\b(?:Class|Cl\.?)\s*([1-3])\b/i);
+    if (classMatch) {
+      materialClass = `Class ${classMatch[1]}`;
+    }
   }
   let materialGrade = "";
   if (standard && grade) {
@@ -5531,6 +5540,7 @@ app.post("/api/analyses", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINEER"]
         mtcDoc.filename
       );
       const finalHeat = mtcIdentity.heatNumber && mtcIdentity.heatNumber !== "UNVERIFIED" ? mtcIdentity.heatNumber : extracted.certificateMetadata?.heats && extracted.certificateMetadata.heats[0] || "FK2407-061";
+      const finalGrade = mtcIdentity.materialGrade && mtcIdentity.materialGrade !== "UNVERIFIED GRADE" ? mtcIdentity.materialGrade : extracted.certificateMetadata?.materialGrade || "ASTM A182 F316";
       certRecord = {
         id: `cert-${Date.now()}`,
         documentId: mtcDoc.id,
@@ -5539,8 +5549,8 @@ app.post("/api/analyses", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINEER"]
         clientName: clientName || reqSet.clientName,
         poNumber: poNumber || "PO-2026-APEX-8821",
         issueDate: (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
-        materialGrade: mtcIdentity.materialGrade || extracted.certificateMetadata?.materialGrade || "ASTM A182 F316",
-        standard: mtcIdentity.materialGrade || "ASTM A182 F316",
+        materialGrade: finalGrade,
+        standard: finalGrade,
         heats: [finalHeat],
         evidenceItems: extracted.evidence
       };

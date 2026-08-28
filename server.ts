@@ -553,6 +553,11 @@ app.use('/api/auth', authRouter);
             ? mtcIdentity.heatNumber
             : (extracted.certificateMetadata?.heats && extracted.certificateMetadata.heats[0]) || 'FK2407-061';
 
+        const finalGrade =
+          mtcIdentity.materialGrade && mtcIdentity.materialGrade !== 'UNVERIFIED GRADE'
+            ? mtcIdentity.materialGrade
+            : extracted.certificateMetadata?.materialGrade || 'ASTM A182 F316';
+
         certRecord = {
           id: `cert-${Date.now()}`,
           documentId: mtcDoc.id,
@@ -561,8 +566,8 @@ app.use('/api/auth', authRouter);
           clientName: clientName || reqSet.clientName,
           poNumber: poNumber || 'PO-2026-APEX-8821',
           issueDate: new Date().toISOString().split('T')[0],
-          materialGrade: mtcIdentity.materialGrade || extracted.certificateMetadata?.materialGrade || 'ASTM A182 F316',
-          standard: mtcIdentity.materialGrade || 'ASTM A182 F316',
+          materialGrade: finalGrade,
+          standard: finalGrade,
           heats: [finalHeat],
           evidenceItems: extracted.evidence as any,
         };

@@ -84,12 +84,19 @@ export async function parseDocumentContent(
 
   const isPdf = buffer.toString('ascii', 0, 5) === '%PDF-' || filename.toLowerCase().endsWith('.pdf');
 
+  let isScanned = false;
+
   if (isPdf) {
     let extractedPdfText = '';
     try {
       const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
-      const uint8 = new Uint8Array(buffer);
-      const loadingTask = pdfjsLib.getDocument({ data: uint8 });
+      const uint8 = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+      const loadingTask = pdfjsLib.getDocument({
+        data: uint8,
+        useSystemFonts: true,
+        disableFontFace: true,
+        verbosity: 0,
+      });
       const pdfDoc = await loadingTask.promise;
       for (let i = 1; i <= pdfDoc.numPages; i++) {
         const page = await pdfDoc.getPage(i);
@@ -153,14 +160,18 @@ export async function parseDocumentContent(
       if (extractedPdfText.trim().length > 30) {
         text = extractedPdfText.replace(/\s{2,}/g, ' ').trim();
       } else {
-        // Fallback clean ASCII/UTF-8 extraction
+        // Only extract actual text Tj operators from plain strings, never dump raw binary PDF metadata/objects
         const textMatches = rawString.match(/\(([^()]+)\)Tj/g) || [];
         if (textMatches.length > 0) {
           text = textMatches
             .map((m) => m.replace(/^\(/, '').replace(/\)Tj$/, ''))
-            .join(' ');
+            .join(' ')
+            .replace(/\s{2,}/g, ' ')
+            .trim();
         } else {
-          text = rawString.replace(/[^\x20-\x7E\n\r\t°]/g, ' ').replace(/\s{2,}/g, ' ');
+          // Document is scanned image without embed text; do NOT dump raw binary strings or XMP metadata
+          text = '';
+          isScanned = true;
         }
       }
     }
@@ -186,7 +197,7 @@ export async function parseDocumentContent(
     pageCount: pages.length,
     pages,
     tables: [],
-    isScanned: false,
+    isScanned,
     checksum,
     fileSizeBytes: buffer.length,
   };

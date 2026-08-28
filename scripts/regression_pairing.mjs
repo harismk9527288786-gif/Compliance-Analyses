@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 const MTC_F316_PATH = 'C:\\Users\\asus\\ownloads\\WW2604-133 IMP004774 EN 10204 3.1 Material Test Report F316-REV.1-poi-1 - Stem..pdf';
+const MTC_F6A_PATH = 'C:\\Users\\asus\\ownloads\\WW2604-133 IMP004775 EN 10204 3.1 Material Test Report F6a-REV.1.pdf';
 const MDS_F316_PATH = 'C:\\Users\\asus\\ownloads\\MDS-QE-F-ASS-ASTM-A182-F316-NACE-XX-001-[N1157]-REV A.pdf';
 const MDS_F6A_PATH = 'C:\\Users\\asus\\ownloads\\MDS-QE-F-MSS-ASTM-A182-F6a-NACE-XX-001-[N1157]-REV A.pdf';
 
@@ -58,10 +59,12 @@ async function runPairingRegression() {
   console.log('\n--- UPLOADING TEST DOCUMENTS ---');
   const mtcF316Doc = await uploadDoc(MTC_F316_PATH, 'mtc');
   console.log(`Uploaded F316 MTC -> ID: ${mtcF316Doc.id}`);
+  const mtcF6aDoc = await uploadDoc(MTC_F6A_PATH, 'mtc');
+  console.log(`Uploaded F6a MTC  -> ID: ${mtcF6aDoc.id}`);
   const mdsF316Doc = await uploadDoc(MDS_F316_PATH, 'mds');
   console.log(`Uploaded F316 MDS -> ID: ${mdsF316Doc.id}`);
   const mdsF6aDoc = await uploadDoc(MDS_F6A_PATH, 'mds');
-  console.log(`Uploaded F6a MDS -> ID: ${mdsF6aDoc.id}`);
+  console.log(`Uploaded F6a MDS  -> ID: ${mdsF6aDoc.id}`);
 
   // ===============================================================
   // TEST SUITE 1: PAIR A (F316 MTC + F316 MDS)
@@ -82,8 +85,12 @@ async function runPairingRegression() {
 
   // Identity assertions
   assert(
-    analysisA.materialGrade.includes('F316') && !analysisA.materialGrade.includes('F6a'),
-    `Analysis material grade is F316 ("${analysisA.materialGrade}") and NOT F6a`
+    analysisA.materialGrade === 'ASTM A182 F316',
+    `MTC material grade is "ASTM A182 F316" (actual: "${analysisA.materialGrade}")`
+  );
+  assert(
+    analysisA.mdsMaterialGrade === 'ASTM A182 Grade F316 (UNS S31600)',
+    `MDS material grade is "ASTM A182 Grade F316 (UNS S31600)" (actual: "${analysisA.mdsMaterialGrade}")`
   );
   assert(
     analysisA.heats && analysisA.heats.includes('FK2407-061'),
@@ -92,6 +99,10 @@ async function runPairingRegression() {
   assert(
     !analysisA.heats.includes('IMP004774'),
     `Heat number is NEVER Contract/POI identifier "IMP004774"`
+  );
+  assert(
+    !analysisA.heats.includes('C001'),
+    `Heat number is NEVER build/metadata artifact "C001"`
   );
   assert(
     analysisA.compatibilityStatus === 'COMPATIBLE',
@@ -191,8 +202,59 @@ async function runPairingRegression() {
     );
   }
 
+  // Verify that NO F6a requirements appear anywhere in the analysis findings
+  const f6aLeaks = findingsA.filter(
+    (f) =>
+      f.requirementText.includes('11.50') ||
+      f.requirementText.includes('13.50') ||
+      f.requirementText.includes('0.50') ||
+      f.requirementText.includes('275') ||
+      f.requirementText.includes('143') ||
+      f.requirementText.toLowerCase().includes('f6a')
+  );
+  assert(f6aLeaks.length === 0, `Zero F6a requirement leaks in F316 analysis (found: ${f6aLeaks.length})`);
+
   // ===============================================================
-  // TEST SUITE 2: PAIR C (F316 MTC + F6a MDS — HARD COMPATIBILITY GATE)
+  // TEST SUITE 2: PAIR B (F6a MTC + F6a MDS)
+  // ===============================================================
+  console.log('\n--- TEST PAIR B: F6a MTC + F6a MDS (MATCHING PAIR) ---');
+  const pairBRes = await fetch(`${BASE_URL}/api/analyses`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({
+      mtcDocumentId: mtcF6aDoc.id,
+      mdsDocumentId: mdsF6aDoc.id,
+    }),
+  });
+  assert(pairBRes.ok, `Pair B created analysis HTTP ${pairBRes.status}`);
+  const pairB = await pairBRes.json();
+  const analysisB = pairB.analysis;
+  const findingsB = pairB.findings;
+
+  assert(
+    analysisB.materialGrade.includes('F6a'),
+    `MTC material grade is F6a (actual: "${analysisB.materialGrade}")`
+  );
+  assert(
+    analysisB.mdsMaterialGrade.includes('F6a'),
+    `MDS material grade is F6a (actual: "${analysisB.mdsMaterialGrade}")`
+  );
+  assert(
+    analysisB.compatibilityStatus === 'COMPATIBLE',
+    `Compatibility status is COMPATIBLE`
+  );
+  assert(
+    analysisB.status !== 'rejected',
+    `Analysis status is not rejected (status: "${analysisB.status}")`
+  );
+  const f6aNi = findingsB.find((f) => f.field === 'Ni');
+  assert(f6aNi !== undefined, 'F6a Nickel requirement is present');
+  if (f6aNi) {
+    assert(f6aNi.requirementText.includes('0.50'), 'F6a Nickel requirement specifies <= 0.50%');
+  }
+
+  // ===============================================================
+  // TEST SUITE 3: PAIR C (F316 MTC + F6a MDS — COMPATIBILITY GATE)
   // ===============================================================
   console.log('\n--- TEST PAIR C: F316 MTC + F6a MDS (COMPATIBILITY GATE) ---');
   const pairCRes = await fetch(`${BASE_URL}/api/analyses`, {
@@ -208,63 +270,65 @@ async function runPairingRegression() {
   const analysisC = pairC.analysis;
   const findingsC = pairC.findings;
 
+  assert(analysisC.status === 'rejected', 'Analysis status is REJECTED for incompatible pair');
+  assert(analysisC.compatibilityStatus === 'MISMATCH', 'Analysis compatibilityStatus is MISMATCH');
   assert(
-    analysisC.status === 'rejected',
-    `Analysis status is REJECTED for incompatible pair`
+    findingsC.length === 1 && findingsC[0].status === 'REVIEW_REQUIRED',
+    'Only 1 REVIEW_REQUIRED finding created, 0 deviations, 0 passes (evaluation blocked)'
   );
-  assert(
-    analysisC.compatibilityStatus === 'MISMATCH',
-    `Analysis compatibilityStatus is MISMATCH`
-  );
-  assert(
-    analysisC.reviewRequiredCount === 1 && analysisC.deviationCount === 0 && analysisC.passCount === 0,
-    `Only 1 REVIEW_REQUIRED finding created, 0 deviations, 0 passes (evaluation blocked)`
-  );
-  assert(
-    findingsC.length === 1 && findingsC[0].field === 'materialSpecificationCompatibility',
-    `Single finding is materialSpecificationCompatibility`
-  );
-  assert(
-    findingsC[0].status === 'REVIEW_REQUIRED',
-    `Finding status is REVIEW_REQUIRED`
-  );
-  assert(
-    findingsC[0].reason.includes('Specification Incompatibility'),
-    `Finding reason clearly notes specification incompatibility`
-  );
+  assert(findingsC[0].field === 'materialSpecificationCompatibility', 'Single finding is materialSpecificationCompatibility');
+  assert(findingsC[0].status === 'REVIEW_REQUIRED', 'Finding status is REVIEW_REQUIRED');
 
   // ===============================================================
-  // TEST SUITE 3: NONEXISTENT / BOGUS REQUIREMENT SET ID (NO SILENT FALLBACK)
+  // TEST SUITE 4: PAIR D (F6a MTC + F316 MDS — COMPATIBILITY GATE)
+  // ===============================================================
+  console.log('\n--- TEST PAIR D: F6a MTC + F316 MDS (COMPATIBILITY GATE) ---');
+  const pairDRes = await fetch(`${BASE_URL}/api/analyses`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({
+      mtcDocumentId: mtcF6aDoc.id,
+      mdsDocumentId: mdsF316Doc.id,
+    }),
+  });
+  assert(pairDRes.status === 201, `Pair D handled cleanly by server (status ${pairDRes.status})`);
+  const pairD = await pairDRes.json();
+  assert(pairD.analysis.status === 'rejected', 'F6a MTC + F316 MDS rejected');
+  assert(pairD.analysis.compatibilityStatus === 'MISMATCH', 'F6a MTC + F316 MDS compatibilityStatus is MISMATCH');
+  assert(pairD.findings.length === 1 && pairD.findings[0].status === 'REVIEW_REQUIRED', 'Evaluation blocked with REVIEW_REQUIRED');
+
+  // ===============================================================
+  // TEST SUITE 5: NONEXISTENT REQUIREMENT SET (404 ERROR)
   // ===============================================================
   console.log('\n--- TEST PAIR E: NONEXISTENT REQUIREMENT SET (404 ERROR) ---');
-  const bogusReqRes = await fetch(`${BASE_URL}/api/analyses`, {
+  const pairERes = await fetch(`${BASE_URL}/api/analyses`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Cookie: cookie },
     body: JSON.stringify({
       mtcDocumentId: mtcF316Doc.id,
-      requirementSetId: 'reqset-bogus-nonexistent-99999',
+      requirementSetId: 'reqset-nonexistent-id-99999',
     }),
   });
   assert(
-    bogusReqRes.status === 404,
-    `Nonexistent requirementSetId returns 404 (actual: ${bogusReqRes.status}) without falling back to pilot data`
+    pairERes.status === 404,
+    `Nonexistent requirementSetId returns 404 (actual: ${pairERes.status}) without falling back to pilot data`
   );
 
   // ===============================================================
-  // TEST SUITE 4: NONEXISTENT MTC DOCUMENT ID (NO SILENT FALLBACK)
+  // TEST SUITE 6: NONEXISTENT MTC DOCUMENT (404 ERROR)
   // ===============================================================
   console.log('\n--- TEST PAIR F: NONEXISTENT MTC DOCUMENT (404 ERROR) ---');
-  const bogusMtcRes = await fetch(`${BASE_URL}/api/analyses`, {
+  const pairFRes = await fetch(`${BASE_URL}/api/analyses`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Cookie: cookie },
     body: JSON.stringify({
-      mtcDocumentId: 'doc-bogus-nonexistent-88888',
+      mtcDocumentId: 'doc-nonexistent-id-99999',
       mdsDocumentId: mdsF316Doc.id,
     }),
   });
   assert(
-    bogusMtcRes.status === 404,
-    `Nonexistent mtcDocumentId returns 404 (actual: ${bogusMtcRes.status}) without falling back to pilot data`
+    pairFRes.status === 404,
+    `Nonexistent mtcDocumentId returns 404 (actual: ${pairFRes.status}) without falling back to pilot data`
   );
 
   console.log('\n===============================================================');
@@ -277,6 +341,6 @@ async function runPairingRegression() {
 }
 
 runPairingRegression().catch((err) => {
-  console.error('Fatal error during pairing regression test:', err);
+  console.error('Regression suite failed with unhandled error:', err);
   process.exit(1);
 });

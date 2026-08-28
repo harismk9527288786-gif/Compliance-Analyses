@@ -63,6 +63,23 @@ export function extractMTCIdentity(documentText: string, filename: string): MTCI
       u === 'NUMBER' ||
       u === 'HEAT-1' ||
       u === 'HEAT-01' ||
+      /^C00\d$/i.test(u) ||
+      /^B\d{3,4}$/i.test(u) ||
+      u.startsWith('F316') ||
+      u.startsWith('F6') ||
+      u.startsWith('A182') ||
+      u.startsWith('A105') ||
+      u.startsWith('A350') ||
+      u.startsWith('A484') ||
+      u.startsWith('A370') ||
+      u.startsWith('A262') ||
+      u.startsWith('A380') ||
+      u.startsWith('A961') ||
+      u.startsWith('S316') ||
+      u.startsWith('S410') ||
+      u.startsWith('N115') ||
+      u.startsWith('XMP') ||
+      u.startsWith('ADOBE') ||
       u.startsWith('IMP') ||
       u.startsWith('POI') ||
       u.startsWith('PO') ||
@@ -229,12 +246,16 @@ export function extractMDSIdentity(documentText: string, filename: string): MDSI
   let materialClass = '';
   let uns = '';
 
-  if (/F[- ]?316L\b/i.test(combined)) {
-    grade = 'F316L';
-    uns = 'UNS S31603';
-  } else if (/(?:Grade|Gr\.?|Type)?\s*F[- ]?316\b|\bAISI\s*316\b/i.test(combined)) {
+  if (
+    /(?:Grade|Gr\.?|Type)?\s*F[- ]?316\b|\bAISI\s*316\b/i.test(cleanFilename) ||
+    /(?:Grade|Gr\.?|Type)\s*F[- ]?316\b/i.test(documentText.slice(0, 500)) ||
+    (/(?:Grade|Gr\.?|Type)?\s*F[- ]?316\b/i.test(combined) && !/F[- ]?316L\b/i.test(cleanFilename))
+  ) {
     grade = 'F316';
     uns = 'UNS S31600';
+  } else if (/F[- ]?316L\b/i.test(combined)) {
+    grade = 'F316L';
+    uns = 'UNS S31603';
   } else if (/\bF[- ]?6a\b|\bGrade[- ]*F6a\b|\bGr\.?[- ]*F6a\b/i.test(combined)) {
     grade = 'F6a';
     materialClass = 'Class 1';
@@ -263,10 +284,13 @@ export function extractMDSIdentity(documentText: string, filename: string): MDSI
     uns = rawUns.startsWith('UNS') ? rawUns : `UNS ${rawUns}`;
   }
 
-  // Explicit Class check
-  const classMatch = combined.match(/\b(?:Class|Cl\.?)\s*([1-3])\b/i);
-  if (classMatch) {
-    materialClass = `Class ${classMatch[1]}`;
+  // Explicit Class check - only valid for grades that define classes in ASTM specs (e.g. F6a, LF2, F11, F22)
+  // Austenitic stainless steels like F316 / F304 do NOT have material classes.
+  if (grade === 'F6a' || grade === 'LF2' || grade === 'F11' || grade === 'F22') {
+    const classMatch = combined.match(/\b(?:Class|Cl\.?)\s*([1-3])\b/i);
+    if (classMatch) {
+      materialClass = `Class ${classMatch[1]}`;
+    }
   }
 
   // Construct official material grade string
