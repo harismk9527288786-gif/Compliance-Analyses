@@ -61,7 +61,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // Partition analyses into active review queue vs signed-off history
   const list = Array.isArray(analyses) ? analyses : [];
   const signedOffAnalyses = list.filter((a) => a && a.status === 'approved');
-  const activeAnalyses = list.filter((a) => a && a.status !== 'approved');
+  // Rejected analyses are resolved (not pending action) — exclude from active queue to prevent perpetual ACTION REQUIRED state
+  const activeAnalyses = list.filter((a) => a && a.status !== 'approved' && a.status !== 'rejected');
+
 
   // Active queue metrics (signed-off records do NOT alarm active dashboard metrics)
   const activeReviews = activeAnalyses.length;

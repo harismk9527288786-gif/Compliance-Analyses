@@ -196,8 +196,8 @@ app.use('/api/auth', authRouter);
     res.json({ requirementSets: sets, message: 'Standard MDS templates loaded into client library.' });
   });
 
-  // Clear all requirement sets for Tenant
-  app.post('/api/requirements/clear', requireAuth, requireRole(['ADMIN', 'QUALITY_ENGINEER', 'REVIEWER']), (req, res) => {
+  // Clear all requirement sets for Tenant (ADMIN only — destructive operation)
+  app.post('/api/requirements/clear', requireAuth, requireRole(['ADMIN']), (req, res) => {
     const orgId = req.user!.organization_id;
     db.clearAllRequirementSets(orgId);
     db.addAuditEvent(orgId, {
@@ -814,8 +814,8 @@ app.use('/api/auth', authRouter);
     res.json({ analyses: list });
   });
 
-  // Clear all analyses for Tenant
-  app.post('/api/analyses/clear', requireAuth, requireRole(['ADMIN', 'QUALITY_ENGINEER', 'REVIEWER']), (req, res) => {
+  // Clear all analyses for Tenant (ADMIN only — destructive operation)
+  app.post('/api/analyses/clear', requireAuth, requireRole(['ADMIN']), (req, res) => {
     const orgId = req.user!.organization_id;
     db.clearAllAnalyses(orgId);
     db.addAuditEvent(orgId, {
@@ -1081,8 +1081,8 @@ app.use('/api/auth', authRouter);
     }
   });
 
-  // Pilot fixture data helper
-  app.get('/api/pilot-data', requireAuth, (req, res) => {
+  // Pilot fixture data helper (ADMIN only — exposes proprietary spec data)
+  app.get('/api/pilot-data', requireAuth, requireRole(['ADMIN']), (req, res) => {
     res.json({
       mds: PILOT_MDS_REQUIREMENT_SET,
       mtc: PILOT_SUPPLIER_MTC,

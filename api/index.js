@@ -3499,348 +3499,8 @@ ${documentText.slice(0, 15e3)}`;
   return fallbackSupplierEvidenceExtraction(documentText, filename);
 }
 function fallbackSupplierEvidenceExtraction(text, filename) {
-  const combined = `${filename}
-${text}`;
   const identity = extractMTCIdentity(text, filename);
-  const heatNo = identity.heatNumber !== "UNVERIFIED" ? identity.heatNumber : "FK2407-061";
-  const isWW2604 = text.includes("WW2604") || text.includes("FK2407-061") || identity.materialGrade.includes("F316") || identity.heatNumber === "FK2407-061";
-  if (isWW2604) {
-    const evidence = [
-      // Material Grade Statement
-      {
-        id: `ev-mtc-grade-${Date.now()}`,
-        heatNo,
-        category: "general",
-        field: "materialGrade",
-        displayName: "Material Grade Designation",
-        rawValue: "ASTM A182 F316",
-        sourceDocument: filename,
-        sourcePage: 1,
-        snippet: "Material: ASTM A182 F316 (Inspection Certificate EN 10204 3.1)",
-        confidence: "high",
-        extractedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      // Chemical Composition (Page 1)
-      {
-        id: `ev-mtc-c-${Date.now()}`,
-        heatNo,
-        category: "chemical",
-        field: "C",
-        displayName: "Carbon (C)",
-        rawValue: "0.018 %",
-        normalizedValue: 0.018,
-        unit: "%",
-        sourceDocument: filename,
-        sourcePage: 1,
-        snippet: `Heat ${heatNo} Chemical Analysis: C: 0.018%`,
-        confidence: "high",
-        extractedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      {
-        id: `ev-mtc-mn-${Date.now()}`,
-        heatNo,
-        category: "chemical",
-        field: "Mn",
-        displayName: "Manganese (Mn)",
-        rawValue: "0.950 %",
-        normalizedValue: 0.95,
-        unit: "%",
-        sourceDocument: filename,
-        sourcePage: 1,
-        snippet: `Heat ${heatNo} Chemical Analysis: Mn: 0.950%`,
-        confidence: "high",
-        extractedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      {
-        id: `ev-mtc-p-${Date.now()}`,
-        heatNo,
-        category: "chemical",
-        field: "P",
-        displayName: "Phosphorus (P)",
-        rawValue: "0.036 %",
-        normalizedValue: 0.036,
-        unit: "%",
-        sourceDocument: filename,
-        sourcePage: 1,
-        snippet: `Heat ${heatNo} Chemical Analysis: P: 0.036%`,
-        confidence: "high",
-        extractedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      {
-        id: `ev-mtc-s-${Date.now()}`,
-        heatNo,
-        category: "chemical",
-        field: "S",
-        displayName: "Sulfur (S)",
-        rawValue: "0.0008 %",
-        normalizedValue: 8e-4,
-        unit: "%",
-        sourceDocument: filename,
-        sourcePage: 1,
-        snippet: `Heat ${heatNo} Chemical Analysis: S: 0.0008%`,
-        confidence: "high",
-        extractedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      {
-        id: `ev-mtc-si-${Date.now()}`,
-        heatNo,
-        category: "chemical",
-        field: "Si",
-        displayName: "Silicon (Si)",
-        rawValue: "0.367 %",
-        normalizedValue: 0.367,
-        unit: "%",
-        sourceDocument: filename,
-        sourcePage: 1,
-        snippet: `Heat ${heatNo} Chemical Analysis: Si: 0.367%`,
-        confidence: "high",
-        extractedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      {
-        id: `ev-mtc-ni-${Date.now()}`,
-        heatNo,
-        category: "chemical",
-        field: "Ni",
-        displayName: "Nickel (Ni)",
-        rawValue: "10.070 %",
-        normalizedValue: 10.07,
-        unit: "%",
-        sourceDocument: filename,
-        sourcePage: 1,
-        snippet: `Heat ${heatNo} Chemical Analysis: Ni: 10.070%`,
-        confidence: "high",
-        extractedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      {
-        id: `ev-mtc-cr-${Date.now()}`,
-        heatNo,
-        category: "chemical",
-        field: "Cr",
-        displayName: "Chromium (Cr)",
-        rawValue: "16.320 %",
-        normalizedValue: 16.32,
-        unit: "%",
-        sourceDocument: filename,
-        sourcePage: 1,
-        snippet: `Heat ${heatNo} Chemical Analysis: Cr: 16.320%`,
-        confidence: "high",
-        extractedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      {
-        id: `ev-mtc-mo-${Date.now()}`,
-        heatNo,
-        category: "chemical",
-        field: "Mo",
-        displayName: "Molybdenum (Mo)",
-        rawValue: "2.037 %",
-        normalizedValue: 2.037,
-        unit: "%",
-        sourceDocument: filename,
-        sourcePage: 1,
-        snippet: `Heat ${heatNo} Chemical Analysis: Mo: 2.037%`,
-        confidence: "high",
-        extractedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      {
-        id: `ev-mtc-n-${Date.now()}`,
-        heatNo,
-        category: "chemical",
-        field: "N",
-        displayName: "Nitrogen (N)",
-        rawValue: "0.052 %",
-        normalizedValue: 0.052,
-        unit: "%",
-        sourceDocument: filename,
-        sourcePage: 1,
-        snippet: `Heat ${heatNo} Chemical Analysis: N: 0.052%`,
-        confidence: "high",
-        extractedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      {
-        id: `ev-mtc-ni2mo-${Date.now()}`,
-        heatNo,
-        category: "chemical",
-        field: "Ni+2Mo",
-        displayName: "Ni + 2Mo",
-        rawValue: "14.144",
-        normalizedValue: 14.144,
-        sourceDocument: filename,
-        sourcePage: 1,
-        snippet: `Heat ${heatNo} Analysis: Ni + 2Mo = 14.144`,
-        confidence: "high",
-        extractedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      {
-        id: `ev-mtc-pren-${Date.now()}`,
-        heatNo,
-        category: "chemical",
-        field: "PREN",
-        displayName: "Pitting Resistance Equivalent (PREN)",
-        rawValue: "23.87",
-        normalizedValue: 23.87,
-        sourceDocument: filename,
-        sourcePage: 1,
-        snippet: `Heat ${heatNo} Analysis: PREN = 23.87`,
-        confidence: "high",
-        extractedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      // Hardness (Page 2)
-      {
-        id: `ev-mtc-hard-${Date.now()}`,
-        heatNo,
-        category: "hardness",
-        field: "hardness",
-        displayName: "Hardness (HBW / HRC)",
-        rawValue: "237 HBW",
-        normalizedValue: 237,
-        unit: "HBW",
-        sourceDocument: filename,
-        sourcePage: 2,
-        snippet: `Hardness Test Heat ${heatNo}: 237 HBW (indent readings: 173, 175, 179 HBW)`,
-        confidence: "high",
-        extractedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      // Heat Treatment (Page 2)
-      {
-        id: `ev-mtc-ht-${Date.now()}`,
-        heatNo,
-        category: "heat_treatment",
-        field: "heatTreatmentCondition",
-        displayName: "Heat Treatment Condition",
-        rawValue: "Solution Annealed, 1040\xB0C, 2h, Water Cooling",
-        sourceDocument: filename,
-        sourcePage: 2,
-        snippet: `Heat Treatment: Solution Annealed, 1040\xB0C, 2h, Water Cooling`,
-        confidence: "high",
-        extractedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      // Mechanical Properties (Page 2)
-      {
-        id: `ev-mtc-ts-${Date.now()}`,
-        heatNo,
-        category: "mechanical",
-        field: "tensileStrength",
-        displayName: "Tensile Strength (Rm)",
-        rawValue: "523 MPa",
-        normalizedValue: 523,
-        unit: "MPa",
-        sourceDocument: filename,
-        sourcePage: 2,
-        snippet: `Tensile Test Heat ${heatNo}: Rm = 523 MPa`,
-        confidence: "high",
-        extractedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      {
-        id: `ev-mtc-ys-${Date.now()}`,
-        heatNo,
-        category: "mechanical",
-        field: "yieldStrength",
-        displayName: "Yield Strength (0.2% Offset)",
-        rawValue: "232 MPa",
-        normalizedValue: 232,
-        unit: "MPa",
-        sourceDocument: filename,
-        sourcePage: 2,
-        snippet: `Tensile Test Heat ${heatNo}: Rp0.2 = 232 MPa`,
-        confidence: "high",
-        extractedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      {
-        id: `ev-mtc-el-${Date.now()}`,
-        heatNo,
-        category: "mechanical",
-        field: "elongation",
-        displayName: "Elongation (A5)",
-        rawValue: "47 %",
-        normalizedValue: 47,
-        unit: "%",
-        sourceDocument: filename,
-        sourcePage: 2,
-        snippet: `Tensile Test Heat ${heatNo}: A = 47%`,
-        confidence: "high",
-        extractedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      {
-        id: `ev-mtc-roa-${Date.now()}`,
-        heatNo,
-        category: "mechanical",
-        field: "reductionOfArea",
-        displayName: "Reduction of Area (Z)",
-        rawValue: "68 %",
-        normalizedValue: 68,
-        unit: "%",
-        sourceDocument: filename,
-        sourcePage: 2,
-        snippet: `Tensile Test Heat ${heatNo}: Z = 68%`,
-        confidence: "high",
-        extractedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      // NDE & Certification (Page 3)
-      {
-        id: `ev-mtc-vis-${Date.now()}`,
-        heatNo,
-        category: "nde",
-        field: "visualExamination",
-        displayName: "Visual Inspection",
-        rawValue: "100% accessible forged surfaces visual examination satisfactory",
-        sourceDocument: filename,
-        sourcePage: 3,
-        snippet: "Visual examination: 100% accessible forged surfaces free of defects",
-        confidence: "high",
-        extractedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      {
-        id: `ev-mtc-personnel-${Date.now()}`,
-        heatNo,
-        category: "nde",
-        field: "ndePersonnelQualification",
-        displayName: "NDE Personnel Qualification",
-        rawValue: "NDE personnel Level II/III qualification certified",
-        sourceDocument: filename,
-        sourcePage: 3,
-        snippet: "NDE personnel qualified per ISO 9712 / EN 473 Level II/III",
-        confidence: "high",
-        extractedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      {
-        id: `ev-mtc-weld-${Date.now()}`,
-        heatNo,
-        category: "certification",
-        field: "weldRepair",
-        displayName: "Weld Repair Prohibition",
-        rawValue: "Without weld repair",
-        sourceDocument: filename,
-        sourcePage: 3,
-        snippet: "Material manufactured without weld repair",
-        confidence: "high",
-        extractedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      {
-        id: `ev-mtc-31-${Date.now()}`,
-        heatNo,
-        category: "certification",
-        field: "en10204Type",
-        displayName: "EN 10204 Certification",
-        rawValue: "3.1",
-        sourceDocument: filename,
-        sourcePage: 3,
-        snippet: "Inspection Certificate EN 10204 Type 3.1",
-        confidence: "high",
-        extractedAt: (/* @__PURE__ */ new Date()).toISOString()
-      }
-    ];
-    return {
-      certificateMetadata: {
-        mtcNumber: identity.mtcNumber || "WW2604133-3",
-        supplierName: identity.supplierName || "Wenzhou Winway Mechanical & Electrical Equipment Co., Ltd",
-        materialGrade: "ASTM A182 F316",
-        standard: "ASTM A182 F316",
-        heats: [heatNo],
-        en10204Type: "3.1"
-      },
-      evidence
-    };
-  }
+  const heatNo = identity.heatNumber !== "UNVERIFIED" ? identity.heatNumber : "UNVERIFIED";
   return extractGenericMTCEvidenceFromText(text, filename, identity);
 }
 function extractGenericMTCEvidenceFromText(text, filename, identity) {
@@ -3910,11 +3570,14 @@ function parseEngineeringValue(raw) {
   }
   const numVal = parseFloat(match[2]);
   if (isNaN(numVal)) return null;
+  const rawOp = (match[1] || "").trim();
+  const relationalOperator = rawOp === "<" || rawOp === ">" || rawOp === "<=" || rawOp === ">=" ? rawOp : void 0;
   let unit = (match[3] || "").trim();
   return {
     value: numVal,
     unit: normalizeUnitString(unit),
-    originalText: str
+    originalText: str,
+    relationalOperator
   };
 }
 function normalizeUnitString(unit) {
@@ -3982,13 +3645,16 @@ function convertValue(val, sourceUnit, targetUnit) {
 
 // src/engine/ce.ts
 function calculateCarbonEquivalent(chemistry, maxLimit = 0.43, reportedCE) {
-  const c = chemistry.C || 0;
-  const mn = chemistry.Mn || 0;
-  const cr = chemistry.Cr || 0;
-  const mo = chemistry.Mo || 0;
-  const v = chemistry.V || 0;
-  const ni = chemistry.Ni || 0;
-  const cu = chemistry.Cu || 0;
+  const missingCriticalElements = [];
+  if (chemistry.C === void 0 || chemistry.C === null) missingCriticalElements.push("C");
+  if (chemistry.Mn === void 0 || chemistry.Mn === null) missingCriticalElements.push("Mn");
+  const c = chemistry.C ?? 0;
+  const mn = chemistry.Mn ?? 0;
+  const cr = chemistry.Cr ?? 0;
+  const mo = chemistry.Mo ?? 0;
+  const v = chemistry.V ?? 0;
+  const ni = chemistry.Ni ?? 0;
+  const cu = chemistry.Cu ?? 0;
   const mnPart = mn / 6;
   const crMoVPart = (cr + mo + v) / 5;
   const niCuPart = (ni + cu) / 15;
@@ -3996,7 +3662,7 @@ function calculateCarbonEquivalent(chemistry, maxLimit = 0.43, reportedCE) {
   const calculatedCE = Math.round(rawCE * 1e3) / 1e3;
   const formula = "CE = C + Mn/6 + (Cr + Mo + V)/5 + (Ni + Cu)/15";
   const breakdown = `${c.toFixed(3)} + (${mn.toFixed(3)}/6) + ((${cr.toFixed(3)}+${mo.toFixed(3)}+${v.toFixed(3)})/5) + ((${ni.toFixed(3)}+${cu.toFixed(3)})/15) = ${calculatedCE.toFixed(3)}`;
-  const isCompliantWithLimit = calculatedCE <= maxLimit;
+  const isCompliantWithLimit = missingCriticalElements.length === 0 ? calculatedCE <= maxLimit : false;
   let discrepancyWithReported = void 0;
   let isDiscrepancySignificant = false;
   if (reportedCE !== void 0 && !isNaN(reportedCE)) {
@@ -4128,6 +3794,15 @@ function evaluateMinOperator(analysisId, req, evidence, heatNo) {
       evidence,
       heatNo,
       `Could not parse numeric value from supplier evidence: "${evidence.rawValue}"`
+    );
+  }
+  if (parsed.relationalOperator === "<" || parsed.relationalOperator === "<=") {
+    return createReviewRequiredFinding(
+      analysisId,
+      req,
+      evidence,
+      heatNo,
+      `Supplier evidence states value is less than ${parsed.value} ${req.unit || ""}, which cannot confirm minimum of ${reqMin} ${req.unit || ""}. Explicit test value required.`
     );
   }
   const normalizedVal = req.unit ? convertValue(parsed.value, parsed.unit || req.unit, req.unit) : parsed.value;
@@ -4280,7 +3955,8 @@ function evaluateMatchOperator(analysisId, req, evidence, heatNo) {
   const matchesAnyOption = targetOptions.some(
     (opt) => opt.length > 2 && (cleanEvidence.includes(opt) || opt.includes(cleanEvidence))
   );
-  let isMatch = cleanTarget.length > 1 && (cleanEvidence.includes(cleanTarget) || cleanTarget.includes(cleanEvidence)) || matchesAnyOption || rawEv.includes("pass") || rawEv.includes("conforms") || rawEv.includes("satisfactory") || rawEv.includes("3.1") && reqTarget.includes("3.1") || rawEv.includes("nace") && reqTarget.includes("nace");
+  let isMatch = cleanTarget.length > 1 && (cleanEvidence.includes(cleanTarget) || cleanTarget.includes(cleanEvidence)) || matchesAnyOption || // Only allow generic pass-language if the requirement itself is asking for a generic conformity statement
+  reqTarget.includes("pass") && rawEv.includes("pass") || reqTarget.includes("conforms") && rawEv.includes("conforms") || reqTarget.includes("3.1") && rawEv.includes("3.1") || reqTarget.includes("nace") && rawEv.includes("nace");
   if (req.field === "heatTreatmentCondition") {
     const isSolutionAnneal = rawEv.includes("solution") || rawEv.includes("water cool");
     const requiresSolutionAnneal = reqTarget.includes("solution");
@@ -4367,7 +4043,23 @@ function evaluateRequiredOperator(analysisId, req, evidence, heatNo) {
 function evaluateForbiddenOperator(analysisId, req, evidence, heatNo) {
   const raw = String(evidence.rawValue || "").trim().toLowerCase();
   const forbiddenPhrases = ["repaired", "weld repaired", "defect repaired", "welding performed"];
-  const safePhrases = ["no weld repair", "without weld repair", "none", "nil", "not permitted", "no welding"];
+  const safePhrases = [
+    "no weld repair",
+    "without weld repair",
+    "none",
+    "nil",
+    "not permitted",
+    "no welding",
+    "not repaired",
+    "not weld repaired",
+    "no repair",
+    "unrepaired",
+    "repair: none",
+    "repair: nil",
+    "weld repair: none",
+    "weld repair: nil",
+    "no defect repair"
+  ];
   const containsForbidden = forbiddenPhrases.some((p) => raw.includes(p)) && !safePhrases.some((p) => raw.includes(p));
   const status = containsForbidden ? "DEVIATION" : "PASS";
   const severity = containsForbidden ? "critical" : "info";
@@ -4414,6 +4106,36 @@ function evaluateAggregateOperator(analysisId, req, cert, evidence, heatNo) {
   const reportedCE = reportedParsed ? reportedParsed.value : void 0;
   const maxLimit = req.maxValue ?? 0.43;
   const ceResult = calculateCarbonEquivalent(chemistry, maxLimit, reportedCE);
+  if (ceResult.missingCriticalElements && ceResult.missingCriticalElements.length > 0) {
+    const missingList = ceResult.missingCriticalElements.join(", ");
+    return {
+      id: `finding-${req.id}-${heatNo || "gen"}-${Date.now()}`,
+      analysisId,
+      requirementId: req.id,
+      evidenceId: evidence.id,
+      category: req.category,
+      field: req.field,
+      displayName: req.displayName,
+      heatNo,
+      requirementText: `Max CE ${maxLimit} (IIW formula)`,
+      requiredMax: maxLimit,
+      requirementClause: req.clauseReference,
+      requirementSourceDoc: req.sourceDocument,
+      requirementSourcePage: req.sourcePage,
+      supplierRawValue: evidence.rawValue,
+      supplierEvidenceDoc: evidence.sourceDocument,
+      supplierEvidencePage: evidence.sourcePage,
+      supplierSnippet: evidence.snippet,
+      confidence: "low",
+      operator: "AGGREGATE",
+      calculatedComparison: `CE calculation incomplete \u2014 missing elements: ${missingList}`,
+      status: "DOCUMENTATION_GAP",
+      severity: "critical",
+      reason: `Carbon Equivalent cannot be verified: mandatory element(s) [${missingList}] were not identified in the submitted MTC chemistry data. Submit complete chemical analysis report.`,
+      metallurgicalExplanation: `Formula: ${ceResult.formula}. Missing mandatory elements: ${missingList}. Cannot compute CE without these values.`,
+      isReviewed: false
+    };
+  }
   const isPass = ceResult.isCompliantWithLimit;
   const status = isPass ? "PASS" : "DEVIATION";
   const severity = isPass ? "info" : "major";
@@ -5274,7 +4996,7 @@ app.post("/api/requirements/templates", requireAuth, requireRole(["ADMIN", "QUAL
   const sets = db.loadStandardTemplatesForOrg(orgId, req.user);
   res.json({ requirementSets: sets, message: "Standard MDS templates loaded into client library." });
 });
-app.post("/api/requirements/clear", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINEER", "REVIEWER"]), (req, res) => {
+app.post("/api/requirements/clear", requireAuth, requireRole(["ADMIN"]), (req, res) => {
   const orgId = req.user.organization_id;
   db.clearAllRequirementSets(orgId);
   db.addAuditEvent(orgId, {
@@ -5805,7 +5527,7 @@ app.get("/api/analyses", requireAuth, (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.json({ analyses: list });
 });
-app.post("/api/analyses/clear", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINEER", "REVIEWER"]), (req, res) => {
+app.post("/api/analyses/clear", requireAuth, requireRole(["ADMIN"]), (req, res) => {
   const orgId = req.user.organization_id;
   db.clearAllAnalyses(orgId);
   db.addAuditEvent(orgId, {
@@ -6027,7 +5749,7 @@ app.post("/api/test-suite/run", requireAuth, requireRole(["ADMIN", "QUALITY_ENGI
     res.status(500).json({ error: e.message });
   }
 });
-app.get("/api/pilot-data", requireAuth, (req, res) => {
+app.get("/api/pilot-data", requireAuth, requireRole(["ADMIN"]), (req, res) => {
   res.json({
     mds: PILOT_MDS_REQUIREMENT_SET,
     mtc: PILOT_SUPPLIER_MTC

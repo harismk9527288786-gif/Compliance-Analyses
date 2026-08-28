@@ -7,11 +7,15 @@ export interface ParsedNumericValue {
   value: number;
   unit: string;
   originalText: string;
+  /** Relational operator captured from the raw value string, e.g. '<', '>', '<=', '>=' */
+  relationalOperator?: '<' | '>' | '<=' | '>=';
 }
 
 /**
  * Extracts a numeric value and its unit from a raw string.
- * Example: "312 MPa" -> { value: 312, unit: "MPa", originalText: "312 MPa" }
+ * Preserves any relational operator prefix (< > <= >=) so callers can apply
+ * correct boundary logic instead of treating e.g. "< 250 MPa" as "= 250 MPa".
+ * Example: "< 312 MPa" -> { value: 312, unit: "MPa", relationalOperator: '<', originalText: "< 312 MPa" }
  */
 export function parseEngineeringValue(raw: string | number | undefined | null): ParsedNumericValue | null {
   if (raw === undefined || raw === null) return null;
@@ -22,8 +26,7 @@ export function parseEngineeringValue(raw: string | number | undefined | null): 
   const str = String(raw).trim();
   if (!str) return null;
 
-  // Handle standard decimal numbers with optional signs and units
-  // Matches e.g. "910 °C", "312.5 MPa", "29%", "<0.015", ">= 250"
+  // Capture optional relational operator prefix
   const match = str.match(/^([<>]=?|\b)?\s*([+-]?\d+(?:\.\d+)?)\s*([°a-zA-Z/%³²\-_0-9]+)?/);
   if (!match) {
     const numOnly = parseFloat(str.replace(/[^0-9.-]/g, ''));
@@ -36,13 +39,20 @@ export function parseEngineeringValue(raw: string | number | undefined | null): 
   const numVal = parseFloat(match[2]);
   if (isNaN(numVal)) return null;
 
+  const rawOp = (match[1] || '').trim();
+  const relationalOperator = (rawOp === '<' || rawOp === '>' || rawOp === '<=' || rawOp === '>=' )
+    ? rawOp as '<' | '>' | '<=' | '>='
+    : undefined;
+
   let unit = (match[3] || '').trim();
   return {
     value: numVal,
     unit: normalizeUnitString(unit),
     originalText: str,
+    relationalOperator,
   };
 }
+
 
 /**
  * Normalizes unit string representations to standard forms

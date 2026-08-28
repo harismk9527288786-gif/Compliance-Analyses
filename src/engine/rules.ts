@@ -177,6 +177,18 @@ function evaluateMinOperator(
     );
   }
 
+  // If supplier value carries an explicit 'less-than' operator (e.g. "< 250 MPa"),
+  // the value is strictly below the stated number — cannot confirm it meets minimum.
+  if (parsed.relationalOperator === '<' || parsed.relationalOperator === '<=') {
+    return createReviewRequiredFinding(
+      analysisId,
+      req,
+      evidence,
+      heatNo,
+      `Supplier evidence states value is less than ${parsed.value} ${req.unit || ''}, which cannot confirm minimum of ${reqMin} ${req.unit || ''}. Explicit test value required.`
+    );
+  }
+
   const normalizedVal = req.unit ? convertValue(parsed.value, parsed.unit || req.unit, req.unit) : parsed.value;
   const isPass = normalizedVal >= reqMin;
 
@@ -216,6 +228,7 @@ function evaluateMinOperator(
     reason,
     isReviewed: false,
   };
+
 }
 
 function evaluateMaxOperator(
@@ -367,11 +380,12 @@ function evaluateMatchOperator(
   let isMatch =
     (cleanTarget.length > 1 && (cleanEvidence.includes(cleanTarget) || cleanTarget.includes(cleanEvidence))) ||
     matchesAnyOption ||
-    rawEv.includes('pass') ||
-    rawEv.includes('conforms') ||
-    rawEv.includes('satisfactory') ||
-    (rawEv.includes('3.1') && reqTarget.includes('3.1')) ||
-    (rawEv.includes('nace') && reqTarget.includes('nace'));
+    // Only allow generic pass-language if the requirement itself is asking for a generic conformity statement
+    (reqTarget.includes('pass') && rawEv.includes('pass')) ||
+    (reqTarget.includes('conforms') && rawEv.includes('conforms')) ||
+    (reqTarget.includes('3.1') && rawEv.includes('3.1')) ||
+    (reqTarget.includes('nace') && rawEv.includes('nace'));
+
 
   // Strict metallurgical verification for Heat Treatment Condition
   if (req.field === 'heatTreatmentCondition') {
@@ -492,9 +506,14 @@ function evaluateForbiddenOperator(
 ): ComplianceFinding {
   const raw = String(evidence.rawValue || '').trim().toLowerCase();
   const forbiddenPhrases = ['repaired', 'weld repaired', 'defect repaired', 'welding performed'];
-  const safePhrases = ['no weld repair', 'without weld repair', 'none', 'nil', 'not permitted', 'no welding'];
+  const safePhrases = [
+    'no weld repair', 'without weld repair', 'none', 'nil', 'not permitted', 'no welding',
+    'not repaired', 'not weld repaired', 'no repair', 'unrepaired', 'repair: none',
+    'repair: nil', 'weld repair: none', 'weld repair: nil', 'no defect repair',
+  ];
 
   const containsForbidden = forbiddenPhrases.some((p) => raw.includes(p)) && !safePhrases.some((p) => raw.includes(p));
+
 
   const status: FindingStatus = containsForbidden ? 'DEVIATION' : 'PASS';
   const severity: FindingSeverity = containsForbidden ? 'critical' : 'info';
@@ -556,6 +575,39 @@ function evaluateAggregateOperator(
 
   const ceResult = calculateCarbonEquivalent(chemistry, maxLimit, reportedCE);
 
+  // If critical elements (C, Mn) were missing from the MTC chemistry,
+  // CE cannot be reliably calculated — return DOCUMENTATION_GAP instead of a fabricated PASS
+  if (ceResult.missingCriticalElements && ceResult.missingCriticalElements.length > 0) {
+    const missingList = ceResult.missingCriticalElements.join(', ');
+    return {
+      id: `finding-${req.id}-${heatNo || 'gen'}-${Date.now()}`,
+      analysisId,
+      requirementId: req.id,
+      evidenceId: evidence.id,
+      category: req.category,
+      field: req.field,
+      displayName: req.displayName,
+      heatNo,
+      requirementText: `Max CE ${maxLimit} (IIW formula)`,
+      requiredMax: maxLimit,
+      requirementClause: req.clauseReference,
+      requirementSourceDoc: req.sourceDocument,
+      requirementSourcePage: req.sourcePage,
+      supplierRawValue: evidence.rawValue,
+      supplierEvidenceDoc: evidence.sourceDocument,
+      supplierEvidencePage: evidence.sourcePage,
+      supplierSnippet: evidence.snippet,
+      confidence: 'low',
+      operator: 'AGGREGATE',
+      calculatedComparison: `CE calculation incomplete — missing elements: ${missingList}`,
+      status: 'DOCUMENTATION_GAP',
+      severity: 'critical',
+      reason: `Carbon Equivalent cannot be verified: mandatory element(s) [${missingList}] were not identified in the submitted MTC chemistry data. Submit complete chemical analysis report.`,
+      metallurgicalExplanation: `Formula: ${ceResult.formula}. Missing mandatory elements: ${missingList}. Cannot compute CE without these values.`,
+      isReviewed: false,
+    };
+  }
+
   const isPass = ceResult.isCompliantWithLimit;
   const status: FindingStatus = isPass ? 'PASS' : 'DEVIATION';
   const severity: FindingSeverity = isPass ? 'info' : 'major';
@@ -601,6 +653,7 @@ function evaluateAggregateOperator(
     isReviewed: false,
   };
 }
+
 
 function createDocumentationGapFinding(
   analysisId: string,

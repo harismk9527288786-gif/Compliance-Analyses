@@ -41,14 +41,20 @@ export function calculateCarbonEquivalent(
   chemistry: ChemistryElements,
   maxLimit: number = 0.43,
   reportedCE?: number
-): CECalculationResult {
-  const c = chemistry.C || 0;
-  const mn = chemistry.Mn || 0;
-  const cr = chemistry.Cr || 0;
-  const mo = chemistry.Mo || 0;
-  const v = chemistry.V || 0;
-  const ni = chemistry.Ni || 0;
-  const cu = chemistry.Cu || 0;
+): CECalculationResult & { missingCriticalElements: string[] } {
+  // Track which critical elements are missing (not present in chemistry)
+  // C and Mn are mandatory for the IIW formula — missing values must NOT be treated as 0
+  const missingCriticalElements: string[] = [];
+  if (chemistry.C === undefined || chemistry.C === null) missingCriticalElements.push('C');
+  if (chemistry.Mn === undefined || chemistry.Mn === null) missingCriticalElements.push('Mn');
+
+  const c  = chemistry.C  ?? 0;
+  const mn = chemistry.Mn ?? 0;
+  const cr = chemistry.Cr ?? 0;
+  const mo = chemistry.Mo ?? 0;
+  const v  = chemistry.V  ?? 0;
+  const ni = chemistry.Ni ?? 0;
+  const cu = chemistry.Cu ?? 0;
 
   const mnPart = mn / 6;
   const crMoVPart = (cr + mo + v) / 5;
@@ -60,7 +66,11 @@ export function calculateCarbonEquivalent(
   const formula = 'CE = C + Mn/6 + (Cr + Mo + V)/5 + (Ni + Cu)/15';
   const breakdown = `${c.toFixed(3)} + (${mn.toFixed(3)}/6) + ((${cr.toFixed(3)}+${mo.toFixed(3)}+${v.toFixed(3)})/5) + ((${ni.toFixed(3)}+${cu.toFixed(3)})/15) = ${calculatedCE.toFixed(3)}`;
 
-  const isCompliantWithLimit = calculatedCE <= maxLimit;
+  // If critical elements are missing, CE compliance cannot be determined
+  // Callers should check missingCriticalElements and return DOCUMENTATION_GAP
+  const isCompliantWithLimit = missingCriticalElements.length === 0
+    ? calculatedCE <= maxLimit
+    : false; // Cannot determine compliance without C or Mn
 
   let discrepancyWithReported: number | undefined = undefined;
   let isDiscrepancySignificant = false;
@@ -78,6 +88,7 @@ export function calculateCarbonEquivalent(
     breakdown,
     isCompliantWithLimit,
     maxLimit,
+
     reportedCE,
     discrepancyWithReported,
     isDiscrepancySignificant,

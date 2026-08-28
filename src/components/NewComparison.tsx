@@ -70,9 +70,11 @@ export const NewComparison: React.FC<NewComparisonProps> = ({
     setErrorMsg(null);
     setCurrentStepText(processingSteps[0]);
 
+    let stepInterval: ReturnType<typeof setInterval> | null = null;
+
     try {
       let stepIdx = 0;
-      const stepInterval = setInterval(() => {
+      stepInterval = setInterval(() => {
         stepIdx = (stepIdx + 1) % processingSteps.length;
         setCurrentStepText(processingSteps[stepIdx]);
       }, 800);
@@ -156,8 +158,6 @@ export const NewComparison: React.FC<NewComparisonProps> = ({
         body: JSON.stringify(payload),
       });
 
-      clearInterval(stepInterval);
-
       if (!analysisRes.ok) {
         const err = await analysisRes.json();
         throw new Error(formatErrorMessage(err.error || err, 'Verification engine encountered a processing error.'));
@@ -168,8 +168,15 @@ export const NewComparison: React.FC<NewComparisonProps> = ({
     } catch (e: any) {
       setIsProcessing(false);
       setErrorMsg(formatErrorMessage(e, 'Verification could not proceed due to an unexpected parsing error.'));
+    } finally {
+      // Always clear the animation interval — prevents memory leak on error or cancel
+      if (stepInterval !== null) {
+        clearInterval(stepInterval);
+        stepInterval = null;
+      }
     }
   };
+
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 w-full max-w-full overflow-x-hidden">
