@@ -551,6 +551,9 @@ app.use('/api/auth', authRouter);
 
           db.setAnalysis(orgId, analysisId, unverifiedAnalysis);
           db.setFindings(orgId, analysisId, [finding]);
+          await db.flushWrites();
+          const totalInOrg = db.getAnalyses(orgId).length;
+          console.log(`[TRACE-1 CREATE UNVERIFIED] Analysis created: id=${analysisId}, orgId=${orgId}, status=${unverifiedAnalysis.status}, totalOrgInDb=${totalInOrg}`);
           return res.status(201).json({ analysis: unverifiedAnalysis, findings: [finding] });
         }
 
@@ -663,6 +666,10 @@ app.use('/api/auth', authRouter);
 
         db.setAnalysis(orgId, analysisId, mismatchAnalysis);
         db.setFindings(orgId, analysisId, [mismatchFinding]);
+        await db.flushWrites();
+
+        const totalInOrg = db.getAnalyses(orgId).length;
+        console.log(`[TRACE-1 CREATE MISMATCH] Analysis created: id=${analysisId}, orgId=${orgId}, status=${mismatchAnalysis.status}, totalOrgInDb=${totalInOrg}`);
 
         return res.status(201).json({
           analysis: mismatchAnalysis,
@@ -783,6 +790,11 @@ app.use('/api/auth', authRouter);
         details: { passCount, deviationCount, documentationGapCount, total: findings.length },
       });
 
+      await db.flushWrites();
+
+      const totalInOrg = db.getAnalyses(orgId).length;
+      console.log(`[TRACE-1 CREATE] Analysis created: id=${analysisId}, orgId=${orgId}, status=${analysis.status}, totalOrgInDb=${totalInOrg}`);
+
       res.status(201).json({
         analysis,
         findings,
@@ -797,6 +809,8 @@ app.use('/api/auth', authRouter);
   app.get('/api/analyses', requireAuth, (req, res) => {
     const orgId = req.user!.organization_id;
     const list = db.getAnalyses(orgId);
+    console.log(`[TRACE-3 GET] GET /api/analyses: orgId=${orgId}, count=${list.length}, ids=[${list.map((a) => a.id).join(', ')}]`);
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.json({ analyses: list });
   });
 

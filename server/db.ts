@@ -166,6 +166,7 @@ export class DatabaseStore {
 
   private initPromise: Promise<void> | null = null;
   private pendingWritePromise: Promise<void> | null = null;
+  private saveTimeout: NodeJS.Timeout | null = null;
   private pgPool: pg.Pool | null = null;
   private lastSyncedAtTime = 0;
   public isPostgresConnected = false;
@@ -266,16 +267,16 @@ export class DatabaseStore {
           this.data = {
             organizations: { ...(this.data.organizations || {}), ...(parsed.organizations || {}) },
             users: { ...(this.data.users || {}), ...(parsed.users || {}) },
-            sessions: parsed.sessions || {},
-            invitations: parsed.invitations || {},
-            passwordResetTokens: parsed.passwordResetTokens || {},
-            documents: parsed.documents || {},
+            sessions: { ...(this.data.sessions || {}), ...(parsed.sessions || {}) },
+            invitations: { ...(this.data.invitations || {}), ...(parsed.invitations || {}) },
+            passwordResetTokens: { ...(this.data.passwordResetTokens || {}), ...(parsed.passwordResetTokens || {}) },
+            documents: { ...(this.data.documents || {}), ...(parsed.documents || {}) },
             requirementSets: { ...(this.data.requirementSets || {}), ...(parsed.requirementSets || {}) },
-            certificates: parsed.certificates || {},
-            analyses: parsed.analyses || {},
-            findings: parsed.findings || {},
-            feedbackDrafts: parsed.feedbackDrafts || {},
-            auditLogs: parsed.auditLogs || [],
+            certificates: { ...(this.data.certificates || {}), ...(parsed.certificates || {}) },
+            analyses: { ...(this.data.analyses || {}), ...(parsed.analyses || {}) },
+            findings: { ...(this.data.findings || {}), ...(parsed.findings || {}) },
+            feedbackDrafts: { ...(this.data.feedbackDrafts || {}), ...(parsed.feedbackDrafts || {}) },
+            auditLogs: parsed.auditLogs || this.data.auditLogs || [],
           };
           this.ensureSeedData();
           this.persistToDisk();
@@ -316,16 +317,16 @@ export class DatabaseStore {
         this.data = {
           organizations: { ...(this.data.organizations || {}), ...(parsed.organizations || {}) },
           users: { ...(this.data.users || {}), ...(parsed.users || {}) },
-          sessions: parsed.sessions || {},
-          invitations: parsed.invitations || {},
-          passwordResetTokens: parsed.passwordResetTokens || {},
-          documents: parsed.documents || {},
+          sessions: { ...(this.data.sessions || {}), ...(parsed.sessions || {}) },
+          invitations: { ...(this.data.invitations || {}), ...(parsed.invitations || {}) },
+          passwordResetTokens: { ...(this.data.passwordResetTokens || {}), ...(parsed.passwordResetTokens || {}) },
+          documents: { ...(this.data.documents || {}), ...(parsed.documents || {}) },
           requirementSets: { ...(this.data.requirementSets || {}), ...(parsed.requirementSets || {}) },
-          certificates: parsed.certificates || {},
-          analyses: parsed.analyses || {},
-          findings: parsed.findings || {},
-          feedbackDrafts: parsed.feedbackDrafts || {},
-          auditLogs: parsed.auditLogs || [],
+          certificates: { ...(this.data.certificates || {}), ...(parsed.certificates || {}) },
+          analyses: { ...(this.data.analyses || {}), ...(parsed.analyses || {}) },
+          findings: { ...(this.data.findings || {}), ...(parsed.findings || {}) },
+          feedbackDrafts: { ...(this.data.feedbackDrafts || {}), ...(parsed.feedbackDrafts || {}) },
+          auditLogs: parsed.auditLogs || this.data.auditLogs || [],
         };
         this.ensureSeedData();
         this.lastSyncedAtTime = now;
@@ -372,23 +373,23 @@ export class DatabaseStore {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === 'object') {
           this.data = {
-            organizations: parsed.organizations || {},
-            users: parsed.users || {},
-            sessions: parsed.sessions || {},
-            invitations: parsed.invitations || {},
-            passwordResetTokens: parsed.passwordResetTokens || {},
-            documents: parsed.documents || {},
-            requirementSets: parsed.requirementSets || {},
-            certificates: parsed.certificates || {},
-            analyses: parsed.analyses || {},
-            findings: parsed.findings || {},
-            feedbackDrafts: parsed.feedbackDrafts || {},
-            auditLogs: parsed.auditLogs || [],
+            organizations: { ...(this.data.organizations || {}), ...(parsed.organizations || {}) },
+            users: { ...(this.data.users || {}), ...(parsed.users || {}) },
+            sessions: { ...(this.data.sessions || {}), ...(parsed.sessions || {}) },
+            invitations: { ...(this.data.invitations || {}), ...(parsed.invitations || {}) },
+            passwordResetTokens: { ...(this.data.passwordResetTokens || {}), ...(parsed.passwordResetTokens || {}) },
+            documents: { ...(this.data.documents || {}), ...(parsed.documents || {}) },
+            requirementSets: { ...(this.data.requirementSets || {}), ...(parsed.requirementSets || {}) },
+            certificates: { ...(this.data.certificates || {}), ...(parsed.certificates || {}) },
+            analyses: { ...(this.data.analyses || {}), ...(parsed.analyses || {}) },
+            findings: { ...(this.data.findings || {}), ...(parsed.findings || {}) },
+            feedbackDrafts: { ...(this.data.feedbackDrafts || {}), ...(parsed.feedbackDrafts || {}) },
+            auditLogs: parsed.auditLogs || this.data.auditLogs || [],
           };
         }
       }
     } catch (e) {
-      console.error('Error loading database from disk, starting with clean memory store:', e);
+      console.error('Error loading database from disk, preserving existing in-memory store:', e);
     }
   }
 
@@ -398,7 +399,15 @@ export class DatabaseStore {
         if (!fs.existsSync(DATA_DIR)) {
           fs.mkdirSync(DATA_DIR, { recursive: true });
         }
-        fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
+        const tempFile = path.join(DATA_DIR, `mtc_compliance_database.${process.pid}.${Date.now()}.${Math.random().toString(36).substring(2, 6)}.tmp`);
+        fs.writeFileSync(tempFile, JSON.stringify(this.data, null, 2), 'utf-8');
+        try {
+          fs.renameSync(tempFile, DB_FILE);
+        } catch (_) {
+          // Fallback on Windows when target file is temporarily busy
+          fs.copyFileSync(tempFile, DB_FILE);
+          try { fs.unlinkSync(tempFile); } catch (__) {}
+        }
       }
     } catch (e: any) {
       if (e.code !== 'EROFS') {
@@ -408,6 +417,10 @@ export class DatabaseStore {
   }
 
   public async persist(): Promise<void> {
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+      this.saveTimeout = null;
+    }
     this.persistToDisk();
     if (this.pgPool && this.isPostgresConnected) {
       await this.persistToPostgres();
@@ -415,10 +428,14 @@ export class DatabaseStore {
   }
 
   public hasPendingWrites(): boolean {
-    return this.pendingWritePromise !== null;
+    return this.pendingWritePromise !== null || this.saveTimeout !== null;
   }
 
   public async flushWrites(): Promise<void> {
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+      this.saveTimeout = null;
+    }
     this.persistToDisk();
     if (this.pendingWritePromise) {
       await this.pendingWritePromise;
@@ -428,12 +445,18 @@ export class DatabaseStore {
   }
 
   private scheduleSave(): void {
-    this.persistToDisk();
-    if (this.pgPool && this.isPostgresConnected) {
-      this.pendingWritePromise = this.persistToPostgres().finally(() => {
-        this.pendingWritePromise = null;
-      });
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
     }
+    this.saveTimeout = setTimeout(() => {
+      this.saveTimeout = null;
+      this.persistToDisk();
+      if (this.pgPool && this.isPostgresConnected) {
+        this.pendingWritePromise = this.persistToPostgres().finally(() => {
+          this.pendingWritePromise = null;
+        });
+      }
+    }, 25);
   }
 
   private ensureSeedData(): void {

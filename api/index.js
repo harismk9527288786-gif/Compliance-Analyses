@@ -938,6 +938,7 @@ var DatabaseStore = class {
     };
     this.initPromise = null;
     this.pendingWritePromise = null;
+    this.saveTimeout = null;
     this.pgPool = null;
     this.lastSyncedAtTime = 0;
     this.isPostgresConnected = false;
@@ -1014,16 +1015,16 @@ var DatabaseStore = class {
           this.data = {
             organizations: { ...this.data.organizations || {}, ...parsed.organizations || {} },
             users: { ...this.data.users || {}, ...parsed.users || {} },
-            sessions: parsed.sessions || {},
-            invitations: parsed.invitations || {},
-            passwordResetTokens: parsed.passwordResetTokens || {},
-            documents: parsed.documents || {},
+            sessions: { ...this.data.sessions || {}, ...parsed.sessions || {} },
+            invitations: { ...this.data.invitations || {}, ...parsed.invitations || {} },
+            passwordResetTokens: { ...this.data.passwordResetTokens || {}, ...parsed.passwordResetTokens || {} },
+            documents: { ...this.data.documents || {}, ...parsed.documents || {} },
             requirementSets: { ...this.data.requirementSets || {}, ...parsed.requirementSets || {} },
-            certificates: parsed.certificates || {},
-            analyses: parsed.analyses || {},
-            findings: parsed.findings || {},
-            feedbackDrafts: parsed.feedbackDrafts || {},
-            auditLogs: parsed.auditLogs || []
+            certificates: { ...this.data.certificates || {}, ...parsed.certificates || {} },
+            analyses: { ...this.data.analyses || {}, ...parsed.analyses || {} },
+            findings: { ...this.data.findings || {}, ...parsed.findings || {} },
+            feedbackDrafts: { ...this.data.feedbackDrafts || {}, ...parsed.feedbackDrafts || {} },
+            auditLogs: parsed.auditLogs || this.data.auditLogs || []
           };
           this.ensureSeedData();
           this.persistToDisk();
@@ -1061,16 +1062,16 @@ var DatabaseStore = class {
         this.data = {
           organizations: { ...this.data.organizations || {}, ...parsed.organizations || {} },
           users: { ...this.data.users || {}, ...parsed.users || {} },
-          sessions: parsed.sessions || {},
-          invitations: parsed.invitations || {},
-          passwordResetTokens: parsed.passwordResetTokens || {},
-          documents: parsed.documents || {},
+          sessions: { ...this.data.sessions || {}, ...parsed.sessions || {} },
+          invitations: { ...this.data.invitations || {}, ...parsed.invitations || {} },
+          passwordResetTokens: { ...this.data.passwordResetTokens || {}, ...parsed.passwordResetTokens || {} },
+          documents: { ...this.data.documents || {}, ...parsed.documents || {} },
           requirementSets: { ...this.data.requirementSets || {}, ...parsed.requirementSets || {} },
-          certificates: parsed.certificates || {},
-          analyses: parsed.analyses || {},
-          findings: parsed.findings || {},
-          feedbackDrafts: parsed.feedbackDrafts || {},
-          auditLogs: parsed.auditLogs || []
+          certificates: { ...this.data.certificates || {}, ...parsed.certificates || {} },
+          analyses: { ...this.data.analyses || {}, ...parsed.analyses || {} },
+          findings: { ...this.data.findings || {}, ...parsed.findings || {} },
+          feedbackDrafts: { ...this.data.feedbackDrafts || {}, ...parsed.feedbackDrafts || {} },
+          auditLogs: parsed.auditLogs || this.data.auditLogs || []
         };
         this.ensureSeedData();
         this.lastSyncedAtTime = now;
@@ -1113,23 +1114,23 @@ var DatabaseStore = class {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === "object") {
           this.data = {
-            organizations: parsed.organizations || {},
-            users: parsed.users || {},
-            sessions: parsed.sessions || {},
-            invitations: parsed.invitations || {},
-            passwordResetTokens: parsed.passwordResetTokens || {},
-            documents: parsed.documents || {},
-            requirementSets: parsed.requirementSets || {},
-            certificates: parsed.certificates || {},
-            analyses: parsed.analyses || {},
-            findings: parsed.findings || {},
-            feedbackDrafts: parsed.feedbackDrafts || {},
-            auditLogs: parsed.auditLogs || []
+            organizations: { ...this.data.organizations || {}, ...parsed.organizations || {} },
+            users: { ...this.data.users || {}, ...parsed.users || {} },
+            sessions: { ...this.data.sessions || {}, ...parsed.sessions || {} },
+            invitations: { ...this.data.invitations || {}, ...parsed.invitations || {} },
+            passwordResetTokens: { ...this.data.passwordResetTokens || {}, ...parsed.passwordResetTokens || {} },
+            documents: { ...this.data.documents || {}, ...parsed.documents || {} },
+            requirementSets: { ...this.data.requirementSets || {}, ...parsed.requirementSets || {} },
+            certificates: { ...this.data.certificates || {}, ...parsed.certificates || {} },
+            analyses: { ...this.data.analyses || {}, ...parsed.analyses || {} },
+            findings: { ...this.data.findings || {}, ...parsed.findings || {} },
+            feedbackDrafts: { ...this.data.feedbackDrafts || {}, ...parsed.feedbackDrafts || {} },
+            auditLogs: parsed.auditLogs || this.data.auditLogs || []
           };
         }
       }
     } catch (e) {
-      console.error("Error loading database from disk, starting with clean memory store:", e);
+      console.error("Error loading database from disk, preserving existing in-memory store:", e);
     }
   }
   persistToDisk() {
@@ -1138,7 +1139,17 @@ var DatabaseStore = class {
         if (!fs.existsSync(DATA_DIR)) {
           fs.mkdirSync(DATA_DIR, { recursive: true });
         }
-        fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), "utf-8");
+        const tempFile = path.join(DATA_DIR, `mtc_compliance_database.${process.pid}.${Date.now()}.${Math.random().toString(36).substring(2, 6)}.tmp`);
+        fs.writeFileSync(tempFile, JSON.stringify(this.data, null, 2), "utf-8");
+        try {
+          fs.renameSync(tempFile, DB_FILE);
+        } catch (_) {
+          fs.copyFileSync(tempFile, DB_FILE);
+          try {
+            fs.unlinkSync(tempFile);
+          } catch (__) {
+          }
+        }
       }
     } catch (e) {
       if (e.code !== "EROFS") {
@@ -1147,15 +1158,23 @@ var DatabaseStore = class {
     }
   }
   async persist() {
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+      this.saveTimeout = null;
+    }
     this.persistToDisk();
     if (this.pgPool && this.isPostgresConnected) {
       await this.persistToPostgres();
     }
   }
   hasPendingWrites() {
-    return this.pendingWritePromise !== null;
+    return this.pendingWritePromise !== null || this.saveTimeout !== null;
   }
   async flushWrites() {
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+      this.saveTimeout = null;
+    }
     this.persistToDisk();
     if (this.pendingWritePromise) {
       await this.pendingWritePromise;
@@ -1164,12 +1183,18 @@ var DatabaseStore = class {
     }
   }
   scheduleSave() {
-    this.persistToDisk();
-    if (this.pgPool && this.isPostgresConnected) {
-      this.pendingWritePromise = this.persistToPostgres().finally(() => {
-        this.pendingWritePromise = null;
-      });
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
     }
+    this.saveTimeout = setTimeout(() => {
+      this.saveTimeout = null;
+      this.persistToDisk();
+      if (this.pgPool && this.isPostgresConnected) {
+        this.pendingWritePromise = this.persistToPostgres().finally(() => {
+          this.pendingWritePromise = null;
+        });
+      }
+    }, 25);
   }
   ensureSeedData() {
     for (const org of SEED_ORGANIZATIONS) {
@@ -5558,6 +5583,9 @@ app.post("/api/analyses", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINEER"]
         };
         db.setAnalysis(orgId, analysisId2, unverifiedAnalysis);
         db.setFindings(orgId, analysisId2, [finding]);
+        await db.flushWrites();
+        const totalInOrg2 = db.getAnalyses(orgId).length;
+        console.log(`[TRACE-1 CREATE UNVERIFIED] Analysis created: id=${analysisId2}, orgId=${orgId}, status=${unverifiedAnalysis.status}, totalOrgInDb=${totalInOrg2}`);
         return res.status(201).json({ analysis: unverifiedAnalysis, findings: [finding] });
       }
       const extracted = await extractSupplierEvidenceWithAI(
@@ -5652,6 +5680,9 @@ app.post("/api/analyses", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINEER"]
       };
       db.setAnalysis(orgId, analysisId2, mismatchAnalysis);
       db.setFindings(orgId, analysisId2, [mismatchFinding]);
+      await db.flushWrites();
+      const totalInOrg2 = db.getAnalyses(orgId).length;
+      console.log(`[TRACE-1 CREATE MISMATCH] Analysis created: id=${analysisId2}, orgId=${orgId}, status=${mismatchAnalysis.status}, totalOrgInDb=${totalInOrg2}`);
       return res.status(201).json({
         analysis: mismatchAnalysis,
         findings: [mismatchFinding],
@@ -5754,6 +5785,9 @@ app.post("/api/analyses", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINEER"]
       objectName: analysis.title,
       details: { passCount, deviationCount, documentationGapCount, total: findings.length }
     });
+    await db.flushWrites();
+    const totalInOrg = db.getAnalyses(orgId).length;
+    console.log(`[TRACE-1 CREATE] Analysis created: id=${analysisId}, orgId=${orgId}, status=${analysis.status}, totalOrgInDb=${totalInOrg}`);
     res.status(201).json({
       analysis,
       findings,
@@ -5767,6 +5801,8 @@ app.post("/api/analyses", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINEER"]
 app.get("/api/analyses", requireAuth, (req, res) => {
   const orgId = req.user.organization_id;
   const list = db.getAnalyses(orgId);
+  console.log(`[TRACE-3 GET] GET /api/analyses: orgId=${orgId}, count=${list.length}, ids=[${list.map((a) => a.id).join(", ")}]`);
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.json({ analyses: list });
 });
 app.post("/api/analyses/clear", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINEER", "REVIEWER"]), (req, res) => {

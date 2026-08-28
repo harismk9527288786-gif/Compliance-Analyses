@@ -146,6 +146,30 @@ export default function App() {
     }
   };
 
+  // Refresh analyses from server with safe union-merge
+  const refreshAnalyses = async () => {
+    try {
+      const analysesRes = await apiFetch('/api/analyses');
+      if (analysesRes.ok) {
+        const data = await analysesRes.json();
+        setAnalyses((prev) => {
+          const map = new Map<string, AnalysisRecord>();
+          for (const a of prev) {
+            if (a && a.id) map.set(a.id, a);
+          }
+          for (const a of (data.analyses || [])) {
+            if (a && a.id) map.set(a.id, a);
+          }
+          return Array.from(map.values()).sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+        });
+      }
+    } catch (e) {
+      console.error('Failed to refresh analyses:', e);
+    }
+  };
+
   // Fetch initial data from backend API for authenticated tenant
   const fetchInitialData = async () => {
     try {
@@ -160,12 +184,8 @@ export default function App() {
         }
       }
 
-      // Fetch analyses
-      const analysesRes = await apiFetch('/api/analyses');
-      if (analysesRes.ok) {
-        const data = await analysesRes.json();
-        setAnalyses(data.analyses || []);
-      }
+      // Fetch analyses with safe merge
+      await refreshAnalyses();
 
       // Fetch requirement sets
       const reqRes = await apiFetch('/api/requirements');
@@ -189,6 +209,27 @@ export default function App() {
 
   useEffect(() => {
     checkAuthStatus();
+  }, []);
+
+  // Listen to browser back/forward history navigation
+  useEffect(() => {
+    const handlePopState = () => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const analysisParam = params.get('analysis');
+        if (analysisParam) {
+          setSelectedAnalysisId(analysisParam);
+          setActiveTab('analysis_detail');
+        } else {
+          setSelectedAnalysisId(null);
+          setActiveTab('dashboard');
+          refreshAnalyses();
+        }
+      } catch (_) {}
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   // Fetch analysis details when selectedAnalysisId changes
@@ -656,7 +697,17 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={(tab) => {
           setActiveTab(tab);
-          if (tab === 'dashboard') setSelectedAnalysisId(null);
+          if (tab === 'dashboard') {
+            setSelectedAnalysisId(null);
+            refreshAnalyses();
+            try {
+              if (typeof window !== 'undefined') {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('analysis');
+                window.history.pushState({}, '', url.toString());
+              }
+            } catch (_) {}
+          }
         }}
         currentUser={currentUser}
         currentOrg={currentOrg}
@@ -677,9 +728,21 @@ export default function App() {
             requirementSets={requirementSets}
             currentUser={currentUser}
             initialRequirementSetId={preselectedReqSetId}
-            onAnalysisCreated={(newId) => {
+            onAnalysisCreated={(newId, createdAnalysis) => {
               setShowNewComparison(false);
               setPreselectedReqSetId(undefined);
+              if (createdAnalysis) {
+                setAnalyses((prev) => {
+                  const map = new Map<string, AnalysisRecord>();
+                  map.set(createdAnalysis.id, createdAnalysis);
+                  for (const a of prev) {
+                    if (a && a.id && !map.has(a.id)) map.set(a.id, a);
+                  }
+                  return Array.from(map.values()).sort(
+                    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                  );
+                });
+              }
               fetchInitialData();
               handleSelectAnalysis(newId);
             }}
@@ -697,7 +760,9 @@ export default function App() {
             initialStatusTab={findingStatusTab}
             onBack={() => {
               setSelectedAnalysisId(null);
+              setSelectedAnalysis(null);
               setActiveTab('dashboard');
+              refreshAnalyses();
               try {
                 if (typeof window !== 'undefined') {
                   const url = new URL(window.location.href);

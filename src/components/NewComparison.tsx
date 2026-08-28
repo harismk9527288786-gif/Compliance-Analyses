@@ -10,14 +10,14 @@ import {
   Cpu,
   Layers,
 } from 'lucide-react';
-import { RequirementSet, User } from '../types';
+import { AnalysisRecord, RequirementSet, User } from '../types';
 import { apiFetch, formatErrorMessage } from '../utils/api';
 import { extractTextFromPdfClient } from '../utils/clientPdfParser';
 
 interface NewComparisonProps {
   requirementSets: RequirementSet[];
   currentUser: User;
-  onAnalysisCreated: (analysisId: string) => void;
+  onAnalysisCreated: (analysisId: string, analysisRecord?: AnalysisRecord) => void;
   onCancel: () => void;
   initialRequirementSetId?: string;
 }
@@ -163,7 +163,7 @@ export const NewComparison: React.FC<NewComparisonProps> = ({
       }
 
       const result = await analysisRes.json();
-      onAnalysisCreated(result.analysis.id);
+      onAnalysisCreated(result.analysis.id, result.analysis);
     } catch (e: any) {
       setIsProcessing(false);
       setErrorMsg(formatErrorMessage(e, 'Verification could not proceed due to an unexpected parsing error.'));
