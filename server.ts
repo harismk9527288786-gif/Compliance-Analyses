@@ -118,6 +118,17 @@ app.use('/api/auth', authRouter);
         }
 
         const parsed = await parseDocumentContent(req.file.buffer, req.file.originalname);
+
+        // Fallback: If server-side PDF extraction yielded empty text or ran in a constrained environment,
+        // use high-fidelity client-extracted text if provided in the upload request.
+        if ((!parsed.text || parsed.text.trim().length < 30) && req.body.extractedText && typeof req.body.extractedText === 'string') {
+          const clientText = req.body.extractedText.trim();
+          if (clientText.length >= 30) {
+            parsed.text = clientText;
+            parsed.isScanned = false;
+          }
+        }
+
         const docId = `doc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
         const docRecord: DocumentRecord = {

@@ -1,8 +1,8 @@
 // server.ts
 import "dotenv/config";
-import fs2 from "fs";
+import fs3 from "fs";
 import express2 from "express";
-import path2 from "path";
+import path3 from "path";
 import multer from "multer";
 import cookieParser from "cookie-parser";
 
@@ -2406,6 +2406,8 @@ authRouter.patch("/users/:id/status", requireAuth, requireRole(["ADMIN"]), (req,
 // server/pdfService.ts
 import crypto2 from "crypto";
 import zlib from "zlib";
+import fs2 from "fs";
+import path2 from "path";
 function calculateChecksum(buffer) {
   return crypto2.createHash("sha256").update(buffer).digest("hex");
 }
@@ -2451,10 +2453,26 @@ async function parseDocumentContent(buffer, filename) {
   if (isPdf) {
     let extractedPdfText = "";
     try {
-      const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      let pdfjsLib = null;
+      try {
+        pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      } catch {
+        try {
+          pdfjsLib = await import("pdfjs-dist/build/pdf.mjs");
+        } catch {
+          pdfjsLib = await import("pdfjs-dist");
+        }
+      }
+      const cMapDir = path2.join(process.cwd(), "node_modules/pdfjs-dist/cmaps/");
+      const standardFontDir = path2.join(process.cwd(), "node_modules/pdfjs-dist/standard_fonts/");
+      const cMapUrl = fs2.existsSync(cMapDir) ? cMapDir + "/" : void 0;
+      const standardFontDataUrl = fs2.existsSync(standardFontDir) ? standardFontDir + "/" : void 0;
       const uint8 = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
       const loadingTask = pdfjsLib.getDocument({
         data: uint8,
+        cMapUrl,
+        cMapPacked: true,
+        standardFontDataUrl,
         useSystemFonts: true,
         disableFontFace: true,
         verbosity: 0
@@ -2463,7 +2481,7 @@ async function parseDocumentContent(buffer, filename) {
       for (let i = 1; i <= pdfDoc.numPages; i++) {
         const page = await pdfDoc.getPage(i);
         const textContent = await page.getTextContent();
-        const pageText = textContent.items.map((item) => item.str).join(" ");
+        const pageText = textContent.items.map((item) => item.str || "").join(" ");
         pages.push({ pageNumber: i, text: pageText });
         extractedPdfText += pageText + "\n";
       }
@@ -5168,6 +5186,13 @@ app.post(
         return res.status(400).json({ error: validation.error });
       }
       const parsed = await parseDocumentContent(req.file.buffer, req.file.originalname);
+      if ((!parsed.text || parsed.text.trim().length < 30) && req.body.extractedText && typeof req.body.extractedText === "string") {
+        const clientText = req.body.extractedText.trim();
+        if (clientText.length >= 30) {
+          parsed.text = clientText;
+          parsed.isScanned = false;
+        }
+      }
       const docId = `doc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       const docRecord = {
         id: docId,
@@ -5972,7 +5997,7 @@ app.get("/api/pilot-data", requireAuth, (req, res) => {
     mtc: PILOT_SUPPLIER_MTC
   });
 });
-var distPath = path2.join(process.cwd(), "dist");
+var distPath = path3.join(process.cwd(), "dist");
 var entryPoint = process.argv[1] || "";
 var isBuiltEntry = /\.(cjs|mjs|js)$/i.test(entryPoint);
 var isProduction2 = process.env.NODE_ENV === "production" || isBuiltEntry || !!process.env.VERCEL;
@@ -5992,13 +6017,13 @@ app.use("/api", (err, req, res, next) => {
 });
 if (!process.env.VERCEL) {
   if (isProduction2) {
-    if (fs2.existsSync(path2.join(distPath, "index.html"))) {
+    if (fs3.existsSync(path3.join(distPath, "index.html"))) {
       console.log("Serving prebuilt frontend from dist/ (production mode)");
       app.use(
         express2.static(distPath, {
           index: false,
           setHeaders: (res, filePath) => {
-            const name = path2.basename(filePath);
+            const name = path3.basename(filePath);
             if (name === "sw.js" || name === "index.html" || name === "manifest.json") {
               res.setHeader("Cache-Control", "no-cache, must-revalidate");
             } else if (/-[A-Za-z0-9_-]{8,}\.[a-z]+$/.test(name)) {
@@ -6011,7 +6036,7 @@ if (!process.env.VERCEL) {
       );
       app.get("*", (req, res) => {
         res.setHeader("Cache-Control", "no-cache, must-revalidate");
-        res.sendFile(path2.join(distPath, "index.html"));
+        res.sendFile(path3.join(distPath, "index.html"));
       });
     }
   } else {

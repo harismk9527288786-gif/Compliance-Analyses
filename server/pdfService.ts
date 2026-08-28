@@ -1,5 +1,7 @@
 import crypto from 'crypto';
 import zlib from 'zlib';
+import fs from 'fs';
+import path from 'path';
 
 export interface ExtractedPDFDocument {
   text: string;
@@ -89,10 +91,28 @@ export async function parseDocumentContent(
   if (isPdf) {
     let extractedPdfText = '';
     try {
-      const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+      let pdfjsLib: any = null;
+      try {
+        pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+      } catch {
+        try {
+          pdfjsLib = await import('pdfjs-dist/build/pdf.mjs');
+        } catch {
+          pdfjsLib = await import('pdfjs-dist');
+        }
+      }
+
+      const cMapDir = path.join(process.cwd(), 'node_modules/pdfjs-dist/cmaps/');
+      const standardFontDir = path.join(process.cwd(), 'node_modules/pdfjs-dist/standard_fonts/');
+      const cMapUrl = fs.existsSync(cMapDir) ? cMapDir + '/' : undefined;
+      const standardFontDataUrl = fs.existsSync(standardFontDir) ? standardFontDir + '/' : undefined;
+
       const uint8 = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
       const loadingTask = pdfjsLib.getDocument({
         data: uint8,
+        cMapUrl,
+        cMapPacked: true,
+        standardFontDataUrl,
         useSystemFonts: true,
         disableFontFace: true,
         verbosity: 0,
@@ -101,7 +121,7 @@ export async function parseDocumentContent(
       for (let i = 1; i <= pdfDoc.numPages; i++) {
         const page = await pdfDoc.getPage(i);
         const textContent = await page.getTextContent();
-        const pageText = textContent.items.map((item: any) => item.str).join(' ');
+        const pageText = textContent.items.map((item: any) => item.str || '').join(' ');
         pages.push({ pageNumber: i, text: pageText });
         extractedPdfText += pageText + '\n';
       }

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { RequirementSet, User } from '../types';
 import { apiFetch, formatErrorMessage } from '../utils/api';
+import { extractTextFromPdfClient } from '../utils/clientPdfParser';
 
 interface NewComparisonProps {
   requirementSets: RequirementSet[];
@@ -84,6 +85,15 @@ export const NewComparison: React.FC<NewComparisonProps> = ({
         formData.append('type', 'mtc');
         formData.append('userId', currentUser.id);
 
+        try {
+          const clientText = await extractTextFromPdfClient(mtcFile);
+          if (clientText && clientText.length > 30) {
+            formData.append('extractedText', clientText);
+          }
+        } catch (e) {
+          console.warn('Client-side MTC extraction notice:', e);
+        }
+
         const uploadRes = await apiFetch('/api/documents', {
           method: 'POST',
           body: formData,
@@ -101,6 +111,15 @@ export const NewComparison: React.FC<NewComparisonProps> = ({
         formData.append('file', mdsFile);
         formData.append('type', 'mds');
         formData.append('userId', currentUser.id);
+
+        try {
+          const clientText = await extractTextFromPdfClient(mdsFile);
+          if (clientText && clientText.length > 30) {
+            formData.append('extractedText', clientText);
+          }
+        } catch (e) {
+          console.warn('Client-side MDS extraction notice:', e);
+        }
 
         const uploadRes = await apiFetch('/api/documents', {
           method: 'POST',
