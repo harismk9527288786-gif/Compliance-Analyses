@@ -169,8 +169,8 @@ export async function parseDocumentContent(
     text = rawString;
   }
 
-  // Prepend filename so document identity is always preserved in content stream
-  const fullDocumentText = `Document: ${filename}\n${text}`.trim();
+  // Retain pure extracted document text without polluting content stream with filenames
+  const fullDocumentText = text.trim();
 
   // Divide into realistic pages
   const pageChunks = fullDocumentText.match(/[\s\S]{1,1800}/g) || [fullDocumentText];

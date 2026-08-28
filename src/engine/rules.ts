@@ -380,7 +380,9 @@ function evaluateMatchOperator(
     const isNormalizeAndTemper = rawEv.includes('normaliz') && (rawEv.includes('temper') || rawEv.includes('air cool'));
     const isFullAnneal = rawEv.includes('anneal') && !isSolutionAnneal && (rawEv.includes('furnace') || !rawEv.includes('water'));
 
-    if (isSolutionAnneal && !requiresSolutionAnneal) {
+    if (isSolutionAnneal && requiresSolutionAnneal) {
+      isMatch = true;
+    } else if (isSolutionAnneal && !requiresSolutionAnneal) {
       isMatch = false;
     } else if (reqTarget.includes('furnace cool') || reqTarget.includes('normalize & temper') || reqTarget.includes('normalize')) {
       isMatch = Boolean(

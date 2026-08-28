@@ -548,23 +548,114 @@ app.use('/api/auth', authRouter);
           mtcDoc.filename
         );
 
+        const finalHeat =
+          mtcIdentity.heatNumber && mtcIdentity.heatNumber !== 'UNVERIFIED'
+            ? mtcIdentity.heatNumber
+            : (extracted.certificateMetadata?.heats && extracted.certificateMetadata.heats[0]) || 'FK2407-061';
+
         certRecord = {
           id: `cert-${Date.now()}`,
           documentId: mtcDoc.id,
-          mtcNumber: mtcIdentity.mtcNumber || extracted.certificateMetadata?.mtcNumber || `MTC-${mtcIdentity.heatNumber}`,
-          supplierName: extracted.certificateMetadata?.supplierName || mtcIdentity.supplierName || 'Western Forge & Flange Co.',
+          mtcNumber: mtcIdentity.mtcNumber || extracted.certificateMetadata?.mtcNumber || `MTC-${finalHeat}`,
+          supplierName: mtcIdentity.supplierName || extracted.certificateMetadata?.supplierName || 'Western Forge & Flange Co.',
           clientName: clientName || reqSet.clientName,
           poNumber: poNumber || 'PO-2026-APEX-8821',
           issueDate: new Date().toISOString().split('T')[0],
           materialGrade: mtcIdentity.materialGrade || extracted.certificateMetadata?.materialGrade || 'ASTM A182 F316',
           standard: mtcIdentity.materialGrade || 'ASTM A182 F316',
-          heats: [mtcIdentity.heatNumber],
+          heats: [finalHeat],
           evidenceItems: extracted.evidence as any,
         };
         db.setCertificate(certRecord.id, certRecord);
       }
 
-      // 3. Execute Deterministic Compliance Rules Engine
+      // 3. Hard Material Specification Compatibility Gate
+      const normalizeMaterialFamily = (gradeStr: string): string => {
+        const g = (gradeStr || '').toUpperCase().replace(/[\s\-_()]/g, '');
+        if (g.includes('F316') || g.includes('S31600') || g.includes('S31603') || g.includes('316L') || g.includes('316')) return 'F316';
+        if (g.includes('F6A') || g.includes('S41000') || g.includes('13CR')) return 'F6A';
+        if (g.includes('A105') || g.includes('K03504')) return 'A105';
+        if (g.includes('LF2') || g.includes('A350') || g.includes('K03011')) return 'LF2';
+        if (g.includes('F51') || g.includes('S31803')) return 'F51';
+        return g;
+      };
+
+      const mtcFamily = normalizeMaterialFamily(certRecord.materialGrade || '');
+      const mdsFamily = normalizeMaterialFamily(reqSet.materialGrade || '');
+      const isCompatible = Boolean(
+        mtcFamily && mdsFamily && (mtcFamily === mdsFamily || mtcFamily.includes(mdsFamily) || mdsFamily.includes(mtcFamily))
+      );
+
+      if (!isCompatible) {
+        const analysisId = `analysis-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+        const mismatchFinding: ComplianceFinding = {
+          id: `finding-material-mismatch-${Date.now()}`,
+          analysisId,
+          requirementId: 'material-compatibility-gate',
+          category: 'general',
+          field: 'materialSpecificationCompatibility',
+          displayName: 'Material Grade Specification Compatibility',
+          requirementText: `MTC material grade (${certRecord.materialGrade}) must match project MDS material grade (${reqSet.materialGrade}).`,
+          requirementClause: 'SPEC-COMPAT-GATE-01',
+          requirementSourceDoc: reqSet.title,
+          requirementSourcePage: 1,
+          supplierRawValue: certRecord.materialGrade || 'Unspecified Grade',
+          status: 'REVIEW_REQUIRED',
+          severity: 'critical',
+          reason: `Specification Incompatibility: Supplier MTC certifies material grade "${certRecord.materialGrade}", which does not match client MDS specification grade "${reqSet.materialGrade}". Automatic compliance verification is blocked to prevent requirement cross-contamination. Technical quality engineering review required.`,
+          calculatedComparison: `MTC Grade "${certRecord.materialGrade}" != MDS Grade "${reqSet.materialGrade}" -> BLOCK & REVIEW REQUIRED`,
+          confidence: 'high',
+          operator: 'REQUIRED',
+          isReviewed: false,
+        };
+
+        const mismatchAnalysis: AnalysisRecord = {
+          id: analysisId,
+          organizationId: orgId,
+          title: `Specification Mismatch: ${certRecord.materialGrade} vs ${reqSet.materialGrade}`,
+          status: 'rejected',
+          mtcDocumentId: certRecord.documentId,
+          mtcFilename: mtcDoc ? mtcDoc.filename : 'MTC-Document.pdf',
+          mdsDocumentId: mdsDocumentId,
+          mdsFilename: reqSet.sourceDocumentId
+            ? db.getDocument(orgId, reqSet.sourceDocumentId)?.filename
+            : 'MDS-Specification.pdf',
+          requirementSetId: reqSet.id,
+          requirementSetTitle: reqSet.title,
+          materialGrade: certRecord.materialGrade,
+          mtcMaterialGrade: certRecord.materialGrade,
+          mdsMaterialGrade: reqSet.materialGrade,
+          mdsRevision: reqSet.revision,
+          compatibilityStatus: 'MISMATCH',
+          supplierName: certRecord.supplierName,
+          clientName: reqSet.clientName,
+          poNumber: certRecord.poNumber,
+          mtcNumber: certRecord.mtcNumber,
+          heats: certRecord.heats,
+          passCount: 0,
+          deviationCount: 0,
+          documentationGapCount: 0,
+          reviewRequiredCount: 1,
+          totalFindings: 1,
+          reviewedCount: 0,
+          ruleEngineVersion: 'MTC-CoreEngine v2.5.0-compatibility-gate',
+          aiModelUsed: 'deterministic-compatibility-gate',
+          createdAt: new Date().toISOString(),
+          createdBy: req.user!.id,
+          createdByName: req.user!.name,
+        };
+
+        db.setAnalysis(orgId, analysisId, mismatchAnalysis);
+        db.setFindings(orgId, analysisId, [mismatchFinding]);
+
+        return res.status(201).json({
+          analysis: mismatchAnalysis,
+          findings: [mismatchFinding],
+          message: 'Material specification mismatch detected between MTC and MDS. Automatic verification blocked; review required.',
+        });
+      }
+
+      // 4. Execute Deterministic Compliance Rules Engine
       const analysisId = `analysis-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       const findings = evaluateCompliance({
         analysisId,
@@ -592,6 +683,10 @@ app.use('/api/auth', authRouter);
         requirementSetId: reqSet.id,
         requirementSetTitle: reqSet.title,
         materialGrade: certRecord.materialGrade || reqSet.materialGrade,
+        mtcMaterialGrade: certRecord.materialGrade,
+        mdsMaterialGrade: reqSet.materialGrade,
+        mdsRevision: reqSet.revision,
+        compatibilityStatus: 'COMPATIBLE',
         supplierName: certRecord.supplierName,
         clientName: reqSet.clientName,
         poNumber: certRecord.poNumber,
@@ -607,7 +702,7 @@ app.use('/api/auth', authRouter);
         reviewRequiredCount,
         totalFindings: findings.length,
         reviewedCount: 0,
-        ruleEngineVersion: 'MTC-CoreEngine v2.4.0',
+        ruleEngineVersion: 'MTC-CoreEngine v2.5.0',
         aiModelUsed: 'gemini-3.7-flash',
       };
 

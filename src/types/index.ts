@@ -256,6 +256,10 @@ export interface AnalysisRecord {
   requirementSetId?: string;
   requirementSetTitle: string;
   materialGrade: string;
+  mtcMaterialGrade?: string;
+  mdsMaterialGrade?: string;
+  mdsRevision?: string;
+  compatibilityStatus?: 'COMPATIBLE' | 'MISMATCH' | 'REVIEW_REQUIRED';
   supplierName: string;
   clientName: string;
   poNumber?: string;

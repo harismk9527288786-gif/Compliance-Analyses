@@ -242,6 +242,19 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
         </div>
       </div>
 
+      {/* Specification Mismatch Alert Banner */}
+      {analysis.compatibilityStatus === 'MISMATCH' && (
+        <div className="bg-rose-950/80 border border-rose-600/80 rounded-xl p-4 sm:p-5 text-rose-200 flex items-start gap-3 shadow-sm" role="alert">
+          <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" aria-hidden="true" />
+          <div className="space-y-1">
+            <h3 className="font-bold text-white text-sm">Specification Incompatibility Blocked</h3>
+            <p className="text-xs text-rose-200 leading-relaxed">
+              Supplier MTC material grade <span className="font-mono font-bold text-white">{analysis.mtcMaterialGrade || analysis.materialGrade}</span> is metallurgically incompatible with Project MDS specification <span className="font-mono font-bold text-white">{analysis.mdsMaterialGrade || analysis.requirementSetTitle}</span>. Automated compliance evaluation has been blocked to prevent requirement cross-contamination. Technical quality engineering review is required.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* 2. TECHNICAL VERIFICATION HEADER CARD (Industrial dark slate, crisp high contrast) */}
       <section
         aria-label="Material Verification Record Header"
