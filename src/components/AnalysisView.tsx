@@ -78,6 +78,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
 
   // Filter findings
   const list = Array.isArray(findings) ? findings : [];
+  const hasUnresolvedDeviations = list.some((f) => f.status !== 'PASS' && !f.isReviewed);
   const filteredFindings = list.filter((f) => {
     if (!f) return false;
     const matchesStatus =
@@ -328,7 +329,9 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowApprovalModal(true)}
-                  className="px-4 py-2 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400/50 shadow-xs transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                  disabled={hasUnresolvedDeviations}
+                  title={hasUnresolvedDeviations ? "Cannot approve: Unresolved deviations exist" : "Technical Sign-Off"}
+                  className={`px-4 py-2 text-xs font-bold rounded-lg ${hasUnresolvedDeviations ? 'bg-emerald-600/50 cursor-not-allowed opacity-50' : 'bg-emerald-600 hover:bg-emerald-500 cursor-pointer'} text-white border border-emerald-400/50 shadow-xs transition-colors flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400`}
                 >
                   <ShieldCheck className="w-4 h-4 stroke-[2.5]" aria-hidden="true" />
                   <span>Technical Sign-Off</span>

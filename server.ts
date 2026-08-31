@@ -964,6 +964,12 @@ app.use('/api/auth', authRouter);
     const orgId = req.user!.organization_id;
     const { approvalNotes, finalStatus } = req.body;
 
+    const findingsList = db.getFindings(orgId, req.params.id) || [];
+    const hasUnresolved = findingsList.some((f) => f.status !== 'PASS' && !f.isReviewed);
+    if (hasUnresolved) {
+      return res.status(400).json({ error: 'Cannot approve analysis with unresolved deviations or gaps. Please review and resolve all issues before signing off.' });
+    }
+
     const analysis = db.getAnalysis(orgId, req.params.id);
     if (!analysis) return res.status(404).json({ error: 'Analysis not found in your organization.' });
 
