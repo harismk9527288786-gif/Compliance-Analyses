@@ -326,18 +326,25 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
                 >
                   Reject Certificate
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setShowApprovalModal(true)}
-                  disabled={hasUnresolvedDeviations}
-                  title={hasUnresolvedDeviations ? "Cannot approve: Unresolved deviations exist" : "Technical Sign-Off"}
-                  className={`px-4 py-2 text-xs font-bold rounded-lg ${hasUnresolvedDeviations ? 'bg-emerald-600/50 cursor-not-allowed opacity-50' : 'bg-emerald-600 hover:bg-emerald-500 cursor-pointer'} text-white border border-emerald-400/50 shadow-xs transition-colors flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400`}
-                >
-                  <ShieldCheck className="w-4 h-4 stroke-[2.5]" aria-hidden="true" />
-                  <span>Technical Sign-Off</span>
-                </button>
+                <div className="relative group">
+                  <button
+                    type="button"
+                    onClick={() => setShowApprovalModal(true)}
+                    disabled={hasUnresolvedDeviations}
+                    className={`px-4 py-2 text-xs font-bold rounded-lg ${hasUnresolvedDeviations ? 'bg-emerald-800/40 text-emerald-300/60 cursor-not-allowed border border-emerald-800/50' : 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer border border-emerald-400/50'} shadow-xs transition-colors flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400`}
+                  >
+                    <ShieldCheck className="w-4 h-4 stroke-[2.5]" aria-hidden="true" />
+                    <span>Technical Sign-Off</span>
+                  </button>
+                  {hasUnresolvedDeviations && (
+                    <div className="hidden group-hover:block absolute right-0 top-full mt-1.5 w-64 p-2 bg-slate-950 text-slate-200 text-[11px] font-sans rounded-md border border-slate-700 shadow-xl z-20">
+                      Cannot sign off: Unresolved deviations or documentation gaps exist. Inspect individual findings below to review or grant concessions first.
+                    </div>
+                  )}
+                </div>
               </>
             )}
+
 
             {isApproved && (
               <div className="px-3.5 py-2 bg-emerald-950 border border-emerald-700 rounded-lg text-xs text-emerald-300 flex items-center gap-2 font-mono font-bold">
