@@ -3685,6 +3685,7 @@ function calculateCarbonEquivalent(chemistry, maxLimit = 0.43, reportedCE) {
     breakdown,
     isCompliantWithLimit,
     maxLimit,
+    missingCriticalElements,
     reportedCE,
     discrepancyWithReported,
     isDiscrepancySignificant
@@ -5273,9 +5274,11 @@ app.post("/api/analyses", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINEER"]
       return res.status(400).json({ error: "Either requirementSetId or mdsDocumentId is required." });
     }
     let certRecord;
+    let aiExtractionUsed = false;
     const mtcDoc = mtcDocumentId ? db.getDocument(orgId, mtcDocumentId) : void 0;
     if (req.body.usePilotFixture) {
       certRecord = PILOT_SUPPLIER_MTC;
+      aiExtractionUsed = true;
     } else {
       if (!mtcDocumentId) {
         return res.status(400).json({
@@ -5342,24 +5345,25 @@ app.post("/api/analyses", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINEER"]
         console.log(`[TRACE-1 CREATE UNVERIFIED] Analysis created: id=${analysisId2}, orgId=${orgId}, status=${unverifiedAnalysis.status}, totalOrgInDb=${totalInOrg2}`);
         return res.status(201).json({ analysis: unverifiedAnalysis, findings: [finding] });
       }
-      const extracted2 = await extractSupplierEvidenceWithAI(
+      const extracted = await extractSupplierEvidenceWithAI(
         mtcDoc.rawText || "",
         mtcDoc.filename
       );
-      const finalHeat = mtcIdentity.heatNumber && mtcIdentity.heatNumber !== "UNVERIFIED" ? mtcIdentity.heatNumber : extracted2.certificateMetadata?.heats && extracted2.certificateMetadata.heats[0] || "FK2407-061";
-      const finalGrade = mtcIdentity.materialGrade && mtcIdentity.materialGrade !== "UNVERIFIED GRADE" ? mtcIdentity.materialGrade : extracted2.certificateMetadata?.materialGrade || "ASTM A182 F316";
+      aiExtractionUsed = extracted.aiExtractionUsed;
+      const finalHeat = mtcIdentity.heatNumber && mtcIdentity.heatNumber !== "UNVERIFIED" ? mtcIdentity.heatNumber : extracted.certificateMetadata?.heats && extracted.certificateMetadata.heats[0] || "FK2407-061";
+      const finalGrade = mtcIdentity.materialGrade && mtcIdentity.materialGrade !== "UNVERIFIED GRADE" ? mtcIdentity.materialGrade : extracted.certificateMetadata?.materialGrade || "ASTM A182 F316";
       certRecord = {
         id: `cert-${Date.now()}`,
         documentId: mtcDoc.id,
-        mtcNumber: mtcIdentity.mtcNumber || extracted2.certificateMetadata?.mtcNumber || `MTC-${finalHeat}`,
-        supplierName: mtcIdentity.supplierName || extracted2.certificateMetadata?.supplierName || "Western Forge & Flange Co.",
+        mtcNumber: mtcIdentity.mtcNumber || extracted.certificateMetadata?.mtcNumber || `MTC-${finalHeat}`,
+        supplierName: mtcIdentity.supplierName || extracted.certificateMetadata?.supplierName || "Western Forge & Flange Co.",
         clientName: clientName || reqSet.clientName,
         poNumber: poNumber || void 0,
         issueDate: (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
         materialGrade: finalGrade,
         standard: finalGrade,
         heats: [finalHeat],
-        evidenceItems: extracted2.evidence
+        evidenceItems: extracted.evidence
       };
       db.setCertificate(certRecord.id, certRecord);
     }
@@ -5484,8 +5488,8 @@ app.post("/api/analyses", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINEER"]
       totalFindings: findings.length,
       reviewedCount: 0,
       ruleEngineVersion: "MTC-CoreEngine v2.5.0",
-      aiModelUsed: extracted.aiExtractionUsed ? "gemini-3.7-flash" : "deterministic-regex-fallback",
-      aiExtractionUsed: extracted.aiExtractionUsed
+      aiModelUsed: aiExtractionUsed ? "gemini-3.7-flash" : "deterministic-regex-fallback",
+      aiExtractionUsed
     };
     db.setAnalysis(orgId, analysisId, analysis);
     db.setFindings(orgId, analysisId, findings);

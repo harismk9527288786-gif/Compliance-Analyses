@@ -88,9 +88,11 @@ export function calculateCarbonEquivalent(
     breakdown,
     isCompliantWithLimit,
     maxLimit,
+    missingCriticalElements,
 
     reportedCE,
     discrepancyWithReported,
     isDiscrepancySignificant,
   };
 }
+

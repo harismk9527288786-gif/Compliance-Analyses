@@ -627,7 +627,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 }`}
               >
                 <AlertTriangle className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
-                <span>Issues ({viewScope === 'pending' ? activeNeedsAttention : (activeNeedsAttention)})</span>
+                <span>Issues ({viewScope === 'pending' ? activeNeedsAttention : totalNeedsAttention})</span>
               </button>
               <button
                 type="button"
@@ -641,9 +641,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 }`}
               >
                 <CheckCircle2 className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
-                <span>Conforming ({viewScope === 'pending' ? activePass : activePass})</span>
+                <span>Conforming ({viewScope === 'pending' ? activePass : totalPass})</span>
               </button>
             </div>
+
 
             {/* Search Input */}
             <div className="relative flex-1 sm:w-56 min-w-[200px] max-w-full">

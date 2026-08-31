@@ -479,11 +479,14 @@ app.use('/api/auth', authRouter);
 
       // 2. Resolve Certificate Evidence (Must be uploaded in current session)
       let certRecord: CertificateRecord | undefined;
+      let aiExtractionUsed: boolean = false;
       const mtcDoc = mtcDocumentId ? db.getDocument(orgId, mtcDocumentId) : undefined;
 
       if (req.body.usePilotFixture) {
         certRecord = PILOT_SUPPLIER_MTC;
+        aiExtractionUsed = true;
       } else {
+
         if (!mtcDocumentId) {
           return res.status(400).json({
             error: 'MTC document is required for verification. Please upload or select a supplier MTC in the current session.'
@@ -562,6 +565,8 @@ app.use('/api/auth', authRouter);
           mtcDoc.rawText || '',
           mtcDoc.filename
         );
+        aiExtractionUsed = extracted.aiExtractionUsed;
+
 
         const finalHeat =
           mtcIdentity.heatNumber && mtcIdentity.heatNumber !== 'UNVERIFIED'
@@ -727,9 +732,10 @@ app.use('/api/auth', authRouter);
         totalFindings: findings.length,
         reviewedCount: 0,
         ruleEngineVersion: 'MTC-CoreEngine v2.5.0',
-        aiModelUsed: extracted.aiExtractionUsed ? 'gemini-3.7-flash' : 'deterministic-regex-fallback',
-        aiExtractionUsed: extracted.aiExtractionUsed,
+        aiModelUsed: aiExtractionUsed ? 'gemini-3.7-flash' : 'deterministic-regex-fallback',
+        aiExtractionUsed: aiExtractionUsed,
       };
+
 
       db.setAnalysis(orgId, analysisId, analysis);
       db.setFindings(orgId, analysisId, findings);
