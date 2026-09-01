@@ -110,7 +110,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
       a.documentationGapCount || 0,
       a.status,
       new Date(a.createdAt).toISOString(),
-      a.createdByName,
+      a.approvedByName || a.createdByName,
     ]);
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.map((val) => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n');

@@ -340,7 +340,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           }}
           className={`text-left bg-white rounded-xl p-5 border transition-all cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 group ${
             statusFilter === 'pass'
-              ? 'border-emerald-600 ring-2 ring-emerald-600 bg-emerald-50/60'
+              ? 'border-emerald-600 ring-1 ring-emerald-600 bg-emerald-50/60'
               : 'border-emerald-300 hover:border-emerald-500 hover:bg-emerald-50'
           }`}
         >
@@ -377,7 +377,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           }}
           className={`text-left bg-white rounded-xl p-5 border transition-all cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 group ${
             statusFilter === 'deviations'
-              ? 'border-rose-600 ring-2 ring-rose-600 bg-rose-50/60'
+              ? 'border-rose-600 ring-1 ring-rose-600 bg-rose-50/60'
               : 'border-rose-300 hover:border-rose-500 hover:bg-rose-50'
           }`}
         >
@@ -413,7 +413,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           }}
           className={`text-left bg-white rounded-xl p-5 border transition-all cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 group ${
             statusFilter === 'all'
-              ? 'border-slate-900 ring-2 ring-slate-900 bg-slate-50'
+              ? 'border-slate-900 ring-1 ring-slate-900 bg-slate-50'
               : 'border-slate-300 hover:border-slate-400 hover:bg-slate-50'
           }`}
         >

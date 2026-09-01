@@ -585,6 +585,7 @@ app.use('/api/auth', authRouter);
           standard: finalGrade,
           heats: [finalHeat],
           evidenceItems: extracted.evidence as any,
+          aiExtractionUsed: extracted.aiExtractionUsed
         };
         db.setCertificate(certRecord.id, certRecord);
       }
@@ -727,8 +728,8 @@ app.use('/api/auth', authRouter);
         totalFindings: findings.length,
         reviewedCount: 0,
         ruleEngineVersion: 'MTC-CoreEngine v2.5.0',
-        aiModelUsed: extracted.aiExtractionUsed ? 'gemini-3.7-flash' : 'deterministic-regex-fallback',
-        aiExtractionUsed: extracted.aiExtractionUsed,
+        aiModelUsed: certRecord.aiExtractionUsed ? 'gemini-3.7-flash' : 'deterministic-regex-fallback',
+        aiExtractionUsed: certRecord.aiExtractionUsed,
       };
 
       db.setAnalysis(orgId, analysisId, analysis);

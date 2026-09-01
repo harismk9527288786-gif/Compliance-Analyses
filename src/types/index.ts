@@ -164,6 +164,7 @@ export interface CertificateRecord {
   certifiedBy?: string;
   en10204Type?: string;
   evidenceItems: SupplierEvidence[];
+  aiExtractionUsed?: boolean;
 }
 
 export type FindingStatus =

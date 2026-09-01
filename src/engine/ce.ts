@@ -92,5 +92,6 @@ export function calculateCarbonEquivalent(
     reportedCE,
     discrepancyWithReported,
     isDiscrepancySignificant,
+    missingCriticalElements,
   };
 }
