@@ -454,6 +454,16 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                               </div>
                             )}
                           </div>
+                        ) : analysis.status === 'rejected' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold font-mono bg-rose-100 text-rose-900 border border-rose-300">
+                            <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
+                            <span>REJECTED</span>
+                          </span>
+                        ) : (analysis.reviewRequiredCount || 0) > 0 ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-100 text-amber-900 border border-amber-300">
+                            <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
+                            <span>REVIEW REQUIRED ({analysis.reviewRequiredCount})</span>
+                          </span>
                         ) : hasDeviations ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold font-mono bg-rose-100 text-rose-900 border border-rose-300">
                             <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
@@ -471,6 +481,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                           </span>
                         )}
                       </td>
+
 
                       <td className="py-3 px-3 text-[11px] text-slate-500 font-mono">
                         <div>{new Date(analysis.createdAt).toLocaleDateString()}</div>

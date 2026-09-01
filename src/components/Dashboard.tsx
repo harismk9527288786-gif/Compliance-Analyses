@@ -61,9 +61,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // Partition analyses into active review queue vs signed-off history
   const list = Array.isArray(analyses) ? analyses : [];
   const signedOffAnalyses = list.filter((a) => a && a.status === 'approved');
-  // Rejected analyses are resolved (not pending action) — exclude from active queue to prevent perpetual ACTION REQUIRED state
-  const activeAnalyses = list.filter((a) => a && a.status !== 'approved' && a.status !== 'rejected');
-
+  // Active review queue includes all pending, in-progress, and unverified records awaiting QC sign-off
+  const activeAnalyses = list.filter((a) => a && a.status !== 'approved');
 
   // Active queue metrics (signed-off records do NOT alarm active dashboard metrics)
   const activeReviews = activeAnalyses.length;
@@ -80,8 +79,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const totalPass = list.reduce((acc, a) => acc + (a?.passCount || 0), 0);
   const totalDeviations = list.reduce((acc, a) => acc + (a?.deviationCount || 0), 0);
   const totalGaps = list.reduce((acc, a) => acc + (a?.documentationGapCount || 0), 0);
-  const totalNeedsAttention = totalDeviations + totalGaps;
+  const totalReviewRequired = list.reduce((acc, a) => acc + (a?.reviewRequiredCount || 0), 0);
+  const totalNeedsAttention = totalDeviations + totalGaps + totalReviewRequired;
   const totalChecks = totalPass + totalNeedsAttention;
+
 
   // Filter analyses requiring attention from ACTIVE queue only (signed-off records excluded)
   const attentionItems = activeAnalyses.filter(
@@ -114,11 +115,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     if (!matchesSearch) return false;
     if (statusFilter === 'all') return true;
-    if (statusFilter === 'deviations') return (a.deviationCount || 0) > 0;
+    if (statusFilter === 'deviations') return (a.deviationCount || 0) > 0 || (a.documentationGapCount || 0) > 0 || (a.reviewRequiredCount || 0) > 0 || a.status === 'rejected';
     if (statusFilter === 'gaps') return (a.documentationGapCount || 0) > 0;
-    if (statusFilter === 'pass') return a.status === 'approved' || ((a.deviationCount || 0) === 0 && (a.documentationGapCount || 0) === 0 && (a.reviewRequiredCount || 0) === 0);
+    if (statusFilter === 'pass') return a.status === 'approved' || ((a.deviationCount || 0) === 0 && (a.documentationGapCount || 0) === 0 && (a.reviewRequiredCount || 0) === 0 && a.status !== 'rejected');
     return true;
   });
+
 
   const getAttentionSummary = (a: AnalysisRecord) => {
     if ((a.reviewRequiredCount || 0) > 0) {
@@ -822,6 +824,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             <CheckCircle2 className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
                             <span>CONFORMANT</span>
                           </span>
+                        ) : isRejected ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold font-mono bg-rose-100 text-rose-900 border border-rose-300">
+                            <ShieldAlert className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
+                            <span>REJECTED</span>
+                          </span>
+                        ) : (analysis.reviewRequiredCount || 0) > 0 ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-100 text-amber-900 border border-amber-300">
+                            <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
+                            <span>REVIEW REQUIRED ({analysis.reviewRequiredCount})</span>
+                          </span>
                         ) : hasDeviations ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold font-mono bg-rose-100 text-rose-900 border border-rose-300">
                             <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
@@ -839,6 +851,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           </span>
                         )}
                       </td>
+
 
                       {/* 5. Audit State */}
                       <td className="py-3 px-3">

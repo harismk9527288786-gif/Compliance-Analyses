@@ -531,9 +531,10 @@ app.use('/api/auth', authRouter);
             id: analysisId,
             organizationId: orgId,
             title: `MTC Identity Review Required: ${mtcDoc.filename}`,
-            status: 'rejected',
+            status: 'ready_for_review',
             mtcDocumentId: mtcDoc.id,
             mtcFilename: mtcDoc.filename,
+
             mtcNumber: mtcIdentity.mtcNumber,
             supplierName: mtcIdentity.supplierName || 'Unverified Supplier',
             clientName: clientName || reqSet.clientName,
@@ -638,8 +639,9 @@ app.use('/api/auth', authRouter);
           id: analysisId,
           organizationId: orgId,
           title: `Specification Mismatch: ${certRecord.materialGrade} vs ${reqSet.materialGrade}`,
-          status: 'rejected',
+          status: 'ready_for_review',
           mtcDocumentId: certRecord.documentId,
+
           mtcFilename: mtcDoc ? mtcDoc.filename : 'MTC-Document.pdf',
           mdsDocumentId: mdsDocumentId,
           mdsFilename: reqSet.sourceDocumentId
