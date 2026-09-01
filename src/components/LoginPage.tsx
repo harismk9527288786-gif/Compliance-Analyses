@@ -960,8 +960,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                             type="button"
                             onClick={() => setShowInvitePassword(!showInvitePassword)}
                             className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200 cursor-pointer"
+                            aria-label={showInvitePassword ? 'Hide password' : 'Show password'}
                           >
-                            {showInvitePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            {showInvitePassword ? (
+                              <EyeOff className="w-4 h-4" aria-hidden="true" />
+                            ) : (
+                              <Eye className="w-4 h-4" aria-hidden="true" />
+                            )}
                           </button>
                         </div>
                       </div>
@@ -1051,6 +1056,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 type="button"
                 onClick={() => setShowForgotModal(false)}
                 className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors cursor-pointer"
+                aria-label="Close"
               >
                 <X className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -1178,6 +1184,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 type="button"
                 onClick={() => setShowStandardsModal(false)}
                 className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors cursor-pointer"
+                aria-label="Close"
               >
                 <X className="w-4 h-4" aria-hidden="true" />
               </button>
