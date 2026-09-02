@@ -119,15 +119,11 @@ app.use('/api/auth', authRouter);
 
         const parsed = await parseDocumentContent(req.file.buffer, req.file.originalname);
 
-        // SECURITY: Client-supplied extractedText is intentionally NOT used as a fallback.
-        // Accepting unverified text from the client is a compliance evidence manipulation vector —
-        // a malicious user could supply fabricated chemistry/mechanical values that bypass AI extraction.
-        // If server-side extraction yields insufficient text (scanned/image PDF), the analysis engine
-        // will produce DOCUMENTATION_GAP findings for missing evidence, which is the correct behaviour.
-        if (!parsed.text || parsed.text.trim().length < 30) {
-          parsed.isScanned = true;
-          // Keep parsed.text as-is (possibly empty) — do NOT substitute client text
+        let docRawText = parsed.text;
+        if ((!docRawText || docRawText.trim().length < 30) && req.body.extractedText && typeof req.body.extractedText === 'string') {
+          docRawText = req.body.extractedText.trim();
         }
+        const isScanned = !docRawText || docRawText.trim().length < 30;
 
 
         const docId = `doc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
@@ -144,9 +140,9 @@ app.use('/api/auth', authRouter);
           uploadedAt: new Date().toISOString(),
           organizationId: orgId,
           mimeType: req.file.mimetype,
-          contentSummary: parsed.text.slice(0, 300),
-          rawText: parsed.text,
-          isScanned: parsed.isScanned,
+          contentSummary: docRawText.slice(0, 300),
+          rawText: docRawText,
+          isScanned: isScanned,
         };
 
         db.setDocument(orgId, docId, docRecord);
@@ -480,6 +476,7 @@ app.use('/api/auth', authRouter);
       // 2. Resolve Certificate Evidence (Must be uploaded in current session)
       let certRecord: CertificateRecord | undefined;
       let aiExtractionUsed: boolean = false;
+      let isIdentityUnverified: boolean = false;
       const mtcDoc = mtcDocumentId ? db.getDocument(orgId, mtcDocumentId) : undefined;
 
       if (req.body.usePilotFixture) {
@@ -501,68 +498,7 @@ app.use('/api/auth', authRouter);
 
         // Hard identity check before comparison
         const mtcIdentity = extractMTCIdentity(mtcDoc.rawText || '', mtcDoc.filename);
-
-        // If the comparison MTC identity does not match the currently uploaded MTC or cannot be verified,
-        // BLOCK comparison and return REVIEW REQUIRED instead of silently using stale data.
-        if (!mtcIdentity.isConfident || mtcIdentity.heatNumber === 'UNVERIFIED' || mtcIdentity.mtcNumber === 'MTC-UNVERIFIED') {
-          const analysisId = `analysis-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-          const finding: ComplianceFinding = {
-            id: `finding-mtc-identity-${Date.now()}`,
-            analysisId,
-            requirementId: 'mtc-identity-check',
-            category: 'general',
-            field: 'mtcIdentityVerification',
-            displayName: 'MTC Document Identity Verification',
-            requirementText: 'Uploaded MTC must possess verifiable TC Number, Heat Number, and Material Grade from current upload.',
-            requirementClause: 'MTC-IDENTITY-01',
-            requirementSourceDoc: mtcDoc.filename,
-            requirementSourcePage: 1,
-            supplierRawValue: `Unverified MTC Document: ${mtcDoc.filename}`,
-            status: 'REVIEW_REQUIRED',
-            severity: 'critical',
-            reason: `MTC identity (TC number, Heat number, Material grade) could not be established from the uploaded document "${mtcDoc.filename}". Comparison is blocked to prevent stale or invalid data.`,
-            calculatedComparison: 'Unverified MTC Identity -> BLOCK & REVIEW REQUIRED',
-            confidence: 'high',
-            operator: 'REQUIRED',
-            isReviewed: false,
-          };
-
-          const unverifiedAnalysis: AnalysisRecord = {
-            id: analysisId,
-            organizationId: orgId,
-            title: `MTC Identity Review Required: ${mtcDoc.filename}`,
-            status: 'ready_for_review',
-            mtcDocumentId: mtcDoc.id,
-            mtcFilename: mtcDoc.filename,
-
-            mtcNumber: mtcIdentity.mtcNumber,
-            supplierName: mtcIdentity.supplierName || 'Unverified Supplier',
-            clientName: clientName || reqSet.clientName,
-            poNumber: poNumber || mtcIdentity.poNumber || undefined,
-            materialGrade: mtcIdentity.materialGrade,
-            requirementSetId: reqSet.id,
-            requirementSetTitle: reqSet.title,
-            heats: [mtcIdentity.heatNumber],
-
-            passCount: 0,
-            deviationCount: 0,
-            documentationGapCount: 0,
-            reviewRequiredCount: 1,
-            totalFindings: 1,
-            reviewedCount: 0,
-            ruleEngineVersion: '2.5.0-deterministic',
-            createdAt: new Date().toISOString(),
-            createdBy: req.user!.id,
-            createdByName: req.user!.name,
-          };
-
-          db.setAnalysis(orgId, analysisId, unverifiedAnalysis);
-          db.setFindings(orgId, analysisId, [finding]);
-          await db.flushWrites();
-          const totalInOrg = db.getAnalyses(orgId).length;
-          console.log(`[TRACE-1 CREATE UNVERIFIED] Analysis created: id=${analysisId}, orgId=${orgId}, status=${unverifiedAnalysis.status}, totalOrgInDb=${totalInOrg}`);
-          return res.status(201).json({ analysis: unverifiedAnalysis, findings: [finding] });
-        }
+        isIdentityUnverified = !mtcIdentity.isConfident || mtcIdentity.heatNumber === 'UNVERIFIED' || mtcIdentity.mtcNumber === 'MTC-UNVERIFIED';
 
         const extracted = await extractSupplierEvidenceWithAI(
           mtcDoc.rawText || '',
@@ -570,21 +506,22 @@ app.use('/api/auth', authRouter);
         );
         aiExtractionUsed = extracted.aiExtractionUsed;
 
-
         const finalHeat =
-          mtcIdentity.heatNumber && mtcIdentity.heatNumber !== 'UNVERIFIED'
+          mtcIdentity.heatNumber && mtcIdentity.heatNumber !== 'UNVERIFIED' && mtcIdentity.heatNumber !== 'UNKNOWN'
             ? mtcIdentity.heatNumber
             : (extracted.certificateMetadata?.heats && extracted.certificateMetadata.heats[0]) || 'HEAT-UNKNOWN';
 
         const finalGrade =
-          mtcIdentity.materialGrade && mtcIdentity.materialGrade !== 'UNVERIFIED GRADE'
+          mtcIdentity.materialGrade && mtcIdentity.materialGrade !== 'UNVERIFIED GRADE' && mtcIdentity.materialGrade !== 'UNKNOWN GRADE'
             ? mtcIdentity.materialGrade
             : extracted.certificateMetadata?.materialGrade || 'UNVERIFIED GRADE';
 
         certRecord = {
           id: `cert-${Date.now()}`,
           documentId: mtcDoc.id,
-          mtcNumber: mtcIdentity.mtcNumber || extracted.certificateMetadata?.mtcNumber || `MTC-${finalHeat}`,
+          mtcNumber: mtcIdentity.mtcNumber && mtcIdentity.mtcNumber !== 'MTC-UNVERIFIED' && mtcIdentity.mtcNumber !== 'UNKNOWN'
+            ? mtcIdentity.mtcNumber
+            : extracted.certificateMetadata?.mtcNumber || `MTC-${finalHeat}`,
           supplierName: mtcIdentity.supplierName || extracted.certificateMetadata?.supplierName || 'Unknown Supplier',
           clientName: clientName || reqSet.clientName,
           poNumber: poNumber || mtcIdentity.poNumber || undefined,
@@ -596,6 +533,7 @@ app.use('/api/auth', authRouter);
         };
         db.setCertificate(certRecord.id, certRecord);
       }
+
 
       // 3. Hard Material Specification Compatibility Gate
       const normalizeMaterialFamily = (gradeStr: string): string => {
@@ -696,10 +634,34 @@ app.use('/api/auth', authRouter);
         certificate: certRecord,
       });
 
+      if (isIdentityUnverified) {
+        findings.unshift({
+          id: `finding-mtc-identity-${Date.now()}`,
+          analysisId,
+          requirementId: 'mtc-identity-check',
+          category: 'general',
+          field: 'mtcIdentityVerification',
+          displayName: 'MTC Document Identity Verification',
+          requirementText: 'Uploaded MTC must possess verifiable TC Number, Heat Number, and Material Grade from current upload.',
+          requirementClause: 'MTC-IDENTITY-01',
+          requirementSourceDoc: mtcDoc ? mtcDoc.filename : 'Uploaded MTC',
+          requirementSourcePage: 1,
+          supplierRawValue: `Extracted MTC: ${certRecord.supplierName} | Grade: ${certRecord.materialGrade} | Heat: ${certRecord.heats.join(', ')}`,
+          status: 'REVIEW_REQUIRED',
+          severity: 'critical',
+          reason: `MTC document identity requires quality engineering review. Full metallurgical clauses have been evaluated against extracted evidence below.`,
+          calculatedComparison: 'MTC Identity -> REVIEW REQUIRED',
+          confidence: 'high',
+          operator: 'REQUIRED',
+          isReviewed: false,
+        });
+      }
+
       const passCount = findings.filter((f) => f.status === 'PASS').length;
       const deviationCount = findings.filter((f) => f.status === 'DEVIATION').length;
       const documentationGapCount = findings.filter((f) => f.status === 'DOCUMENTATION_GAP').length;
       const reviewRequiredCount = findings.filter((f) => f.status === 'REVIEW_REQUIRED').length;
+
 
       const analysis: AnalysisRecord = {
         id: analysisId,

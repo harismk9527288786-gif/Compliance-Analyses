@@ -5007,9 +5007,11 @@ app.post(
         return res.status(400).json({ error: validation.error });
       }
       const parsed = await parseDocumentContent(req.file.buffer, req.file.originalname);
-      if (!parsed.text || parsed.text.trim().length < 30) {
-        parsed.isScanned = true;
+      let docRawText = parsed.text;
+      if ((!docRawText || docRawText.trim().length < 30) && req.body.extractedText && typeof req.body.extractedText === "string") {
+        docRawText = req.body.extractedText.trim();
       }
+      const isScanned = !docRawText || docRawText.trim().length < 30;
       const docId = `doc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       const docRecord = {
         id: docId,
@@ -5023,9 +5025,9 @@ app.post(
         uploadedAt: (/* @__PURE__ */ new Date()).toISOString(),
         organizationId: orgId,
         mimeType: req.file.mimetype,
-        contentSummary: parsed.text.slice(0, 300),
-        rawText: parsed.text,
-        isScanned: parsed.isScanned
+        contentSummary: docRawText.slice(0, 300),
+        rawText: docRawText,
+        isScanned
       };
       db.setDocument(orgId, docId, docRecord);
       db.addAuditEvent(orgId, {
@@ -5312,6 +5314,7 @@ app.post("/api/analyses", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINEER"]
     }
     let certRecord;
     let aiExtractionUsed = false;
+    let isIdentityUnverified = false;
     const mtcDoc = mtcDocumentId ? db.getDocument(orgId, mtcDocumentId) : void 0;
     if (req.body.usePilotFixture) {
       certRecord = PILOT_SUPPLIER_MTC;
@@ -5328,72 +5331,18 @@ app.post("/api/analyses", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINEER"]
         });
       }
       const mtcIdentity = extractMTCIdentity(mtcDoc.rawText || "", mtcDoc.filename);
-      if (!mtcIdentity.isConfident || mtcIdentity.heatNumber === "UNVERIFIED" || mtcIdentity.mtcNumber === "MTC-UNVERIFIED") {
-        const analysisId2 = `analysis-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-        const finding = {
-          id: `finding-mtc-identity-${Date.now()}`,
-          analysisId: analysisId2,
-          requirementId: "mtc-identity-check",
-          category: "general",
-          field: "mtcIdentityVerification",
-          displayName: "MTC Document Identity Verification",
-          requirementText: "Uploaded MTC must possess verifiable TC Number, Heat Number, and Material Grade from current upload.",
-          requirementClause: "MTC-IDENTITY-01",
-          requirementSourceDoc: mtcDoc.filename,
-          requirementSourcePage: 1,
-          supplierRawValue: `Unverified MTC Document: ${mtcDoc.filename}`,
-          status: "REVIEW_REQUIRED",
-          severity: "critical",
-          reason: `MTC identity (TC number, Heat number, Material grade) could not be established from the uploaded document "${mtcDoc.filename}". Comparison is blocked to prevent stale or invalid data.`,
-          calculatedComparison: "Unverified MTC Identity -> BLOCK & REVIEW REQUIRED",
-          confidence: "high",
-          operator: "REQUIRED",
-          isReviewed: false
-        };
-        const unverifiedAnalysis = {
-          id: analysisId2,
-          organizationId: orgId,
-          title: `MTC Identity Review Required: ${mtcDoc.filename}`,
-          status: "ready_for_review",
-          mtcDocumentId: mtcDoc.id,
-          mtcFilename: mtcDoc.filename,
-          mtcNumber: mtcIdentity.mtcNumber,
-          supplierName: mtcIdentity.supplierName || "Unverified Supplier",
-          clientName: clientName || reqSet.clientName,
-          poNumber: poNumber || mtcIdentity.poNumber || void 0,
-          materialGrade: mtcIdentity.materialGrade,
-          requirementSetId: reqSet.id,
-          requirementSetTitle: reqSet.title,
-          heats: [mtcIdentity.heatNumber],
-          passCount: 0,
-          deviationCount: 0,
-          documentationGapCount: 0,
-          reviewRequiredCount: 1,
-          totalFindings: 1,
-          reviewedCount: 0,
-          ruleEngineVersion: "2.5.0-deterministic",
-          createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-          createdBy: req.user.id,
-          createdByName: req.user.name
-        };
-        db.setAnalysis(orgId, analysisId2, unverifiedAnalysis);
-        db.setFindings(orgId, analysisId2, [finding]);
-        await db.flushWrites();
-        const totalInOrg2 = db.getAnalyses(orgId).length;
-        console.log(`[TRACE-1 CREATE UNVERIFIED] Analysis created: id=${analysisId2}, orgId=${orgId}, status=${unverifiedAnalysis.status}, totalOrgInDb=${totalInOrg2}`);
-        return res.status(201).json({ analysis: unverifiedAnalysis, findings: [finding] });
-      }
+      isIdentityUnverified = !mtcIdentity.isConfident || mtcIdentity.heatNumber === "UNVERIFIED" || mtcIdentity.mtcNumber === "MTC-UNVERIFIED";
       const extracted = await extractSupplierEvidenceWithAI(
         mtcDoc.rawText || "",
         mtcDoc.filename
       );
       aiExtractionUsed = extracted.aiExtractionUsed;
-      const finalHeat = mtcIdentity.heatNumber && mtcIdentity.heatNumber !== "UNVERIFIED" ? mtcIdentity.heatNumber : extracted.certificateMetadata?.heats && extracted.certificateMetadata.heats[0] || "HEAT-UNKNOWN";
-      const finalGrade = mtcIdentity.materialGrade && mtcIdentity.materialGrade !== "UNVERIFIED GRADE" ? mtcIdentity.materialGrade : extracted.certificateMetadata?.materialGrade || "UNVERIFIED GRADE";
+      const finalHeat = mtcIdentity.heatNumber && mtcIdentity.heatNumber !== "UNVERIFIED" && mtcIdentity.heatNumber !== "UNKNOWN" ? mtcIdentity.heatNumber : extracted.certificateMetadata?.heats && extracted.certificateMetadata.heats[0] || "HEAT-UNKNOWN";
+      const finalGrade = mtcIdentity.materialGrade && mtcIdentity.materialGrade !== "UNVERIFIED GRADE" && mtcIdentity.materialGrade !== "UNKNOWN GRADE" ? mtcIdentity.materialGrade : extracted.certificateMetadata?.materialGrade || "UNVERIFIED GRADE";
       certRecord = {
         id: `cert-${Date.now()}`,
         documentId: mtcDoc.id,
-        mtcNumber: mtcIdentity.mtcNumber || extracted.certificateMetadata?.mtcNumber || `MTC-${finalHeat}`,
+        mtcNumber: mtcIdentity.mtcNumber && mtcIdentity.mtcNumber !== "MTC-UNVERIFIED" && mtcIdentity.mtcNumber !== "UNKNOWN" ? mtcIdentity.mtcNumber : extracted.certificateMetadata?.mtcNumber || `MTC-${finalHeat}`,
         supplierName: mtcIdentity.supplierName || extracted.certificateMetadata?.supplierName || "Unknown Supplier",
         clientName: clientName || reqSet.clientName,
         poNumber: poNumber || mtcIdentity.poNumber || void 0,
@@ -5491,6 +5440,28 @@ app.post("/api/analyses", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINEER"]
       requirements: reqSet.requirements,
       certificate: certRecord
     });
+    if (isIdentityUnverified) {
+      findings.unshift({
+        id: `finding-mtc-identity-${Date.now()}`,
+        analysisId,
+        requirementId: "mtc-identity-check",
+        category: "general",
+        field: "mtcIdentityVerification",
+        displayName: "MTC Document Identity Verification",
+        requirementText: "Uploaded MTC must possess verifiable TC Number, Heat Number, and Material Grade from current upload.",
+        requirementClause: "MTC-IDENTITY-01",
+        requirementSourceDoc: mtcDoc ? mtcDoc.filename : "Uploaded MTC",
+        requirementSourcePage: 1,
+        supplierRawValue: `Extracted MTC: ${certRecord.supplierName} | Grade: ${certRecord.materialGrade} | Heat: ${certRecord.heats.join(", ")}`,
+        status: "REVIEW_REQUIRED",
+        severity: "critical",
+        reason: `MTC document identity requires quality engineering review. Full metallurgical clauses have been evaluated against extracted evidence below.`,
+        calculatedComparison: "MTC Identity -> REVIEW REQUIRED",
+        confidence: "high",
+        operator: "REQUIRED",
+        isReviewed: false
+      });
+    }
     const passCount = findings.filter((f) => f.status === "PASS").length;
     const deviationCount = findings.filter((f) => f.status === "DEVIATION").length;
     const documentationGapCount = findings.filter((f) => f.status === "DOCUMENTATION_GAP").length;
