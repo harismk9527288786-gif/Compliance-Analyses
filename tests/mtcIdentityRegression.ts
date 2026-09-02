@@ -159,6 +159,77 @@ Material: ASTM A182 F316
   }
 
   // ─────────────────────────────────────────────────────────────────
+  // TEST 2B: Specific User Scenario: Empty doc text with full filename
+  // Filename = "WW2604-133 IMP004774 EN 10204 3.1 Material Test Report F316-REV.1-poi-1 - Stem..pdf"
+  // Expected:
+  //   manufacturer = undefined / NOT IDENTIFIED (never guessed)
+  //   material = ASTM A182 F316 (from filename "F316")
+  //   PO = IMP004774 (from filename "IMP004774")
+  //   production = WW2604-133 (from filename "WW2604-133")
+  //   TC = UNKNOWN / MTC-UNVERIFIED (not in filename)
+  //   heat = UNVERIFIED / UNKNOWN (not in filename)
+  // ─────────────────────────────────────────────────────────────────
+  {
+    const filename = 'WW2604-133 IMP004774 EN 10204 3.1 Material Test Report F316-REV.1-poi-1 - Stem..pdf';
+    const identity = extractMTCIdentity('', filename);
+
+    const suppCheck = assertEqual(identity.supplierName, undefined, 'supplier on empty text + filename');
+    results.push({
+      name: 'TC-REGR-07A: Manufacturer is UNKNOWN when doc text empty',
+      passed: suppCheck.passed,
+      expected: 'undefined',
+      actual: String(identity.supplierName),
+      detail: suppCheck.detail,
+    });
+
+    const matCheck = assertEqual(identity.materialGrade, 'ASTM A182 F316', 'material from filename');
+    results.push({
+      name: 'TC-REGR-07B: Material grade ASTM A182 F316 extracted from filename',
+      passed: matCheck.passed,
+      expected: 'ASTM A182 F316',
+      actual: identity.materialGrade,
+      detail: matCheck.detail,
+    });
+
+    const poCheck = assertEqual(identity.poNumber, 'IMP004774', 'PO from filename');
+    results.push({
+      name: 'TC-REGR-07C: PO / Contract No IMP004774 extracted from filename',
+      passed: poCheck.passed,
+      expected: 'IMP004774',
+      actual: String(identity.poNumber),
+      detail: poCheck.detail,
+    });
+
+    const prodCheck = assertEqual(identity.productionNumber, 'WW2604-133', 'production from filename');
+    results.push({
+      name: 'TC-REGR-07D: Production No WW2604-133 extracted from filename',
+      passed: prodCheck.passed,
+      expected: 'WW2604-133',
+      actual: String(identity.productionNumber),
+      detail: prodCheck.detail,
+    });
+
+    const tcCheck = assertEqual(identity.mtcNumber, 'MTC-UNVERIFIED', 'TC not in filename');
+    results.push({
+      name: 'TC-REGR-07E: TC No is UNKNOWN / UNVERIFIED when doc text empty',
+      passed: tcCheck.passed,
+      expected: 'MTC-UNVERIFIED',
+      actual: identity.mtcNumber,
+      detail: tcCheck.detail,
+    });
+
+    const heatCheck = assertEqual(identity.heatNumber, 'UNVERIFIED', 'heat not in filename');
+    results.push({
+      name: 'TC-REGR-07F: Heat No is UNKNOWN / UNVERIFIED when doc text empty',
+      passed: heatCheck.passed,
+      expected: 'UNVERIFIED',
+      actual: identity.heatNumber,
+      detail: heatCheck.detail,
+    });
+  }
+
+
+  // ─────────────────────────────────────────────────────────────────
   // TEST 3: Western Forge MTC is only identified when in document text
   // ─────────────────────────────────────────────────────────────────
   {

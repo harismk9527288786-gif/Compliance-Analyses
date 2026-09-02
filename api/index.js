@@ -2656,7 +2656,7 @@ ${documentText}`;
     }
   }
   if (!mtcNumber) {
-    const docTcMatch = combinedSearchText.match(/\b(WW\d{7}(?:[-_][A-Za-z0-9]+)?|WW\d{4}[-_]\d{3,4})\b/i);
+    const docTcMatch = documentText.match(/\b(WW\d{7}(?:[-_][A-Za-z0-9]+)?)\b/i);
     if (docTcMatch) {
       mtcNumber = docTcMatch[1];
     }

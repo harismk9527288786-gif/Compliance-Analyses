@@ -133,12 +133,18 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
                 <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
                 <span>DEVIATION</span>
               </span>
+            ) : finding.status === 'REVIEW_REQUIRED' ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-bold font-mono bg-amber-100 text-amber-900 border border-amber-300">
+                <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
+                <span>REVIEW REQUIRED</span>
+              </span>
             ) : (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-bold font-mono bg-amber-100 text-amber-900 border border-amber-300">
                 <FileQuestion className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
                 <span>DOCUMENTATION GAP</span>
               </span>
             )}
+
             <span className="text-xs text-slate-600 font-medium capitalize">
               Severity: <strong className="text-slate-900">{finding.severity}</strong>
             </span>

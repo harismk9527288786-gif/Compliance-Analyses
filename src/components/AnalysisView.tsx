@@ -358,22 +358,57 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
         {/* 4 Metadata Traceability Panels */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-800 text-xs">
           <div className="space-y-0.5">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block font-mono">Material Grade</span>
-            <span className="font-bold text-white text-sm">{analysis.materialGrade}</span>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-bold text-slate-400 font-mono">Material Grade</span>
+              <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-emerald-400 border border-slate-700 font-semibold">
+                EXTRACTED
+              </span>
+            </div>
+            <span className="font-bold text-white text-sm block">{analysis.materialGrade}</span>
+            <span className="text-[10px] text-slate-400 font-mono block">
+              {isApproved ? '✓ Verified by QC' : 'Independent Verification: Pending'}
+            </span>
           </div>
+
           <div className="space-y-0.5">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block font-mono">Supplier Mill</span>
-            <span className="font-semibold text-slate-200 truncate block">{analysis.supplierName}</span>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-bold text-slate-400 font-mono">Supplier Mill</span>
+              <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded font-semibold ${
+                analysis.supplierName && analysis.supplierName !== 'Unknown Supplier' && analysis.supplierName !== 'Unverified Supplier'
+                  ? 'bg-slate-800 text-slate-200 border border-slate-700'
+                  : 'bg-amber-950 text-amber-400 border border-amber-800'
+              }`}>
+                {analysis.supplierName && analysis.supplierName !== 'Unknown Supplier' && analysis.supplierName !== 'Unverified Supplier'
+                  ? 'IDENTIFIED'
+                  : 'NOT IDENTIFIED'}
+              </span>
+            </div>
+            <span className="font-semibold text-slate-200 truncate block">{analysis.supplierName || 'Not Identified'}</span>
+            <span className="text-[10px] text-slate-400 font-mono block">
+              {analysis.poNumber ? `PO / Contract: ${analysis.poNumber}` : 'PO: Unspecified'}
+            </span>
           </div>
+
           <div className="space-y-0.5">
             <span className="text-[10px] uppercase font-bold text-slate-400 block font-mono">Client Specification</span>
             <span className="font-semibold text-slate-200 truncate block">{analysis.clientName}</span>
+            <span className="text-[10px] text-slate-400 truncate block font-mono">{analysis.requirementSetTitle}</span>
           </div>
+
           <div className="space-y-0.5">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block font-mono">Ladle Heats Evaluated</span>
-            <span className="font-mono font-bold text-emerald-300">{(analysis.heats || []).join(', ') || 'N/A'}</span>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-bold text-slate-400 font-mono">Ladle Heats Evaluated</span>
+              <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700 font-semibold">
+                {(analysis.heats || []).length} HEAT{((analysis.heats || []).length > 1) ? 'S' : ''}
+              </span>
+            </div>
+            <span className="font-mono font-bold text-emerald-300 block">{(analysis.heats || []).join(', ') || 'N/A'}</span>
+            <span className="text-[10px] text-slate-400 font-mono block">
+              TC#: {analysis.mtcNumber || 'N/A'}
+            </span>
           </div>
         </div>
+
 
         {/* Technical Sign-Off Concession Record */}
         {isApproved && analysis.approvalNotes && (
