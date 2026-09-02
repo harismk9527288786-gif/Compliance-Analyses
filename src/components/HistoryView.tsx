@@ -40,7 +40,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   onDeleteAnalysis,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'signed_off' | 'pass' | 'deviations' | 'gaps'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'archived' | 'pass' | 'deviations' | 'gaps'>('all');
   const [selectedSupplier, setSelectedSupplier] = useState<string>('all');
   const [showClearConfirmModal, setShowClearConfirmModal] = useState(false);
   const [deletingAnalysisId, setDeletingAnalysisId] = useState<string | null>(null);
@@ -48,7 +48,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   // Aggregate stats
   const list = Array.isArray(analyses) ? analyses : [];
   const totalRecords = list.length;
-  const totalApproved = list.filter((a) => a && a.status === 'approved').length;
+  const totalArchived = list.filter((a) => a && (a.status === 'approved' || a.status === 'rejected')).length;
   const totalPass = list.filter((a) => a && (a.deviationCount || 0) === 0 && (a.documentationGapCount || 0) === 0 && (a.passCount || 0) > 0).length;
   const totalDeviations = list.filter((a) => a && (a.deviationCount || 0) > 0).length;
   const totalGaps = list.filter((a) => a && (a.documentationGapCount || 0) > 0 && (a.deviationCount || 0) === 0).length;
@@ -76,10 +76,10 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
 
     if (!matchesSearch) return false;
     if (selectedSupplier !== 'all' && a.supplierName !== selectedSupplier) return false;
-    if (statusFilter === 'signed_off') return a.status === 'approved';
-    if (statusFilter === 'deviations') return (a.deviationCount || 0) > 0;
+    if (statusFilter === 'archived') return a.status === 'approved' || a.status === 'rejected';
+    if (statusFilter === 'deviations') return (a.deviationCount || 0) > 0 || a.status === 'rejected';
     if (statusFilter === 'gaps') return (a.documentationGapCount || 0) > 0;
-    if (statusFilter === 'pass') return a.status === 'approved' || ((a.deviationCount || 0) === 0 && (a.documentationGapCount || 0) === 0);
+    if (statusFilter === 'pass') return a.status === 'approved' || ((a.deviationCount || 0) === 0 && (a.documentationGapCount || 0) === 0 && a.status !== 'rejected');
     return true;
   });
 
@@ -264,16 +264,16 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
             <button
               type="button"
               role="tab"
-              aria-selected={statusFilter === 'signed_off'}
-              onClick={() => setStatusFilter('signed_off')}
+              aria-selected={statusFilter === 'archived'}
+              onClick={() => setStatusFilter('archived')}
               className={`px-3 py-1 rounded-md font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
-                statusFilter === 'signed_off'
+                statusFilter === 'archived'
                   ? 'bg-emerald-700 text-white shadow-xs'
                   : 'text-emerald-800 hover:text-emerald-900'
               }`}
             >
               <ShieldCheck className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
-              <span>Signed Off ({totalApproved})</span>
+              <span>Archived ({totalArchived})</span>
             </button>
             <button
               type="button"

@@ -500,9 +500,10 @@ export default function App() {
         addToast({
           id: `toast-${Date.now()}`,
           type: 'info',
-          title: 'Material Certificate Rejected',
+          title: 'the certificate is rejected',
           description: 'Formal non-conformance logged and archived.',
         });
+        navigateToTab('history', true);
         const auditRes = await apiFetch('/api/audit');
         if (auditRes.ok) {
           const auditData = await auditRes.json();
