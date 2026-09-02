@@ -107,8 +107,11 @@ NACE Compliance: NACE MR0175 / ISO 15156
   console.log(`- DOCUMENTATION_GAP: ${gapFindings.length}\n`);
 
   // Assertions
-  assert(passFindings.length >= 10, 'Multiple conforming requirements (PASS >= 10)', `Found ${passFindings.length} conforming requirements`);
-  
+  assert(passFindings.length === 23, 'Conforming requirements count is exactly 23', `Found ${passFindings.length} conforming requirements`);
+  assert(deviationFindings.length === 1, 'Deviations count is exactly 1 (MESC 2022 vs 2021)', `Found ${deviationFindings.length} deviations`);
+  assert(reviewFindings.length === 2, 'Review Required count is exactly 2 (HT Soaking & NACE)', `Found ${reviewFindings.length} review required`);
+  assert(gapFindings.length === 1, 'Documentation Gap count is exactly 1 (Surface NDE PT/UT)', `Found ${gapFindings.length} documentation gaps`);
+
   // Verify Chemistry Conforming
   const cFinding = findings.find((f) => f.field === 'C');
   assert(cFinding?.status === 'PASS', 'Carbon (C = 0.018 wt% <= 0.030 wt%) is PASS', `Status: ${cFinding?.status}, Raw: ${cFinding?.supplierRawValue}`);
@@ -130,9 +133,25 @@ NACE Compliance: NACE MR0175 / ISO 15156
   const mescFinding = findings.find((f) => f.field === 'mescStandardRevision');
   assert(mescFinding?.status === 'DEVIATION', 'MESC SPE 77/302:2022 vs 2021 discrepancy is DEVIATION', `Status: ${mescFinding?.status}, Raw: ${mescFinding?.supplierRawValue}`);
 
-  // Verify Hardness (HBW vs HRC conversion uncertainty)
+  // Verify Hardness (HBW vs HRC conversion)
   const hardFinding = findings.find((f) => f.field === 'hardness');
-  assert(hardFinding?.status === 'REVIEW_REQUIRED' || hardFinding?.status === 'PASS', 'Hardness requirement evaluated independently', `Status: ${hardFinding?.status}, Raw: ${hardFinding?.supplierRawValue}`);
+  assert(hardFinding?.status === 'PASS', 'Hardness (179 HBW <= 237 HBW / 22 HRC limit) is PASS', `Status: ${hardFinding?.status}, Raw: ${hardFinding?.supplierRawValue}`);
+
+  // Verify HT Soaking Ruling Thickness
+  const soakFinding = findings.find((f) => f.field === 'heatTreatmentSoaking');
+  assert(soakFinding?.status === 'REVIEW_REQUIRED', 'HT Soaking without thickness is REVIEW_REQUIRED', `Status: ${soakFinding?.status}, Raw: ${soakFinding?.supplierRawValue}`);
+
+  // Verify NACE Edition Review
+  const naceFinding = findings.find((f) => f.field === 'naceCompliance');
+  assert(naceFinding?.status === 'REVIEW_REQUIRED', 'NACE compliance edition check is REVIEW_REQUIRED', `Status: ${naceFinding?.status}, Raw: ${naceFinding?.supplierRawValue}`);
+
+  // Verify Surface NDE Missing
+  const ndeFinding = findings.find((f) => f.field === 'ndeExamination');
+  assert(ndeFinding?.status === 'DOCUMENTATION_GAP', 'Surface NDE PT/UT missing is DOCUMENTATION_GAP', `Status: ${ndeFinding?.status}`);
+
+  // Verify EN 10204 Type 3.1
+  const certFinding = findings.find((f) => f.field === 'en10204Type');
+  assert(certFinding?.status === 'PASS', 'EN 10204 Type 3.1 certificate is PASS', `Status: ${certFinding?.status}`);
 
   // Verify Independence: Total Findings = Pass + Deviation + Review + Gap
   assert(

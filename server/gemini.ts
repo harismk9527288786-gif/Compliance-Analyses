@@ -1528,6 +1528,23 @@ function extractGenericMTCEvidenceFromText(
     });
   }
 
+  // EN 10204 Type 3.1 Inspection Certificate
+  if (/EN\s*10204\s*(?:Type\s*)?3\.1\b|3\.1\s*Certificate|Inspection\s*Certificate\s*3\.1/i.test(text) || /3\.1/i.test(filename)) {
+    evidence.push({
+      id: `ev-dyn-en31-${Date.now()}`,
+      heatNo,
+      category: 'certification',
+      field: 'en10204Type',
+      displayName: 'EN 10204 Certification',
+      rawValue: 'EN 10204 3.1',
+      sourceDocument: filename,
+      sourcePage: 1,
+      snippet: 'EN 10204 3.1',
+      confidence: 'high',
+      extractedAt: new Date().toISOString(),
+    });
+  }
+
   return {
     certificateMetadata: {
       mtcNumber: identity.mtcNumber,

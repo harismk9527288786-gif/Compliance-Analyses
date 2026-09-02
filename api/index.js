@@ -3848,6 +3848,21 @@ function extractGenericMTCEvidenceFromText(text, filename, identity) {
       extractedAt: (/* @__PURE__ */ new Date()).toISOString()
     });
   }
+  if (/EN\s*10204\s*(?:Type\s*)?3\.1\b|3\.1\s*Certificate|Inspection\s*Certificate\s*3\.1/i.test(text) || /3\.1/i.test(filename)) {
+    evidence.push({
+      id: `ev-dyn-en31-${Date.now()}`,
+      heatNo,
+      category: "certification",
+      field: "en10204Type",
+      displayName: "EN 10204 Certification",
+      rawValue: "EN 10204 3.1",
+      sourceDocument: filename,
+      sourcePage: 1,
+      snippet: "EN 10204 3.1",
+      confidence: "high",
+      extractedAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+  }
   return {
     certificateMetadata: {
       mtcNumber: identity.mtcNumber,
@@ -4314,6 +4329,34 @@ function evaluateMatchOperator(analysisId, req, evidence, heatNo) {
       );
     }
   }
+  if (req.field === "naceCompliance") {
+    return {
+      id: `finding-${req.id}-${heatNo || "gen"}-${Date.now()}`,
+      analysisId,
+      requirementId: req.id,
+      evidenceId: evidence.id,
+      category: req.category,
+      field: req.field,
+      displayName: req.displayName,
+      heatNo,
+      requirementText: req.description || String(req.targetValue || ""),
+      requiredTarget: String(req.targetValue || ""),
+      requirementClause: req.clauseReference,
+      requirementSourceDoc: req.sourceDocument,
+      requirementSourcePage: req.sourcePage,
+      supplierRawValue: evidence.rawValue,
+      supplierEvidenceDoc: evidence.sourceDocument,
+      supplierEvidencePage: evidence.sourcePage,
+      supplierSnippet: evidence.snippet,
+      confidence: evidence.confidence,
+      operator: "MATCH",
+      calculatedComparison: `"${evidence.rawValue}" -> REVIEW_REQUIRED (Edition & Environmental Limits)`,
+      status: "REVIEW_REQUIRED",
+      severity: "info",
+      reason: `NACE MR0175 / ISO 15156 compliance certified ("${evidence.rawValue}"); QA review required to verify standard edition alignment and environmental service limits.`,
+      isReviewed: false
+    };
+  }
   const status = isMatch ? "PASS" : "DEVIATION";
   const severity = isMatch ? "info" : "major";
   const calcStr = `"${evidence.rawValue}" MATCH "${req.targetValue || req.description}" -> ${status}`;
@@ -4352,10 +4395,19 @@ function evaluateRequiredOperator(analysisId, req, evidence, heatNo) {
     return createDocumentationGapFinding(analysisId, req, heatNo);
   }
   const isPositive = raw.includes("yes") || raw.includes("completed") || raw.includes("pass") || raw.includes("conforms") || raw.includes("performed") || raw.includes("certified") || raw.includes("100%") || raw.includes("satisfactory");
-  const status = isPositive ? "PASS" : "DEVIATION";
-  const severity = isPositive ? "info" : "minor";
-  const calcStr = `Evidence Present: "${evidence.rawValue}" -> ${status}`;
-  const reason = isPositive ? `Required evidence confirmed: "${evidence.rawValue}".` : `Evidence provided does not confirm requirement: "${evidence.rawValue}".`;
+  let status = isPositive ? "PASS" : "DEVIATION";
+  let severity = isPositive ? "info" : "minor";
+  let calcStr = `Evidence Present: "${evidence.rawValue}" -> ${status}`;
+  let reason = isPositive ? `Required evidence confirmed: "${evidence.rawValue}".` : `Evidence provided does not confirm requirement: "${evidence.rawValue}".`;
+  if (req.field === "heatTreatmentSoaking") {
+    const hasThickness = /thickness|inch|mm|\b\d+\s*mm\b|\b\d+\s*inch/i.test(evidence.rawValue);
+    if (!hasThickness) {
+      status = "REVIEW_REQUIRED";
+      severity = "minor";
+      calcStr = `Soaking: "${evidence.rawValue}" (Ruling thickness unstated) -> REVIEW_REQUIRED`;
+      reason = `Soaking period of "${evidence.rawValue}" certified; engineering review required to verify component ruling thickness does not exceed 2 inches (60 min/inch criterion).`;
+    }
+  }
   return {
     id: `finding-${req.id}-${heatNo || "gen"}-${Date.now()}`,
     analysisId,
