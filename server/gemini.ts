@@ -298,15 +298,18 @@ export function extractMDSIdentity(documentText: string, filename: string): MDSI
     revision = `Rev ${revMatch[1].toUpperCase()}`;
   }
 
+  const normCombined = combined.replace(/[_/\\-]/g, ' ');
+  const normFilename = cleanFilename.replace(/[_/\\-]/g, ' ');
+
   // 3. Standard identification
   let standard = '';
-  if (/ASTM[- ]?(?:A[- ]?)?182|ASME[- ]?SA[- ]?182/i.test(combined)) {
+  if (/ASTM\s*(?:A\s*)?182|ASME\s*SA\s*182/i.test(normCombined)) {
     standard = 'ASTM A182';
-  } else if (/ASTM[- ]?A[- ]?105|ASME[- ]?SA[- ]?105/i.test(combined)) {
+  } else if (/ASTM\s*A\s*105|ASME\s*SA\s*105/i.test(normCombined)) {
     standard = 'ASTM A105';
-  } else if (/ASTM[- ]?A[- ]?350|ASME[- ]?SA[- ]?350/i.test(combined)) {
+  } else if (/ASTM\s*A\s*350|ASME\s*SA\s*350/i.test(normCombined)) {
     standard = 'ASTM A350';
-  } else if (/ASTM[- ]?A[- ]?694/i.test(combined)) {
+  } else if (/ASTM\s*A\s*694/i.test(normCombined)) {
     standard = 'ASTM A694';
   }
 
@@ -316,38 +319,38 @@ export function extractMDSIdentity(documentText: string, filename: string): MDSI
   let uns = '';
 
   if (
-    /(?:Grade|Gr\.?|Type)?\s*F[- ]?316\b|\bAISI\s*316\b/i.test(cleanFilename) ||
-    /(?:Grade|Gr\.?|Type)\s*F[- ]?316\b/i.test(documentText.slice(0, 500)) ||
-    (/(?:Grade|Gr\.?|Type)?\s*F[- ]?316\b/i.test(combined) && !/F[- ]?316L\b/i.test(cleanFilename))
+    /(?:Grade|Gr\.?|Type)?\s*F\s*316\b|\bAISI\s*316\b/i.test(normFilename) ||
+    /(?:Grade|Gr\.?|Type)\s*F\s*316\b/i.test(normCombined.slice(0, 500)) ||
+    (/(?:Grade|Gr\.?|Type)?\s*F\s*316\b/i.test(normCombined) && !/F\s*316L\b/i.test(normFilename))
   ) {
     grade = 'F316';
     uns = 'UNS S31600';
-  } else if (/F[- ]?316L\b/i.test(combined)) {
+  } else if (/F\s*316L\b/i.test(normCombined)) {
     grade = 'F316L';
     uns = 'UNS S31603';
-  } else if (/\bF[- ]?6a\b|\bGrade[- ]*F6a\b|\bGr\.?[- ]*F6a\b/i.test(combined)) {
+  } else if (/\bF\s*6a\b|\bGrade\s*F6a\b|\bGr\.?\s*F6a\b/i.test(normCombined)) {
     grade = 'F6a';
     materialClass = 'Class 1';
     uns = 'UNS S41000';
-  } else if (/\bF[- ]?51\b|\bGrade[- ]*F51\b/i.test(combined)) {
+  } else if (/\bF\s*51\b|\bGrade\s*F51\b/i.test(normCombined)) {
     grade = 'F51';
     uns = 'UNS S31803';
-  } else if (/\bA105N\b/i.test(combined)) {
+  } else if (/\bA105N\b/i.test(normCombined)) {
     grade = 'A105N';
     uns = 'UNS K03504';
-  } else if (/\bA105\b/i.test(combined)) {
+  } else if (/\bA105\b/i.test(normCombined)) {
     grade = 'A105';
     uns = 'UNS K03504';
-  } else if (/\bLF2\b/i.test(combined)) {
+  } else if (/\bLF2\b/i.test(normCombined)) {
     grade = 'LF2';
     materialClass = 'Class 1';
     uns = 'UNS K03011';
-  } else if (/\bF[- ]?60\b/i.test(combined)) {
+  } else if (/\bF\s*60\b/i.test(normCombined)) {
     grade = 'F60';
   }
 
   // Explicit UNS check
-  const unsMatch = combined.match(/\bUNS\s*([A-Z]\d{5})\b|\b(S41000|S31600|S31603|S31803|K03504|K03011)\b/i);
+  const unsMatch = normCombined.match(/\bUNS\s*([A-Z]\d{5})\b|\b(S41000|S31600|S31603|S31803|K03504|K03011)\b/i);
   if (unsMatch) {
     const rawUns = (unsMatch[1] || unsMatch[2]).toUpperCase();
     uns = rawUns.startsWith('UNS') ? rawUns : `UNS ${rawUns}`;
@@ -686,6 +689,96 @@ export function generateRequirementsForMDS(identity: MDSIdentity, filename: stri
         clauseReference: 'Section 11',
         sourceDocument: srcDoc,
         sourcePage: 4,
+      },
+      {
+        id: `req-f316-mech-forging-ratio-${Date.now()}`,
+        category: 'mechanical',
+        field: 'forgingRatio',
+        displayName: 'Forging Reduction Ratio',
+        operator: 'MIN',
+        minValue: 4,
+        unit: ':1',
+        mandatory: true,
+        description: 'Minimum forging reduction ratio 4:1 (MESC SPE 77/302 Clause 2.1.2)',
+        clauseReference: 'Section 4.2',
+        sourceDocument: srcDoc,
+        sourcePage: 2,
+      },
+      {
+        id: `req-f316-ht-soaking-${Date.now()}`,
+        category: 'heat_treatment',
+        field: 'heatTreatmentSoaking',
+        displayName: 'Heat Treatment Soaking Period',
+        operator: 'REQUIRED',
+        mandatory: true,
+        description: 'Soaking period minimum 2 hours AND 60 min/inch of forging thickness',
+        clauseReference: 'Section 6.2',
+        sourceDocument: srcDoc,
+        sourcePage: 3,
+      },
+      {
+        id: `req-f316-igc-${Date.now()}`,
+        category: 'general',
+        field: 'intergranularCorrosion',
+        displayName: 'Intergranular Corrosion Test (IGC)',
+        operator: 'MATCH',
+        targetValue: 'ASTM A262 Practice E',
+        mandatory: true,
+        description: 'Intergranular corrosion test per ASTM A262 Practice E with satisfactory result (MESC SPE 77/302 Clause 2.1.7)',
+        clauseReference: 'Section 9',
+        sourceDocument: srcDoc,
+        sourcePage: 4,
+      },
+      {
+        id: `req-f316-nde-${Date.now()}`,
+        category: 'nde',
+        field: 'ndeExamination',
+        displayName: 'Surface NDE Examination',
+        operator: 'REQUIRED',
+        mandatory: true,
+        description: '100% Surface NDE examination (PT/UT) per MESC SPE 77/302 Clause 2.1.8',
+        clauseReference: 'Section 10',
+        sourceDocument: srcDoc,
+        sourcePage: 4,
+      },
+      {
+        id: `req-f316-rad-${Date.now()}`,
+        category: 'general',
+        field: 'radioactiveContamination',
+        displayName: 'Radioactive Contamination',
+        operator: 'MATCH',
+        targetValue: 'Free',
+        mandatory: true,
+        description: 'Material must be free from radioactive contamination',
+        clauseReference: 'Section 14',
+        sourceDocument: srcDoc,
+        sourcePage: 5,
+      },
+      {
+        id: `req-f316-nace-${Date.now()}`,
+        category: 'general',
+        field: 'naceCompliance',
+        displayName: 'NACE MR0175 / ISO 15156 Compliance',
+        operator: 'MATCH',
+        targetValue: 'NACE MR0175',
+        mandatory: true,
+        description: 'Compliance with NACE MR0175 / ISO 15156',
+        clauseReference: 'Section 15',
+        sourceDocument: srcDoc,
+        sourcePage: 5,
+      },
+      {
+        id: `req-f316-mesc-rev-${Date.now()}`,
+        category: 'general',
+        field: 'mescStandardRevision',
+        displayName: 'MESC SPE 77/302 Standard Revision',
+        operator: 'MATCH',
+        targetValue: 'MESC SPE 77/302:2022',
+        mandatory: true,
+        description: 'Applicable specification edition MESC SPE 77/302:2022',
+        clauseReference: 'Section 1.2',
+        sourceDocument: srcDoc,
+        sourcePage: 1,
       },
       {
         id: `req-f316-cert-weld-${Date.now()}`,
@@ -1229,11 +1322,211 @@ function extractGenericMTCEvidenceFromText(
   addRegexEvidence('Si', 'Silicon (Si)', 'chemical', /\bSi\s*[:=\s]+([0-9.]+)/i, '%');
   addRegexEvidence('Ni', 'Nickel (Ni)', 'chemical', /\bNi\s*[:=\s]+([0-9.]+)/i, '%');
   addRegexEvidence('Cr', 'Chromium (Cr)', 'chemical', /\bCr\s*[:=\s]+([0-9.]+)/i, '%');
-  addRegexEvidence('hardness', 'Hardness (HBW)', 'hardness', /\b(?:Hardness|HBW|HB)\s*[:=\s]+([0-9.]+)/i, 'HBW');
-  addRegexEvidence('tensileStrength', 'Tensile Strength (Rm)', 'mechanical', /\b(?:Tensile|Rm)\s*[:=\s]+([0-9.]+)/i, 'MPa');
-  addRegexEvidence('yieldStrength', 'Yield Strength (0.2% Offset)', 'mechanical', /\b(?:Yield|Rp0\.?2|ReH)\s*[:=\s]+([0-9.]+)/i, 'MPa');
-  addRegexEvidence('elongation', 'Elongation (A5)', 'mechanical', /\b(?:Elongation|A5|A)\s*[:=\s]+([0-9.]+)/i, '%');
-  addRegexEvidence('reductionOfArea', 'Reduction of Area (Z)', 'mechanical', /\b(?:Reduction\s*of\s*Area|Z)\s*[:=\s]+([0-9.]+)/i, '%');
+  addRegexEvidence('Mo', 'Molybdenum (Mo)', 'chemical', /\bMo\s*[:=\s]+([0-9.]+)/i, '%');
+  addRegexEvidence('N', 'Nitrogen (N)', 'chemical', /\bN\s*[:=\s]+([0-9.]+)/i, '%');
+  addRegexEvidence('Ni+2Mo', 'Ni + 2Mo', 'chemical', /\b(?:Ni\s*\+\s*2\s*Mo|Ni\+2Mo)\s*[:=\s]+([0-9.]+)/i);
+  addRegexEvidence('PREN', 'Pitting Resistance Equivalent (PREN)', 'chemical', /\bPREN?\s*[:=\s]+([0-9.]+)/i);
+
+  addRegexEvidence('tensileStrength', 'Tensile Strength (Rm)', 'mechanical', /\b(?:Tensile(?:\s*Strength)?(?:\s*\([^)]*\))?|Rm)\s*[:=\s]+([0-9.]+)/i, 'MPa');
+  addRegexEvidence('yieldStrength', 'Yield Strength (0.2% Offset)', 'mechanical', /\b(?:Yield(?:\s*Strength)?(?:\s*\([^)]*\))?|Rp0\.?2|ReH)\s*[:=\s]+([0-9.]+)/i, 'MPa');
+  addRegexEvidence('elongation', 'Elongation (A5)', 'mechanical', /\b(?:Elongation(?:\s*\([^)]*\))?|A5|A)\s*[:=\s]+([0-9.]+)/i, '%');
+  addRegexEvidence('reductionOfArea', 'Reduction of Area (Z)', 'mechanical', /\b(?:Reduction\s*of\s*Area(?:\s*\([^)]*\))?|Z)\s*[:=\s]+([0-9.]+)/i, '%');
+
+  // Forging Reduction Ratio
+  const frMatch = text.match(/(?:(?:锻造比|Forging\s*(?:Reduction)?\s*Ratio|Forging\s*Ratio))\s*[:=\s]+([>0-9.:]+)/i) ||
+                  text.match(/\b([>≥]?\s*4\s*:\s*1)\b/i);
+  if (frMatch) {
+    const rawVal = frMatch[1] ? frMatch[1].trim() : frMatch[0].trim();
+    evidence.push({
+      id: `ev-dyn-forgingRatio-${Date.now()}`,
+      heatNo,
+      category: 'mechanical',
+      field: 'forgingRatio',
+      displayName: 'Forging Reduction Ratio',
+      rawValue: rawVal,
+      normalizedValue: 4,
+      unit: ':1',
+      sourceDocument: filename,
+      sourcePage: 1,
+      snippet: frMatch[0],
+      confidence: 'high',
+      extractedAt: new Date().toISOString(),
+    });
+  }
+
+  // Hardness (supports multiple readings like 173, 175, 179 HBW)
+  const hardMatch = text.match(/(?:(?:硬度|Hardness|HBW|HB))\s*[:=\s]+((?:\d{2,3}(?:[,\s]+|\s*-\s*))+\d{2,3}\s*HBW|\d{2,3}\s*HBW|\d{2,3})/i);
+  if (hardMatch) {
+    const rawVal = hardMatch[1].trim();
+    const nums = rawVal.match(/\d{2,3}/g);
+    const maxVal = nums ? Math.max(...nums.map(Number)) : undefined;
+    evidence.push({
+      id: `ev-dyn-hardness-${Date.now()}`,
+      heatNo,
+      category: 'hardness',
+      field: 'hardness',
+      displayName: 'Hardness (HBW / HRC)',
+      rawValue: rawVal.includes('HBW') || rawVal.includes('HRC') ? rawVal : `${rawVal} HBW`,
+      normalizedValue: maxVal,
+      unit: 'HBW',
+      sourceDocument: filename,
+      sourcePage: 1,
+      snippet: hardMatch[0],
+      confidence: 'high',
+      extractedAt: new Date().toISOString(),
+    });
+  }
+
+  // Heat Treatment Condition
+  const htMatch = text.match(/(?:(?:热处理状态|热处理|Heat\s*Treatment(?:\s*Condition)?))\s*[:=\s]+([^\n\r]+)/i) ||
+                  text.match(/(Solution\s*(?:heat\s*)?anneal(?:ed)?\s*(?:at\s*)?\d{3,4}\s*°?C[^\n\r]*)/i) ||
+                  text.match(/(Solution\s*(?:heat\s*)?anneal(?:ed)?[^\n\r]*water\s*cool(?:ing)?)/i);
+  if (htMatch) {
+    evidence.push({
+      id: `ev-dyn-ht-${Date.now()}`,
+      heatNo,
+      category: 'heat_treatment',
+      field: 'heatTreatmentCondition',
+      displayName: 'Heat Treatment Condition',
+      rawValue: htMatch[1] ? htMatch[1].trim() : htMatch[0].trim(),
+      sourceDocument: filename,
+      sourcePage: 1,
+      snippet: htMatch[0],
+      confidence: 'high',
+      extractedAt: new Date().toISOString(),
+    });
+  }
+
+  // Heat Treatment Soaking Period
+  const htSoakMatch = text.match(/(?:(?:保温时间|Soaking(?:\s*Period|\s*Time)?))\s*[:=\s]+([^\n\r]+)/i) ||
+                      text.match(/(\b\d+(?:\.\d+)?\s*(?:hours|hrs|h)\b(?:\s*soaking)?)/i);
+  if (htSoakMatch) {
+    evidence.push({
+      id: `ev-dyn-htSoak-${Date.now()}`,
+      heatNo,
+      category: 'heat_treatment',
+      field: 'heatTreatmentSoaking',
+      displayName: 'Heat Treatment Soaking Period',
+      rawValue: htSoakMatch[1] ? htSoakMatch[1].trim() : htSoakMatch[0].trim(),
+      sourceDocument: filename,
+      sourcePage: 1,
+      snippet: htSoakMatch[0],
+      confidence: 'medium',
+      extractedAt: new Date().toISOString(),
+    });
+  }
+
+  // Intergranular Corrosion (IGC)
+  const igcMatch = text.match(/(?:(?:晶间腐蚀|Intergranular\s*Corrosion|IGC|ASTM\s*A262(?:\s*Practice\s*E)?))\s*[:=\s]+([^\n\r]+)/i) ||
+                   text.match(/(ASTM\s*A262\s*Practice\s*E\s*[:=\s\-]*\s*(?:Satisfactory|Pass|Conforms))/i);
+  if (igcMatch) {
+    evidence.push({
+      id: `ev-dyn-igc-${Date.now()}`,
+      heatNo,
+      category: 'general',
+      field: 'intergranularCorrosion',
+      displayName: 'Intergranular Corrosion Test (IGC)',
+      rawValue: igcMatch[1] ? igcMatch[1].trim() : igcMatch[0].trim(),
+      sourceDocument: filename,
+      sourcePage: 1,
+      snippet: igcMatch[0],
+      confidence: 'high',
+      extractedAt: new Date().toISOString(),
+    });
+  }
+
+  // Visual Inspection
+  const visMatch = text.match(/(?:(?:外观检查|Visual(?:\s*Inspection|\s*Examination)?))\s*[:=\s]+([^\n\r]+)/i) ||
+                   text.match(/(Visual\s*(?:Inspection)?\s*[:=\s\-]*\s*(?:Satisfactory|Pass|Conforms|OK))/i);
+  if (visMatch) {
+    evidence.push({
+      id: `ev-dyn-vis-${Date.now()}`,
+      heatNo,
+      category: 'nde',
+      field: 'visualExamination',
+      displayName: 'Visual Inspection',
+      rawValue: visMatch[1] ? visMatch[1].trim() : visMatch[0].trim(),
+      sourceDocument: filename,
+      sourcePage: 1,
+      snippet: visMatch[0],
+      confidence: 'high',
+      extractedAt: new Date().toISOString(),
+    });
+  }
+
+  // Weld Repairs
+  const weldMatch = text.match(/(?:(?:焊补|Weld\s*Repair(?:s)?|Repair\s*by\s*welding))\s*[:=\s]+([^\n\r]+)/i) ||
+                    text.match(/(Without\s*weld\s*repair|No\s*weld\s*repair|Weld\s*repair\s*[:=\s\-]*\s*(?:None|Nil))/i);
+  if (weldMatch) {
+    evidence.push({
+      id: `ev-dyn-weld-${Date.now()}`,
+      heatNo,
+      category: 'certification',
+      field: 'weldRepair',
+      displayName: 'Weld Repair Prohibition',
+      rawValue: weldMatch[1] ? weldMatch[1].trim() : weldMatch[0].trim(),
+      sourceDocument: filename,
+      sourcePage: 1,
+      snippet: weldMatch[0],
+      confidence: 'high',
+      extractedAt: new Date().toISOString(),
+    });
+  }
+
+  // Radioactive Contamination
+  const radMatch = text.match(/(?:(?:放射性污染|Radioactive(?:\s*Contamination)?))\s*[:=\s]+([^\n\r]+)/i) ||
+                   text.match(/(Free\s*(?:from|of)\s*radioactive(?:\s*contamination)?)/i);
+  if (radMatch) {
+    evidence.push({
+      id: `ev-dyn-rad-${Date.now()}`,
+      heatNo,
+      category: 'general',
+      field: 'radioactiveContamination',
+      displayName: 'Radioactive Contamination',
+      rawValue: radMatch[1] ? radMatch[1].trim() : radMatch[0].trim(),
+      sourceDocument: filename,
+      sourcePage: 1,
+      snippet: radMatch[0],
+      confidence: 'high',
+      extractedAt: new Date().toISOString(),
+    });
+  }
+
+  // NACE Compliance
+  const naceMatch = text.match(/(NACE\s*MR0175(?:\s*\/\s*ISO\s*15156)?)/i);
+  if (naceMatch) {
+    evidence.push({
+      id: `ev-dyn-nace-${Date.now()}`,
+      heatNo,
+      category: 'general',
+      field: 'naceCompliance',
+      displayName: 'NACE MR0175 / ISO 15156 Compliance',
+      rawValue: naceMatch[0].trim(),
+      sourceDocument: filename,
+      sourcePage: 1,
+      snippet: naceMatch[0],
+      confidence: 'high',
+      extractedAt: new Date().toISOString(),
+    });
+  }
+
+  // MESC SPE 77/302 Revision
+  const mescMatch = text.match(/(MESC\s*SPE\s*77\/302\s*[:=\s]*([0-9]{4}))/i);
+  if (mescMatch) {
+    evidence.push({
+      id: `ev-dyn-mesc-${Date.now()}`,
+      heatNo,
+      category: 'general',
+      field: 'mescStandardRevision',
+      displayName: 'MESC SPE 77/302 Standard Revision',
+      rawValue: mescMatch[1].trim(),
+      sourceDocument: filename,
+      sourcePage: 1,
+      snippet: mescMatch[0],
+      confidence: 'high',
+      extractedAt: new Date().toISOString(),
+    });
+  }
 
   return {
     certificateMetadata: {

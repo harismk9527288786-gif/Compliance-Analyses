@@ -410,9 +410,9 @@ function evaluateMatchOperator(
   const cleanTarget = reqTarget.replace(/[\s\-_/]/g, '');
   const cleanEvidence = rawEv.replace(/[\s\-_/]/g, '');
 
-  const targetOptions = reqTarget.split(/\s+or\s+|\s*\/\s*|\|/i).map((t) => t.trim().replace(/[\s\-_/]/g, ''));
+  const targetOptions = reqTarget.split(/\s+or\s+|\s*\|\s*/i).map((t) => t.trim().replace(/[\s\-_/]/g, ''));
   const matchesAnyOption = targetOptions.some(
-    (opt) => opt.length > 2 && (cleanEvidence.includes(opt) || opt.includes(cleanEvidence))
+    (opt) => opt.length > 3 && (cleanEvidence === opt || cleanEvidence.includes(opt) || opt.includes(cleanEvidence))
   );
 
   let isMatch =
@@ -423,6 +423,13 @@ function evaluateMatchOperator(
     (reqTarget.includes('conforms') && rawEv.includes('conforms')) ||
     (reqTarget.includes('3.1') && rawEv.includes('3.1')) ||
     (reqTarget.includes('nace') && rawEv.includes('nace'));
+
+  // Strict standard revision check (e.g. MESC SPE 77/302:2022 vs MESC SPE 77/302:2021)
+  const reqYear = reqTarget.match(/\b(19\d{2}|20\d{2})\b/);
+  const evYear = rawEv.match(/\b(19\d{2}|20\d{2})\b/);
+  if (reqYear && evYear && reqYear[1] !== evYear[1]) {
+    isMatch = false;
+  }
 
 
   // Strict metallurgical verification for Heat Treatment Condition

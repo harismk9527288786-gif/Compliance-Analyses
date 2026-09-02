@@ -50,13 +50,13 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
   onRejectAnalysis,
   onDeleteAnalysis,
 }) => {
-  const [statusTab, setStatusTab] = useState<'all' | 'issues' | 'pass'>(initialStatusTab);
+  const [statusTab, setStatusTab] = useState<'all' | 'issues' | 'pass' | 'deviations' | 'review'>(initialStatusTab as any);
   const [searchQuery, setSearchQuery] = useState('');
   const findingsSectionRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (initialStatusTab) {
-      setStatusTab(initialStatusTab);
+      setStatusTab(initialStatusTab as any);
       if (initialStatusTab === 'issues' || initialStatusTab === 'pass') {
         setTimeout(() => {
           findingsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -73,20 +73,28 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
 
   const isApproved = analysis.status === 'approved';
   const isRejected = analysis.status === 'rejected';
-  const hasDeviations = analysis.deviationCount > 0;
-  const hasGaps = analysis.documentationGapCount > 0;
 
   // Filter findings
   const list = Array.isArray(findings) ? findings : [];
+  const passCount = list.filter((f) => f.status === 'PASS').length;
+  const deviationCount = list.filter((f) => f.status === 'DEVIATION').length;
+  const reviewReqCount = list.filter((f) => f.status === 'REVIEW_REQUIRED' || f.status === 'DOCUMENTATION_GAP').length;
+  const hasDeviations = deviationCount > 0;
+  const hasGaps = list.some((f) => f.status === 'DOCUMENTATION_GAP');
+
   const hasUnresolvedDeviations = list.some((f) => f.status !== 'PASS' && !f.isReviewed);
   const filteredFindings = list.filter((f) => {
     if (!f) return false;
-    const matchesStatus =
-      statusTab === 'all'
-        ? true
-        : statusTab === 'issues'
-        ? f.status === 'DEVIATION' || f.status === 'DOCUMENTATION_GAP' || f.status === 'REVIEW_REQUIRED'
-        : f.status === 'PASS';
+    let matchesStatus = true;
+    if (statusTab === 'pass') {
+      matchesStatus = f.status === 'PASS';
+    } else if (statusTab === 'deviations') {
+      matchesStatus = f.status === 'DEVIATION';
+    } else if (statusTab === 'review') {
+      matchesStatus = f.status === 'REVIEW_REQUIRED' || f.status === 'DOCUMENTATION_GAP';
+    } else if (statusTab === 'issues') {
+      matchesStatus = f.status === 'DEVIATION' || f.status === 'DOCUMENTATION_GAP' || f.status === 'REVIEW_REQUIRED';
+    }
 
     const q = (searchQuery || '').toLowerCase();
     const displayName = (f.displayName || '').toLowerCase();
@@ -477,7 +485,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
       >
         {/* Filter Controls */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div role="tablist" aria-label="Finding Status Tabs" className="inline-flex p-1 bg-slate-100 rounded-lg border border-slate-300 text-xs max-w-full overflow-x-auto">
+          <div role="tablist" aria-label="Finding Status Tabs" className="inline-flex p-1 bg-slate-100 rounded-lg border border-slate-300 text-xs max-w-full overflow-x-auto gap-1">
             <button
               type="button"
               role="tab"
@@ -489,21 +497,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
                   : 'text-slate-700 hover:text-slate-900'
               }`}
             >
-              All Requirements ({findings.length})
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={statusTab === 'issues'}
-              onClick={() => setStatusTab('issues')}
-              className={`px-3 py-1 rounded-md font-bold transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                statusTab === 'issues'
-                  ? 'bg-rose-700 text-white shadow-xs'
-                  : 'text-rose-800 hover:text-rose-900'
-              }`}
-            >
-              <AlertTriangle className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
-              <span>Issues ({analysis.deviationCount + analysis.documentationGapCount + (analysis.reviewRequiredCount || 0)})</span>
+              All Requirements ({list.length})
             </button>
             <button
               type="button"
@@ -517,7 +511,35 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
               }`}
             >
               <CheckCircle2 className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
-              <span>Conforming ({analysis.passCount})</span>
+              <span>Conforming ({passCount})</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={statusTab === 'deviations'}
+              onClick={() => setStatusTab('deviations')}
+              className={`px-3 py-1 rounded-md font-bold transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                statusTab === 'deviations'
+                  ? 'bg-rose-700 text-white shadow-xs'
+                  : 'text-rose-800 hover:text-rose-900'
+              }`}
+            >
+              <AlertTriangle className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
+              <span>Deviations ({deviationCount})</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={statusTab === 'review'}
+              onClick={() => setStatusTab('review')}
+              className={`px-3 py-1 rounded-md font-bold transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                statusTab === 'review'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'text-amber-800 hover:text-amber-900'
+              }`}
+            >
+              <FileQuestion className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
+              <span>Review Required ({reviewReqCount})</span>
             </button>
           </div>
 
