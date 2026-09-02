@@ -1037,10 +1037,10 @@ export function exportAnalysisToPDF(
 
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...BODY_TEXT);
-  doc.text(String(analysis.mtcNumber || 'WW2606229-3'), colLeftValueX, y + 4.2);
-  doc.text(String(analysis.supplierName || 'Western Forge & Flange Co.'), colLeftValueX, y + 9.0);
-  doc.text(String(analysis.materialGrade || 'ASTM A105N'), colLeftValueX, y + 13.8);
-  const specLines = doc.splitTextToSize(String(analysis.requirementSetTitle || 'Client Material Data Sheet - Carbon Steel Forgings for Sour Service (ASTM A105N)'), 57);
+  doc.text(String(analysis.mtcNumber || 'N/A'), colLeftValueX, y + 4.2);
+  doc.text(String(analysis.supplierName || 'N/A'), colLeftValueX, y + 9.0);
+  doc.text(String(analysis.materialGrade || 'N/A'), colLeftValueX, y + 13.8);
+  const specLines = doc.splitTextToSize(String(analysis.requirementSetTitle || 'N/A'), 57);
   doc.text(specLines[0] || '', colLeftValueX, y + 18.6);
 
   // Right Column Labels & Values

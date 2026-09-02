@@ -538,10 +538,12 @@ app.use('/api/auth', authRouter);
             mtcNumber: mtcIdentity.mtcNumber,
             supplierName: mtcIdentity.supplierName || 'Unverified Supplier',
             clientName: clientName || reqSet.clientName,
+            poNumber: poNumber || mtcIdentity.poNumber || undefined,
             materialGrade: mtcIdentity.materialGrade,
             requirementSetId: reqSet.id,
             requirementSetTitle: reqSet.title,
             heats: [mtcIdentity.heatNumber],
+
             passCount: 0,
             deviationCount: 0,
             documentationGapCount: 0,
@@ -572,20 +574,20 @@ app.use('/api/auth', authRouter);
         const finalHeat =
           mtcIdentity.heatNumber && mtcIdentity.heatNumber !== 'UNVERIFIED'
             ? mtcIdentity.heatNumber
-            : (extracted.certificateMetadata?.heats && extracted.certificateMetadata.heats[0]) || 'FK2407-061';
+            : (extracted.certificateMetadata?.heats && extracted.certificateMetadata.heats[0]) || 'HEAT-UNKNOWN';
 
         const finalGrade =
           mtcIdentity.materialGrade && mtcIdentity.materialGrade !== 'UNVERIFIED GRADE'
             ? mtcIdentity.materialGrade
-            : extracted.certificateMetadata?.materialGrade || 'ASTM A182 F316';
+            : extracted.certificateMetadata?.materialGrade || 'UNVERIFIED GRADE';
 
         certRecord = {
           id: `cert-${Date.now()}`,
           documentId: mtcDoc.id,
           mtcNumber: mtcIdentity.mtcNumber || extracted.certificateMetadata?.mtcNumber || `MTC-${finalHeat}`,
-          supplierName: mtcIdentity.supplierName || extracted.certificateMetadata?.supplierName || 'Western Forge & Flange Co.',
+          supplierName: mtcIdentity.supplierName || extracted.certificateMetadata?.supplierName || 'Unknown Supplier',
           clientName: clientName || reqSet.clientName,
-          poNumber: poNumber || undefined,
+          poNumber: poNumber || mtcIdentity.poNumber || undefined,
           issueDate: new Date().toISOString().split('T')[0],
           materialGrade: finalGrade,
           standard: finalGrade,

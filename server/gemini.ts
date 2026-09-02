@@ -44,6 +44,8 @@ export interface MTCIdentity {
   heatNumber: string;
   materialGrade: string;
   supplierName?: string;
+  poNumber?: string;
+  productionNumber?: string;
   isConfident: boolean;
   confidenceReason?: string;
 }
@@ -53,6 +55,8 @@ export interface MTCIdentity {
  * from document text and filename before comparison.
  */
 export function extractMTCIdentity(documentText: string, filename: string): MTCIdentity {
+  const combinedSearchText = `${filename}\n${documentText}`;
+
   // 1. Heat Number (extracted exclusively from document text, NEVER from filename)
   let heatNumber = '';
   const isExcludedHeat = (val: string) => {
@@ -136,28 +140,50 @@ export function extractMTCIdentity(documentText: string, filename: string): MTCI
     }
   }
 
-  // 2. TC / MTC Number (extracted from document text)
+  // 2. TC / MTC Number (extracted from document text or filename)
   let mtcNumber = '';
-  const tcMatch = documentText.match(
-    /(?:(?:证书号\s*)?TC\s*(?:No\.?|Number|#)?|Cert(?:ificate)?\s*(?:No\.?|Number|#)?|MTC\s*(?:No\.?|Number|#)?)\s*[:=\s]+([A-Za-z0-9\-_/]+)/i
+  const isExcludedTC = (val: string) => {
+    const u = val.toUpperCase().trim();
+    return (
+      u === 'EN' ||
+      u === 'TYPE' ||
+      u === '3.1' ||
+      u === '3.2' ||
+      u === '10204' ||
+      u === 'ACCORDING' ||
+      u === 'TO' ||
+      u === 'OF' ||
+      u === 'MATERIAL' ||
+      u === 'TEST' ||
+      u === 'REPORT' ||
+      u === 'INSPECTION'
+    );
+  };
+
+  const tcMatches = Array.from(
+    documentText.matchAll(
+      /(?:(?:证书号|证书编号|编号)\s*[:=\s]+|(?:TC|MTC|Cert(?:ificate)?)\s*(?:No\.?|Number|#|[:=])\s*[:=\s]*)([A-Za-z0-9\-_/]+)/gi
+    )
   );
-  if (tcMatch && tcMatch[1]) {
-    mtcNumber = tcMatch[1].trim();
-  } else {
-    const docTcMatch = documentText.match(/\b(WW2604133(?:-3)?|WW2606229(?:-3)?)\b/i);
+  for (const m of tcMatches) {
+    if (m[1] && !isExcludedTC(m[1])) {
+      mtcNumber = m[1].trim();
+      break;
+    }
+  }
+
+  if (!mtcNumber) {
+    const docTcMatch = combinedSearchText.match(/\b(WW\d{7}(?:[-_][A-Za-z0-9]+)?|WW\d{4}[-_]\d{3,4})\b/i);
     if (docTcMatch) {
       mtcNumber = docTcMatch[1];
     }
   }
 
-  // 3. Material Grade from MTC document text
-  // IMPORTANT: Match only in structured header context (preceded by a label like "Grade:", "Material:",
-  // "Specification:", or at the beginning of a line). This prevents false positives where phrases
-  // like "Not applicable for A105N" or "Substitute for A350 LF2" trigger incorrect grade identification.
+
+  // 3. Material Grade from MTC document text or filename
   let materialGrade = '';
-  const gradeContext = /(?:(?:Material|Grade|Specification|Alloy|Matl|Mat'l|Type)\s*[:=\s]\s*|^\s*)([^\n\r]{0,60})/gim;
   const allLines = documentText.split(/[\r\n]+/);
-  const headerLines = allLines.slice(0, 60).join('\n'); // Only look in first 60 lines for grade info
+  const headerLines = allLines.slice(0, 60).join('\n');
 
   if (/(?:Material|Grade|Specification|Alloy)\s*[:=]\s*[^\n\r]*F316L?\b|UNS\s*S3160[03]|AISI\s*316/i.test(headerLines)) {
     materialGrade = 'ASTM A182 F316';
@@ -168,24 +194,50 @@ export function extractMTCIdentity(documentText: string, filename: string): MTCI
   } else if (/(?:Material|Grade|Specification|Alloy)\s*[:=]\s*[^\n\r]*LF2\b/i.test(headerLines)) {
     materialGrade = 'ASTM A350 LF2';
   } else {
-    // Fallback: full-text scan but only for isolated grade tokens (not inside negation phrases)
-    // Negative lookbehind: skip if preceded by "not", "non", "except", "other than", "applicable for"
-    if (/(?<!not\s+applicable\s+for\s+)(?<!except\s+)(?<!non[- ])F316L?\b/i.test(documentText)) materialGrade = 'ASTM A182 F316';
-    else if (/A105N?\b/i.test(documentText) && !/not\s+applicable\s+for\s+A105N?/i.test(documentText)) materialGrade = 'ASTM A105N';
-    else if (/LF2\b/i.test(documentText) && !/not\s+applicable\s+for\s+.*LF2/i.test(documentText)) materialGrade = 'ASTM A350 LF2';
+    // Fallback: search document text and filename for unambiguous grade tokens
+    if (/(?<!not\s+applicable\s+for\s+)(?<!except\s+)(?<!non[- ])F316L?\b/i.test(combinedSearchText)) materialGrade = 'ASTM A182 F316';
+    else if (/A105N?\b/i.test(combinedSearchText) && !/not\s+applicable\s+for\s+A105N?/i.test(combinedSearchText)) materialGrade = 'ASTM A105N';
+    else if (/LF2\b/i.test(combinedSearchText) && !/not\s+applicable\s+for\s+.*LF2/i.test(combinedSearchText)) materialGrade = 'ASTM A350 LF2';
   }
 
-
   // 4. Supplier / Manufacturer Name
-  let supplierName = 'Western Forge & Flange Co.';
-  if (/WENZHOU\s*WINWAY/i.test(documentText)) {
+  let supplierName = '';
+  if (/WENZHOU\s*WINWAY/i.test(combinedSearchText)) {
     supplierName = 'Wenzhou Winway Mechanical & Electrical Equipment Co., Ltd';
-  } else if (/Western\s*Forge/i.test(documentText)) {
+  } else if (/Western\s*Forge/i.test(combinedSearchText)) {
     supplierName = 'Western Forge & Flange Co.';
   } else {
-    const suppMatch = documentText.match(/(?:Manufacturer|Supplier|Vendor|制造商|制造厂)\s*[:=\s]+([^\n\r,]+)/i);
+    const suppMatch = combinedSearchText.match(/(?:Manufacturer|Supplier|Vendor|Produced\s*by|Mill|制造商|制造厂)\s*[:=\s]+([^\n\r,]{3,80})/i);
     if (suppMatch && suppMatch[1]) {
       supplierName = suppMatch[1].trim();
+    }
+  }
+
+  // 5. Contract / PO Number
+  let poNumber = '';
+  const poMatch = documentText.match(
+    /(?:(?:合同号|订单号|采购单号)\s*(?:Contract|Order|PO)?|Contract\s*(?:No\.?|Number|#)?|PO\s*(?:No\.?|Number|#)?|Purchase\s*Order\s*(?:No\.?|Number|#)?|Order\s*(?:No\.?|Number|#)?)\s*[:=\s]+([A-Za-z0-9\-_/]+)/i
+  );
+  if (poMatch && poMatch[1]) {
+    poNumber = poMatch[1].trim();
+  } else {
+    const fnPoMatch = filename.match(/\b(IMP\d{4,8}|PO[-_ ]?[A-Za-z0-9]+)\b/i);
+    if (fnPoMatch) {
+      poNumber = fnPoMatch[1].trim();
+    }
+  }
+
+  // 6. Production Number / Batch Number
+  let productionNumber = '';
+  const prodMatch = documentText.match(
+    /(?:(?:生产号|批号)\s*(?:Production\s*No\.?)?|Production\s*(?:No\.?|Number|#)?|Prod\s*(?:No\.?|Number|#)?|Batch\s*(?:No\.?|Number|#)?)\s*[:=\s]+([A-Za-z0-9\-_/]+)/i
+  );
+  if (prodMatch && prodMatch[1]) {
+    productionNumber = prodMatch[1].trim();
+  } else {
+    const fnProdMatch = filename.match(/\b(WW\d{4}[-_]\d{3,4})\b/i);
+    if (fnProdMatch) {
+      productionNumber = fnProdMatch[1].trim();
     }
   }
 
@@ -198,7 +250,9 @@ export function extractMTCIdentity(documentText: string, filename: string): MTCI
     mtcNumber: mtcNumber || (heatNumber ? `MTC-${heatNumber}` : 'MTC-UNVERIFIED'),
     heatNumber: heatNumber || 'UNVERIFIED',
     materialGrade: materialGrade || 'UNVERIFIED GRADE',
-    supplierName,
+    supplierName: supplierName || undefined,
+    poNumber: poNumber || undefined,
+    productionNumber: productionNumber || undefined,
     isConfident,
     confidenceReason,
   };
@@ -1083,11 +1137,11 @@ ${documentText.slice(0, 15000)}`;
       const parsed = JSON.parse(response.text);
       const meta = parsed.certificateMetadata || {};
 
-      // Sanitize heat numbers - replace any HEAT-1 with actual heat FK2407-061 if found or applicable
+      // Sanitize heat numbers - replace any HEAT-1 placeholders with actual heat from document text
       let heats = meta.heats;
       if (!Array.isArray(heats) || heats.length === 0 || heats.includes('HEAT-1') || heats.includes('HEAT-01')) {
-        const heatMatch = documentText.match(/FK2407-061|\b([A-Z]{1,4}\d{4,6}(?:-\d{2,4})?)\b/i);
-        heats = [heatMatch ? heatMatch[0].toUpperCase() : 'FK2407-061'];
+        const heatMatch = documentText.match(/\b([A-Z]{1,4}\d{4,6}(?:-\d{2,4})?)\b/i);
+        heats = [heatMatch ? heatMatch[0].toUpperCase() : 'HEAT-UNKNOWN'];
       }
 
       return {

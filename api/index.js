@@ -2608,6 +2608,8 @@ function getGenAI() {
   return aiInstance;
 }
 function extractMTCIdentity(documentText, filename) {
+  const combinedSearchText = `${filename}
+${documentText}`;
   let heatNumber = "";
   const isExcludedHeat = (val) => {
     const u = val.toUpperCase().trim();
@@ -2638,19 +2640,28 @@ function extractMTCIdentity(documentText, filename) {
     }
   }
   let mtcNumber = "";
-  const tcMatch = documentText.match(
-    /(?:(?:证书号\s*)?TC\s*(?:No\.?|Number|#)?|Cert(?:ificate)?\s*(?:No\.?|Number|#)?|MTC\s*(?:No\.?|Number|#)?)\s*[:=\s]+([A-Za-z0-9\-_/]+)/i
+  const isExcludedTC = (val) => {
+    const u = val.toUpperCase().trim();
+    return u === "EN" || u === "TYPE" || u === "3.1" || u === "3.2" || u === "10204" || u === "ACCORDING" || u === "TO" || u === "OF" || u === "MATERIAL" || u === "TEST" || u === "REPORT" || u === "INSPECTION";
+  };
+  const tcMatches = Array.from(
+    documentText.matchAll(
+      /(?:(?:证书号|证书编号|编号)\s*[:=\s]+|(?:TC|MTC|Cert(?:ificate)?)\s*(?:No\.?|Number|#|[:=])\s*[:=\s]*)([A-Za-z0-9\-_/]+)/gi
+    )
   );
-  if (tcMatch && tcMatch[1]) {
-    mtcNumber = tcMatch[1].trim();
-  } else {
-    const docTcMatch = documentText.match(/\b(WW2604133(?:-3)?|WW2606229(?:-3)?)\b/i);
+  for (const m of tcMatches) {
+    if (m[1] && !isExcludedTC(m[1])) {
+      mtcNumber = m[1].trim();
+      break;
+    }
+  }
+  if (!mtcNumber) {
+    const docTcMatch = combinedSearchText.match(/\b(WW\d{7}(?:[-_][A-Za-z0-9]+)?|WW\d{4}[-_]\d{3,4})\b/i);
     if (docTcMatch) {
       mtcNumber = docTcMatch[1];
     }
   }
   let materialGrade = "";
-  const gradeContext = /(?:(?:Material|Grade|Specification|Alloy|Matl|Mat'l|Type)\s*[:=\s]\s*|^\s*)([^\n\r]{0,60})/gim;
   const allLines = documentText.split(/[\r\n]+/);
   const headerLines = allLines.slice(0, 60).join("\n");
   if (/(?:Material|Grade|Specification|Alloy)\s*[:=]\s*[^\n\r]*F316L?\b|UNS\s*S3160[03]|AISI\s*316/i.test(headerLines)) {
@@ -2662,19 +2673,43 @@ function extractMTCIdentity(documentText, filename) {
   } else if (/(?:Material|Grade|Specification|Alloy)\s*[:=]\s*[^\n\r]*LF2\b/i.test(headerLines)) {
     materialGrade = "ASTM A350 LF2";
   } else {
-    if (/(?<!not\s+applicable\s+for\s+)(?<!except\s+)(?<!non[- ])F316L?\b/i.test(documentText)) materialGrade = "ASTM A182 F316";
-    else if (/A105N?\b/i.test(documentText) && !/not\s+applicable\s+for\s+A105N?/i.test(documentText)) materialGrade = "ASTM A105N";
-    else if (/LF2\b/i.test(documentText) && !/not\s+applicable\s+for\s+.*LF2/i.test(documentText)) materialGrade = "ASTM A350 LF2";
+    if (/(?<!not\s+applicable\s+for\s+)(?<!except\s+)(?<!non[- ])F316L?\b/i.test(combinedSearchText)) materialGrade = "ASTM A182 F316";
+    else if (/A105N?\b/i.test(combinedSearchText) && !/not\s+applicable\s+for\s+A105N?/i.test(combinedSearchText)) materialGrade = "ASTM A105N";
+    else if (/LF2\b/i.test(combinedSearchText) && !/not\s+applicable\s+for\s+.*LF2/i.test(combinedSearchText)) materialGrade = "ASTM A350 LF2";
   }
-  let supplierName = "Western Forge & Flange Co.";
-  if (/WENZHOU\s*WINWAY/i.test(documentText)) {
+  let supplierName = "";
+  if (/WENZHOU\s*WINWAY/i.test(combinedSearchText)) {
     supplierName = "Wenzhou Winway Mechanical & Electrical Equipment Co., Ltd";
-  } else if (/Western\s*Forge/i.test(documentText)) {
+  } else if (/Western\s*Forge/i.test(combinedSearchText)) {
     supplierName = "Western Forge & Flange Co.";
   } else {
-    const suppMatch = documentText.match(/(?:Manufacturer|Supplier|Vendor|制造商|制造厂)\s*[:=\s]+([^\n\r,]+)/i);
+    const suppMatch = combinedSearchText.match(/(?:Manufacturer|Supplier|Vendor|Produced\s*by|Mill|制造商|制造厂)\s*[:=\s]+([^\n\r,]{3,80})/i);
     if (suppMatch && suppMatch[1]) {
       supplierName = suppMatch[1].trim();
+    }
+  }
+  let poNumber = "";
+  const poMatch = documentText.match(
+    /(?:(?:合同号|订单号|采购单号)\s*(?:Contract|Order|PO)?|Contract\s*(?:No\.?|Number|#)?|PO\s*(?:No\.?|Number|#)?|Purchase\s*Order\s*(?:No\.?|Number|#)?|Order\s*(?:No\.?|Number|#)?)\s*[:=\s]+([A-Za-z0-9\-_/]+)/i
+  );
+  if (poMatch && poMatch[1]) {
+    poNumber = poMatch[1].trim();
+  } else {
+    const fnPoMatch = filename.match(/\b(IMP\d{4,8}|PO[-_ ]?[A-Za-z0-9]+)\b/i);
+    if (fnPoMatch) {
+      poNumber = fnPoMatch[1].trim();
+    }
+  }
+  let productionNumber = "";
+  const prodMatch = documentText.match(
+    /(?:(?:生产号|批号)\s*(?:Production\s*No\.?)?|Production\s*(?:No\.?|Number|#)?|Prod\s*(?:No\.?|Number|#)?|Batch\s*(?:No\.?|Number|#)?)\s*[:=\s]+([A-Za-z0-9\-_/]+)/i
+  );
+  if (prodMatch && prodMatch[1]) {
+    productionNumber = prodMatch[1].trim();
+  } else {
+    const fnProdMatch = filename.match(/\b(WW\d{4}[-_]\d{3,4})\b/i);
+    if (fnProdMatch) {
+      productionNumber = fnProdMatch[1].trim();
     }
   }
   const isConfident = Boolean(heatNumber || mtcNumber || materialGrade && materialGrade !== "UNVERIFIED GRADE");
@@ -2683,7 +2718,9 @@ function extractMTCIdentity(documentText, filename) {
     mtcNumber: mtcNumber || (heatNumber ? `MTC-${heatNumber}` : "MTC-UNVERIFIED"),
     heatNumber: heatNumber || "UNVERIFIED",
     materialGrade: materialGrade || "UNVERIFIED GRADE",
-    supplierName,
+    supplierName: supplierName || void 0,
+    poNumber: poNumber || void 0,
+    productionNumber: productionNumber || void 0,
     isConfident,
     confidenceReason
   };
@@ -3484,8 +3521,8 @@ ${documentText.slice(0, 15e3)}`;
       const meta = parsed.certificateMetadata || {};
       let heats = meta.heats;
       if (!Array.isArray(heats) || heats.length === 0 || heats.includes("HEAT-1") || heats.includes("HEAT-01")) {
-        const heatMatch = documentText.match(/FK2407-061|\b([A-Z]{1,4}\d{4,6}(?:-\d{2,4})?)\b/i);
-        heats = [heatMatch ? heatMatch[0].toUpperCase() : "FK2407-061"];
+        const heatMatch = documentText.match(/\b([A-Z]{1,4}\d{4,6}(?:-\d{2,4})?)\b/i);
+        heats = [heatMatch ? heatMatch[0].toUpperCase() : "HEAT-UNKNOWN"];
       }
       return {
         aiExtractionUsed: true,
@@ -5323,6 +5360,7 @@ app.post("/api/analyses", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINEER"]
           mtcNumber: mtcIdentity.mtcNumber,
           supplierName: mtcIdentity.supplierName || "Unverified Supplier",
           clientName: clientName || reqSet.clientName,
+          poNumber: poNumber || mtcIdentity.poNumber || void 0,
           materialGrade: mtcIdentity.materialGrade,
           requirementSetId: reqSet.id,
           requirementSetTitle: reqSet.title,
@@ -5350,15 +5388,15 @@ app.post("/api/analyses", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINEER"]
         mtcDoc.filename
       );
       aiExtractionUsed = extracted.aiExtractionUsed;
-      const finalHeat = mtcIdentity.heatNumber && mtcIdentity.heatNumber !== "UNVERIFIED" ? mtcIdentity.heatNumber : extracted.certificateMetadata?.heats && extracted.certificateMetadata.heats[0] || "FK2407-061";
-      const finalGrade = mtcIdentity.materialGrade && mtcIdentity.materialGrade !== "UNVERIFIED GRADE" ? mtcIdentity.materialGrade : extracted.certificateMetadata?.materialGrade || "ASTM A182 F316";
+      const finalHeat = mtcIdentity.heatNumber && mtcIdentity.heatNumber !== "UNVERIFIED" ? mtcIdentity.heatNumber : extracted.certificateMetadata?.heats && extracted.certificateMetadata.heats[0] || "HEAT-UNKNOWN";
+      const finalGrade = mtcIdentity.materialGrade && mtcIdentity.materialGrade !== "UNVERIFIED GRADE" ? mtcIdentity.materialGrade : extracted.certificateMetadata?.materialGrade || "UNVERIFIED GRADE";
       certRecord = {
         id: `cert-${Date.now()}`,
         documentId: mtcDoc.id,
         mtcNumber: mtcIdentity.mtcNumber || extracted.certificateMetadata?.mtcNumber || `MTC-${finalHeat}`,
-        supplierName: mtcIdentity.supplierName || extracted.certificateMetadata?.supplierName || "Western Forge & Flange Co.",
+        supplierName: mtcIdentity.supplierName || extracted.certificateMetadata?.supplierName || "Unknown Supplier",
         clientName: clientName || reqSet.clientName,
-        poNumber: poNumber || void 0,
+        poNumber: poNumber || mtcIdentity.poNumber || void 0,
         issueDate: (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
         materialGrade: finalGrade,
         standard: finalGrade,
