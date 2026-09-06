@@ -93,3 +93,56 @@ const ndeGapFinding: any = {
 assert.strictEqual(formatExportSupplierValue(ndeGapFinding), 'Not Reported', 'Documentation gap should format cleanly as Not Reported');
 
 console.log('All Quality Report export mapping tests PASSED successfully!');
+
+// ---------------------------------------------------------------------------
+// Regression test for the "Supplier Technical Clarification & Concession
+// Action Items" data-mapping bug: a REVIEW_REQUIRED finding whose `reason`
+// (or upstream evidence.rawValue) has been corrupted into a full document
+// dump must NEVER be rendered verbatim into a clarification item description.
+// ---------------------------------------------------------------------------
+import { buildClarificationDescription } from '../src/utils/sanitize';
+
+const documentDumpReason = '材质测试报告 MATERIAL TEST REPORT EN 10204 Type 3.1 证书号 TC No.: WW2604133-3 制造商 Manufacturer： WENZHOU WINWAY MECHANICAL & ELECTRICAL EQUIPMENT CO., LTD 客户 Client： HAWA VALVE INDIA PVT. LTD. Chemical Composition C: 0.018% Si: 0.367% Mn: 0.950% Mechanical Property Yield Strength 232 MPa Tensile Strength 523 MPa Remarks: Visual, dimensional, weld and radioactive inspections satisfactory. IGC test as per ASTM A262 satisfactory. We hereby certify that the material was manufactured, tested and inspected in accordance with the above specification and found to be satisfactory. Signed: QC Manager';
+
+const htSoakingReviewFinding: any = {
+  id: 'finding-htSoak-1',
+  displayName: 'Heat Treatment Soaking Period',
+  field: 'heatTreatmentSoaking',
+  category: 'heat_treatment',
+  heatNo: 'FK2407-061',
+  requirementText: 'Soaking period must be documented with ruling thickness basis (60 min/inch criterion).',
+  requirementClause: 'MDS-HT-04',
+  supplierRawValue: '2 hours, water cooling below 260°C.',
+  status: 'REVIEW_REQUIRED',
+  reason: documentDumpReason, // simulates a corrupted/garbled extraction producing a full document dump
+};
+
+const item01Description = buildClarificationDescription(htSoakingReviewFinding);
+assert(!item01Description.includes('MATERIAL TEST REPORT'), 'Item 01 description must not contain the raw MTC document dump');
+assert(!item01Description.includes('Chemical Composition'), 'Item 01 description must not contain unrelated chemical composition content');
+assert(!item01Description.includes('Manufacturer'), 'Item 01 description must not leak manufacturer/signature block content');
+assert(item01Description.includes('Manual review required'), 'Item 01 description must explicitly state manual review is required when the reason cannot be trusted');
+assert(item01Description.includes('Heat Treatment Soaking Period'), 'Item 01 description must still name the specific parameter');
+assert(item01Description.length < 400, `Item 01 description must be bounded/concise, got ${item01Description.length} chars`);
+console.log('Clarification item description (sanitized):', item01Description);
+
+// A well-formed, clean reason should pass through as a concise, specific narrative.
+const cleanDeviationFinding: any = {
+  id: 'finding-mesc-1',
+  displayName: 'MESC SPE 77/302 Standard Revision',
+  field: 'mescStandardRevision',
+  category: 'general',
+  heatNo: 'FK2407-061',
+  requirementText: 'MESC SPE 77/302:2021',
+  requirementClause: 'MDS-STD-01',
+  supplierRawValue: 'MESC SPE 77/302:2022',
+  status: 'DEVIATION',
+  reason: 'Reported standard revision "MESC SPE 77/302:2022" does not match specified requirement "MESC SPE 77/302:2021".',
+};
+const devDescription = buildClarificationDescription(cleanDeviationFinding);
+assert(devDescription.includes('MESC SPE 77/302 Standard Revision'), 'Clean deviation description should retain parameter name');
+assert(devDescription.includes('2022'), 'Clean deviation description should retain the actual supplier-reported value');
+assert(!devDescription.includes('Manual review required'), 'A clean, well-formed reason should not be replaced by the fallback');
+console.log('Clarification item description (clean deviation):', devDescription);
+
+console.log('All clarification-item data-mapping regression tests PASSED successfully!');

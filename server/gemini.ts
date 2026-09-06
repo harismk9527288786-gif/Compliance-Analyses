@@ -1551,7 +1551,7 @@ function extractGenericMTCEvidenceFromText(
     const htMatch = text.match(/(固溶\s*Solution\s*Annealed\s*1040\s*℃\s*2h\s*水冷\s*Water\s*Cooling)/i) ||
                     text.match(/(Solution\s*(?:heat\s*)?anneal(?:ed)?\s*(?:at\s*)?\d{3,4}\s*°?C[^\n\r,.]*)/i) ||
                     text.match(/(Solution\s*(?:heat\s*)?anneal(?:ed)?[^\n\r,.]*water\s*cool(?:ing)?)/i) ||
-                    text.match(/(?:(?:热处理状态|热处理|Heat\s*Treatment(?:\s*Condition)?))\s*[:=\s]+([^\n\r,.]+)/i);
+                    text.match(/(?:(?:热处理状态|热处理|Heat\s*Treatment(?:\s*Condition)?))\s*[:=\s]+([^\n\r,.]{1,60})/i);
     if (htMatch) {
       evidence.push({
         id: `ev-dyn-ht-${Date.now()}`,
@@ -1572,7 +1572,7 @@ function extractGenericMTCEvidenceFromText(
 
   // Heat Treatment Soaking Period
   if (!extractedFields.has('heatTreatmentSoaking')) {
-    const htSoakMatch = text.match(/(?:(?:保温时间|Soaking(?:\s*Period|\s*Time)?))\s*[:=\s]+([^\n\r,.]+)/i) ||
+    const htSoakMatch = text.match(/(?:(?:保温时间|Soaking(?:\s*Period|\s*Time)?))\s*[:=\s]+([^\n\r,.]{1,60})/i) ||
                         text.match(/(1040\s*℃\s*2h\s*水冷\s*Water\s*Cooling)/i) ||
                         text.match(/(\b\d+(?:\.\d+)?\s*(?:hours|hrs|h)\b(?:\s*soaking)?)/i);
     if (htSoakMatch) {
@@ -1597,7 +1597,7 @@ function extractGenericMTCEvidenceFromText(
   if (!extractedFields.has('intergranularCorrosion')) {
     const igcMatch = text.match(/(IGC\s*test\s*carried\s*out\s*as\s*per\s*ASTM\s*A262\s*Practice\s*E[^\n\r.]*found\s*satisfactory)/i) ||
                      text.match(/(ASTM\s*A262\s*Practice\s*E\s*[:=\s\-]*\s*(?:Satisfactory|Pass|Conforms))/i) ||
-                     text.match(/(?:(?:晶间腐蚀|Intergranular\s*Corrosion|IGC|ASTM\s*A262(?:\s*Practice\s*E)?))\s*[:=\s]+([^\n\r,.]+)/i);
+                     text.match(/(?:(?:晶间腐蚀|Intergranular\s*Corrosion|IGC|ASTM\s*A262(?:\s*Practice\s*E)?))\s*[:=\s]+([^\n\r,.]{1,60})/i);
     if (igcMatch) {
       evidence.push({
         id: `ev-dyn-igc-${Date.now()}`,
@@ -1619,7 +1619,7 @@ function extractGenericMTCEvidenceFromText(
   // Visual Inspection
   if (!extractedFields.has('visualExamination')) {
     const visMatch = text.match(/(Visual\s*examination\s*carried\s*out\s*on\s*components[^\n\r.]+found\s*satisfactory)/i) ||
-                     text.match(/(?:(?:外观检查|Visual(?:\s*Inspection|\s*Examination)?))\s*[:=\s]+([^\n\r,.]+)/i) ||
+                     text.match(/(?:(?:外观检查|Visual(?:\s*Inspection|\s*Examination)?))\s*[:=\s]+([^\n\r,.]{1,60})/i) ||
                      text.match(/(Visual\s*(?:Inspection)?\s*[:=\s\-]*\s*(?:Satisfactory|Pass|Conforms|OK))/i);
     if (visMatch) {
       evidence.push({
@@ -1643,7 +1643,7 @@ function extractGenericMTCEvidenceFromText(
   if (!extractedFields.has('weldRepair')) {
     const weldMatch = text.match(/(No\s*weld\s*repairs\s*have\s*been\s*conducted)/i) ||
                       text.match(/(Without\s*weld\s*repair|No\s*weld\s*repair|Weld\s*repair\s*[:=\s\-]*\s*(?:None|Nil))/i) ||
-                      text.match(/(?:(?:焊补|Weld\s*Repair(?:s)?|Repair\s*by\s*welding))\s*[:=\s]+([^\n\r,.]+)/i);
+                      text.match(/(?:(?:焊补|Weld\s*Repair(?:s)?|Repair\s*by\s*welding))\s*[:=\s]+([^\n\r,.]{1,60})/i);
     if (weldMatch) {
       evidence.push({
         id: `ev-dyn-weld-${Date.now()}`,
@@ -1666,7 +1666,7 @@ function extractGenericMTCEvidenceFromText(
   if (!extractedFields.has('radioactiveContamination')) {
     const radMatch = text.match(/(Material\s*is\s*free\s*from\s*radioactive\s*contamination)/i) ||
                      text.match(/(Free\s*(?:from|of)\s*radioactive(?:\s*contamination)?)/i) ||
-                     text.match(/(?:(?:放射性污染|Radioactive(?:\s*Contamination)?))\s*[:=\s]+([^\n\r,.]+)/i);
+                     text.match(/(?:(?:放射性污染|Radioactive(?:\s*Contamination)?))\s*[:=\s]+([^\n\r,.]{1,60})/i);
     if (radMatch) {
       evidence.push({
         id: `ev-dyn-rad-${Date.now()}`,

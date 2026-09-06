@@ -20,7 +20,7 @@ import {
   User,
   ExternalFeedbackDraft,
 } from '../types';
-import { exportAnalysisToExcel, exportAnalysisToPDF } from '../utils/exportUtils';
+import { exportAnalysisToExcel, exportAnalysisToPDF, formatExportSupplierValue } from '../utils/exportUtils';
 
 
 interface AnalysisViewProps {
@@ -619,9 +619,9 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
                         {f.requirementText}
                       </td>
 
-                      {/* Supplier Value */}
+                      {/* Supplier Value (sanitized: parameter-specific, never a raw document dump) */}
                       <td className="py-3 px-3 font-bold text-slate-900">
-                        {f.supplierRawValue}
+                        {formatExportSupplierValue(f)}
                       </td>
 
                       {/* Compliance Status Rail (Icon + Label + Color) */}
