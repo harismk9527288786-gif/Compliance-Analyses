@@ -13,6 +13,7 @@ import { extractRequirementsWithAI, extractSupplierEvidenceWithAI, extractMTCIde
 export { extractRequirementsWithAI, extractSupplierEvidenceWithAI, extractMTCIdentity } from './server/gemini';
 import { evaluateCompliance } from './src/engine/rules';
 export { evaluateCompliance } from './src/engine/rules';
+import { buildClarificationDescription } from './src/utils/sanitize';
 import { PILOT_MDS_REQUIREMENT_SET, PILOT_SUPPLIER_MTC } from './src/engine/pilotData';
 import { runAllTestCases } from './src/engine/testSuite';
 import {
@@ -359,7 +360,7 @@ app.use('/api/auth', authRouter);
             itemNumber: i + 1,
             title: `${d.displayName} Deviation (${d.heatNo || 'General'})`,
             findingId: d.id,
-            description: `Reported value "${d.supplierRawValue}" deviates from specified requirement "${d.requirementText}". Reason: ${d.reason}`,
+            description: buildClarificationDescription(d),
             actionRequired: 'Please submit corrective technical documentation or re-test justification.',
           })),
           ...gaps.map((g, i) => ({
@@ -367,7 +368,7 @@ app.use('/api/auth', authRouter);
             itemNumber: deviations.length + i + 1,
             title: `Missing Evidence: ${g.displayName}`,
             findingId: g.id,
-            description: `Client MDS Clause mandates "${g.displayName}", which was not identified in the submitted MTC.`,
+            description: buildClarificationDescription(g),
             actionRequired: 'Please attach formal Level II supplementary test certificate.',
           })),
         ],
@@ -726,7 +727,7 @@ app.use('/api/auth', authRouter);
             itemNumber: i + 1,
             title: `Specification Review Required: ${r.displayName}`,
             findingId: r.id,
-            description: r.reason,
+            description: buildClarificationDescription(r),
             actionRequired: 'Quality engineering verification of the project specification identity is required.',
           })),
           ...deviations.map((d, i) => ({
@@ -734,7 +735,7 @@ app.use('/api/auth', authRouter);
             itemNumber: reviewReqs.length + i + 1,
             title: `${d.displayName} Deviation (${d.heatNo || 'General'})`,
             findingId: d.id,
-            description: `Reported value "${d.supplierRawValue}" deviates from specified requirement "${d.requirementText}". Reason: ${d.reason}`,
+            description: buildClarificationDescription(d),
             actionRequired: 'Please submit corrective technical documentation or re-test justification.',
           })),
           ...gaps.map((g, i) => ({
@@ -742,7 +743,7 @@ app.use('/api/auth', authRouter);
             itemNumber: reviewReqs.length + deviations.length + i + 1,
             title: `Missing Evidence: ${g.displayName}`,
             findingId: g.id,
-            description: `The client specification requires "${g.displayName}" (${g.requirementClause || 'Mandatory'}), which was not identified in the submitted certificate.`,
+            description: buildClarificationDescription(g),
             actionRequired: 'Please attach formal supplementary examination test reports.',
           })),
         ],

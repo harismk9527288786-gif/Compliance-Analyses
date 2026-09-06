@@ -11,6 +11,7 @@ import {
   Send,
 } from 'lucide-react';
 import { ComplianceFinding, FindingStatus, User } from '../types';
+import { formatExportSupplierValue, sanitizeFindingReason } from '../utils/sanitize';
 
 interface FindingDetailDrawerProps {
   finding: ComplianceFinding | null;
@@ -177,7 +178,7 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
             <div className="text-slate-900 font-bold text-xs font-mono uppercase tracking-wider">
               Supplier Certificate Evidence
             </div>
-            <div className="text-sm font-semibold text-slate-900">{finding.supplierRawValue}</div>
+            <div className="text-sm font-semibold text-slate-900">{formatExportSupplierValue(finding)}</div>
             <div className="text-[11px] text-slate-600 space-y-0.5 pt-1 border-t border-slate-200 font-mono">
               <div>
                 Normalized: <strong>{finding.supplierNormalizedValue !== undefined ? `${finding.supplierNormalizedValue} ${finding.supplierUnit || ''}` : 'N/A'}</strong>
@@ -209,7 +210,7 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
             <span>Engineering Finding Details</span>
           </div>
           <p className="text-xs text-slate-800 leading-relaxed bg-slate-50 p-3 rounded border border-slate-200 font-medium">
-            {finding.reason}
+            {sanitizeFindingReason(finding)}
           </p>
         </div>
 
