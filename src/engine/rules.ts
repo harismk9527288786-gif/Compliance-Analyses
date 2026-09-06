@@ -86,14 +86,50 @@ export function evaluateSingleRequirement(
     };
   }
 
+  // Helper to normalize field keys for matching
+  const canonicalField = (name: string): string => {
+    const clean = (name || '').toLowerCase().replace(/[\s\-_()+]/g, '');
+    if (clean === 'c' || clean === 'carbon') return 'c';
+    if (clean === 'mn' || clean === 'manganese') return 'mn';
+    if (clean === 'p' || clean === 'phosphorus') return 'p';
+    if (clean === 's' || clean === 'sulfur') return 's';
+    if (clean === 'si' || clean === 'silicon') return 'si';
+    if (clean === 'cr' || clean === 'chromium') return 'cr';
+    if (clean === 'ni' || clean === 'nickel') return 'ni';
+    if (clean === 'mo' || clean === 'molybdenum') return 'mo';
+    if (clean === 'n' || clean === 'nitrogen') return 'n';
+    if (clean === 'ni2mo' || clean === 'ni+2mo') return 'ni+2mo';
+    if (clean === 'pren' || clean === 'pre') return 'pren';
+    if (clean === 'yieldstrength' || clean === 'ys' || clean === 'rp02' || clean === 'reh') return 'yieldstrength';
+    if (clean === 'tensilestrength' || clean === 'ts' || clean === 'rm') return 'tensilestrength';
+    if (clean === 'elongation' || clean === 'a5' || clean === 'a') return 'elongation';
+    if (clean === 'reductionofarea' || clean === 'ra' || clean === 'z') return 'reductionofarea';
+    if (clean === 'hardness' || clean === 'hbw' || clean === 'hrc' || clean === 'hv') return 'hardness';
+    return clean;
+  };
+
+  const reqFieldCanon = canonicalField(req.field);
+
   // Find matching evidence items
   const matchedEvidence = cert.evidenceItems.filter((e) => {
+    const eFieldCanon = canonicalField(e.field);
     const fieldMatch =
+      eFieldCanon === reqFieldCanon ||
       e.field.toLowerCase() === req.field.toLowerCase() ||
       Boolean(e.displayName && req.displayName && e.displayName.toLowerCase() === req.displayName.toLowerCase());
     if (!fieldMatch) return false;
-    if (heatNo && e.heatNo && e.heatNo !== 'GENERAL' && e.heatNo !== heatNo) {
-      return false;
+
+    // Resilient heat matching:
+    // If certificate has single heat, all certificate evidence applies to it
+    if (cert.heats && cert.heats.length <= 1) {
+      return true;
+    }
+    if (heatNo && e.heatNo && e.heatNo !== 'GENERAL' && e.heatNo !== 'HEAT-UNKNOWN' && e.heatNo !== 'UNVERIFIED') {
+      const normEvHeat = e.heatNo.replace(/[\s\-_]/g, '').toUpperCase();
+      const normReqHeat = heatNo.replace(/[\s\-_]/g, '').toUpperCase();
+      if (normEvHeat !== normReqHeat) {
+        return false;
+      }
     }
     return true;
   });

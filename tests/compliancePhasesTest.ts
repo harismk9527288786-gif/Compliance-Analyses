@@ -266,10 +266,61 @@ NACE Compliance: NACE MR0175 / ISO 15156
     'Requirement statuses are strictly isolated'
   );
 
+  // 6. Test Real Tabular MTC Document Text Extraction & Evaluation
+  console.log('\nTesting Real Tabular EN 10204 3.1 MTC Text from Mill:');
+  const realMtcTabularText = `
+材质测试报告 MATERIAL TEST REPORT EN 10204 Type 3.1 证书号 TC No.: WW2604133-3 日期 DATE: 2026-5-25 页数 PAGE ： 1 OF 1 制造商 Manufacturer ： WENZHOU WINWAY MECHANICAL & ELECTRICAL EQUIPMENT CO., LTD 客户 Client ： HAWA VALVE INDIA PVT. LTD. 原材料证书号 MTC Numbers WW2604133- A 3 生产号 Production No. ： WW2604-133 客户合同号 Contract No. ： IMP004774 材料成分和性能 MATERRIAL COMPONENTS AND PROPERTIES 材料 MATERIAL 热处理 HEAT TREATMENT 热处理温度 TEMPERATURE 保温时间 HOLDING TIME(h) 冷却方式 COOLING TYPE We hereby certify that the material was manufactured, sampled, tested and inspected in accordance with ASTM 182 Grade F316-2023, NACE MR0175/ISO15156:2015, MESC SPE 77/302:2021, and Hawa MDS-QE-F-ASS-ASTM-A182-F316-NACE-6D-001-[N1157]-REV A and meet the requirements. ASTM 182 Grade F316 (UNS S31600) 固溶 Solution Annealed 1040 ℃ 2h 水冷 Water Cooling 零部件名称 PART NAME 数量 QTY 材料 MATERIAL 炉号 HEAT NO. 化学成份（ % ） CHEMICAL COMPOSITION 机械性能 MECHANICAL PROPERTY C% Si% Mn% P% S% Cr% Ni% Mo% Cu% Fe% Al% N% Ni+2Mo PREN Y.S. 0.2% Ten. Elongati on % (4D) R% Hardness HBW IMPACT TEST TEMP. °C: -196°C Direction: Longitudinal (Mpa) (Mpa) 标准 Reference ASTM A182 Min. -- -- -- -- -- 16.000 10.000 2.000 -- -- -- -- 14.00 23.00 205 515 30 50 -- (J)Avg. / (J) Min. Avg. Value Max. 0.030 1.000 2.000 0.045 0.030 18.000 14.000 3.000 -- -- -- 0.100 20.00 28.00 -- -- -- -- 237 Ball Valve Stem 6" - 900# RF 1 A182 F316 FK2407-061 0.018 0.367 0.950 0.036 0.0008 16.320 10.070 2.037 -- -- -- 0.052 14.144 23.87 232 523 47 68 173,175,179 -- -- -- -- Ball Valve Ball 3 " - 900# RF 2 A182 F316 FK2407-061 0.018 0.367 0.950 0.036 0.0008 16.320 10.070 2.037 -- -- -- 0.052 14.144 23.87 232 523 47 68 173,175,179 -- -- -- -- Note: Remark: (1) Visual examination carried out on components as per ASME BPVC SEC VIII, Div. 1, UF-45, & UF-46 and ASTM A182/A182M and found satisfactory. (2) Dimensional inspection carried out as per drawing & PO and results found satisfactory. (3) No weld repairs have been conducted on above components. (4) Forging ratio is more than 4:1 (5) Pickling and Passivation done as per ASTM A380. (6) Steel making: Electric arc furnace (7) Material is free from radioactive contamination. (8)IGC test carried out as per ASTM A262 Practice E and results found satisfactory. We hereby certify that the valves listed above are manufactured and tested in accordance with WITNESSED BY: HE DENGHONG the requirement of valve standard and purchase order. WINWAY VALVE QC Manager Martin
+`;
+
+  const realMtcExtracted = await extractSupplierEvidenceWithAI(realMtcTabularText, mtcFilename);
+  assert(realMtcExtracted.evidence.length >= 20, 'Tabular MTC evidence extraction extracts all chemistry and mechanical values', `Extracted ${realMtcExtracted.evidence.length} items`);
+
+  const realCertRecord: CertificateRecord = {
+    id: 'cert-real-mtc',
+    documentId: 'doc-real-mtc',
+    mtcNumber: realMtcExtracted.certificateMetadata.mtcNumber || 'WW2604133-3',
+    supplierName: realMtcExtracted.certificateMetadata.supplierName || 'Wenzhou Winway Mechanical & Electrical Equipment Co., Ltd',
+    clientName: 'HAWA VALVES',
+    poNumber: 'IMP004774',
+    issueDate: '2026-05-25',
+    materialGrade: 'ASTM A182 F316',
+    standard: 'ASTM A182 F316',
+    heats: ['FK2407-061'],
+    evidenceItems: realMtcExtracted.evidence as any,
+  };
+
+  const realFindings = evaluateCompliance({
+    analysisId: 'analysis-real-mtc',
+    requirements,
+    certificate: realCertRecord,
+  });
+
+  const realPass = realFindings.filter((f) => f.status === 'PASS');
+  const realDev = realFindings.filter((f) => f.status === 'DEVIATION');
+  const realRev = realFindings.filter((f) => f.status === 'REVIEW_REQUIRED');
+  const realGap = realFindings.filter((f) => f.status === 'DOCUMENTATION_GAP');
+
+  assert(realPass.length === 23, 'Real Tabular MTC PASS count is exactly 23', `Pass: ${realPass.length}`);
+  assert(realDev.length === 1, 'Real Tabular MTC DEVIATION count is exactly 1 (MESC 2022 vs 2021)', `Dev: ${realDev.length}`);
+  assert(realRev.length === 2, 'Real Tabular MTC REVIEW_REQUIRED count is exactly 2 (HT Soaking & NACE)', `Rev: ${realRev.length}`);
+  assert(realGap.length === 1, 'Real Tabular MTC DOCUMENTATION_GAP count is exactly 1 (Surface NDE PT/UT)', `Gap: ${realGap.length}`);
+
+  // Chemistry specific assertions on real MTC
+  const cReal = realFindings.find((f) => f.field === 'C');
+  assert(cReal?.supplierRawValue === '0.018 %' && cReal?.status === 'PASS', 'Carbon C=0.018 wt% extracted and evaluated as PASS', `Raw: ${cReal?.supplierRawValue}`);
+
+  const mnReal = realFindings.find((f) => f.field === 'Mn');
+  assert(mnReal?.supplierRawValue === '0.950 %' && mnReal?.status === 'PASS', 'Manganese Mn=0.950 wt% extracted and evaluated as PASS', `Raw: ${mnReal?.supplierRawValue}`);
+
+  const sReal = realFindings.find((f) => f.field === 'S');
+  assert(sReal?.supplierRawValue === '0.0008 %' && sReal?.status === 'PASS', 'Sulfur S=0.0008 wt% extracted and evaluated as PASS', `Raw: ${sReal?.supplierRawValue}`);
+
+  const nReal = realFindings.find((f) => f.field === 'N');
+  assert(nReal?.supplierRawValue === '0.052 %' && nReal?.status === 'PASS', 'Nitrogen N=0.052 wt% extracted and evaluated as PASS', `Raw: ${nReal?.supplierRawValue}`);
+
   console.log('\n───────────────────────────────────────────────────────');
   console.log(`  ${passed} passed, ${failed} failed, ${passed + failed} total`);
   console.log('───────────────────────────────────────────────────────\n');
-
 
   if (failed > 0) {
     process.exit(1);
