@@ -18,7 +18,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { AnalysisRecord, ComplianceFinding, ExternalFeedbackDraft, User } from '../types';
-import { exportAnalysisToExcel, exportAnalysisToPDF } from '../utils/exportUtils';
+import { exportAnalysisToExcel, exportAnalysisToPDF, formatExportSupplierValue } from '../utils/exportUtils';
 
 interface ReportModalProps {
   analysis: AnalysisRecord;
@@ -61,7 +61,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
           title: `${f.displayName} (${f.heatNo || 'General'})`,
           description:
             f.status === 'DEVIATION'
-              ? `Reported value "${f.supplierRawValue}" deviates from specified requirement "${f.requirementText}". Reason: ${f.reason}`
+              ? `Reported value "${formatExportSupplierValue(f)}" deviates from specified requirement "${f.requirementText}". Reason: ${f.reason}`
               : `The client specification requires "${f.displayName}" (${f.requirementClause || 'Mandatory'}), which was not identified in the submitted certificate.`,
           actionRequired:
             f.status === 'DEVIATION'
@@ -374,7 +374,7 @@ Apex Valve & Flow Engineering Ltd.`;
                           <td className="py-2.5 px-3 font-bold text-slate-900">{f.displayName}</td>
                           <td className="py-2.5 px-3 font-mono text-slate-600">{f.heatNo || 'GEN'}</td>
                           <td className="py-2.5 px-3 text-slate-700">{f.requirementText}</td>
-                          <td className="py-2.5 px-3 font-bold text-slate-900">{f.supplierRawValue}</td>
+                          <td className="py-2.5 px-3 font-bold text-slate-900">{formatExportSupplierValue(f)}</td>
                           <td className="py-2.5 px-3">
                             {f.status === 'PASS' ? (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
@@ -385,6 +385,11 @@ Apex Valve & Flow Engineering Ltd.`;
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-100 text-rose-900 border border-rose-300">
                                 <AlertTriangle className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
                                 <span>DEVIATION</span>
+                              </span>
+                            ) : f.status === 'REVIEW_REQUIRED' ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                <AlertTriangle className="w-3 h-3 stroke-[2.5]" aria-hidden="true" />
+                                <span>REVIEW REQ</span>
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-300">

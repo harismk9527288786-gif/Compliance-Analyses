@@ -1236,11 +1236,14 @@ ${documentText.slice(0, 15000)}`;
       const parsed = JSON.parse(response.text);
       const meta = parsed.certificateMetadata || {};
 
-      // Sanitize heat numbers - replace any HEAT-1 placeholders with actual heat from document text
+      // Sanitize heat numbers - preserve verified heat from document identity
       let heats = meta.heats;
-      if (!Array.isArray(heats) || heats.length === 0 || heats.includes('HEAT-1') || heats.includes('HEAT-01')) {
+      const verifiedHeat = fallbackResult.certificateMetadata?.heats?.[0];
+      if (verifiedHeat && verifiedHeat !== 'HEAT-UNKNOWN' && verifiedHeat !== 'UNVERIFIED') {
+        heats = [verifiedHeat];
+      } else if (!Array.isArray(heats) || heats.length === 0 || heats.includes('HEAT-1') || heats.includes('HEAT-01')) {
         const heatMatch = documentText.match(/\b([A-Z]{1,4}\d{4,6}(?:-\d{2,4})?)\b/i);
-        heats = [heatMatch ? heatMatch[0].toUpperCase() : (fallbackResult.certificateMetadata?.heats?.[0] || 'HEAT-UNKNOWN')];
+        heats = [heatMatch ? heatMatch[0].toUpperCase() : (verifiedHeat || 'HEAT-UNKNOWN')];
       }
 
       const canonicalFieldMap: Record<string, string> = {
@@ -1319,6 +1322,10 @@ ${documentText.slice(0, 15000)}`;
         aiExtractionUsed: true,
         certificateMetadata: {
           ...meta,
+          supplierName: meta.supplierName || fallbackResult.certificateMetadata?.supplierName,
+          materialGrade: meta.materialGrade || fallbackResult.certificateMetadata?.materialGrade,
+          mtcNumber: meta.mtcNumber || fallbackResult.certificateMetadata?.mtcNumber,
+          poNumber: meta.poNumber || fallbackResult.certificateMetadata?.poNumber,
           heats,
         },
         evidence: aiEvidence,

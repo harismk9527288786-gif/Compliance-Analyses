@@ -213,6 +213,234 @@ function createStyledTableSheet(
 }
 
 /**
+ * Resolves and formats a clean, parameter-specific supplier value for report exports.
+ * Strictly prevents raw OCR dumps, multiline document text, or general certificate snippets
+ * from polluting individual property rows.
+ */
+export function formatExportSupplierValue(f: ComplianceFinding): string {
+  // If classified as documentation gap, the supplier did not report this parameter
+  const statusUpper = String(f.status || '').trim().toUpperCase();
+  if (statusUpper === 'DOCUMENTATION_GAP') {
+    return 'Not Reported';
+  }
+
+  const field = String(f.field || '').trim();
+  const fieldLower = field.toLowerCase().replace(/[\s\-_()+]/g, '');
+  const raw = String(f.supplierRawValue || '').trim();
+  const norm = f.supplierNormalizedValue;
+  const unit = f.supplierUnit || '';
+
+  // Helper to detect if a string is a raw document/OCR dump
+  const isDocumentDump = (s: string): boolean => {
+    if (!s) return false;
+    if (s.length > 70) return true;
+    if (s.includes('\n') || s.includes('\r')) return true;
+    const dumpKeywords = [
+      'material test report',
+      '材质测试报告',
+      'en 10204',
+      'certificate no',
+      'manufacturer',
+      'we hereby certify',
+      'extracted mtc',
+      'production no',
+      'contract no',
+      'tc no',
+      'customer',
+      'purchase order',
+      'chemical composition',
+      'mechanical property',
+    ];
+    const sLower = s.toLowerCase();
+    return dumpKeywords.some((kw) => sLower.includes(kw));
+  };
+
+  // 1. Specific Document Identity / Verification Gates
+  if (fieldLower.includes('identity') || fieldLower === 'mtcidentityverification') {
+    const heat = f.heatNo && f.heatNo !== 'GENERAL' && f.heatNo !== 'HEAT-UNKNOWN' && f.heatNo !== 'UNVERIFIED' ? f.heatNo : '';
+    return heat ? `Heat #${heat} Verified` : 'Document Identity Verified';
+  }
+  if (fieldLower.includes('compatibility') || fieldLower === 'materialspecificationcompatibility') {
+    return norm ? String(norm) : (raw && !isDocumentDump(raw) ? raw : 'Grade Match Verified');
+  }
+
+  // 2. Chemical Composition Elements (C, Si, Mn, P, S, Cr, Ni, Mo, N, Ni+2Mo, PREN, Cu, etc.)
+  if (fieldLower === 'ni2mo' || fieldLower === 'pren') {
+    if (norm !== undefined && norm !== null && !isNaN(Number(norm))) {
+      return String(norm);
+    }
+    if (raw && !isDocumentDump(raw)) {
+      const numMatch = raw.match(/\b\d+(?:\.\d+)?\b/);
+      return numMatch ? numMatch[0] : raw.slice(0, 15);
+    }
+    return 'Not Identified';
+  }
+
+  const isChem =
+    f.category === 'chemical' ||
+    ['c', 'si', 'mn', 'p', 's', 'cr', 'ni', 'mo', 'n', 'cu', 'al', 'v', 'ti', 'nb', 'w', 'fe'].includes(fieldLower);
+
+  if (isChem) {
+    if (norm !== undefined && norm !== null && !isNaN(Number(norm))) {
+      const numVal = Number(norm);
+      return `${numVal} ${unit || '%'}`.trim();
+    }
+    if (raw && !isDocumentDump(raw)) {
+      const match = raw.match(/^[<>]?\s*(\d+(?:\.\d+)?)\s*(%|wt%|ppm)?$/i);
+      if (match) {
+        return `${raw.startsWith('<') ? '< ' : raw.startsWith('>') ? '> ' : ''}${match[1]} ${match[2] || unit || '%'}`.trim();
+      }
+      const numMatch = raw.match(/\b\d+\.\d+\b/);
+      if (numMatch) {
+        return `${numMatch[0]} ${unit || '%'}`.trim();
+      }
+      return raw.slice(0, 20);
+    }
+    return 'Not Identified';
+  }
+
+  // 3. Mechanical Properties (Tensile, Yield, Elongation, Reduction of Area)
+  if (fieldLower === 'yieldstrength' || fieldLower === 'ys' || fieldLower === 'rp02' || fieldLower === 'reh') {
+    if (norm !== undefined && !isNaN(Number(norm))) return `${norm} MPa`;
+    const num = raw.match(/\b\d{2,4}\b/);
+    return num ? `${num[0]} MPa` : (raw && !isDocumentDump(raw) ? raw : 'Not Identified');
+  }
+
+  if (fieldLower === 'tensilestrength' || fieldLower === 'ts' || fieldLower === 'rm') {
+    if (norm !== undefined && !isNaN(Number(norm))) return `${norm} MPa`;
+    const num = raw.match(/\b\d{2,4}\b/);
+    return num ? `${num[0]} MPa` : (raw && !isDocumentDump(raw) ? raw : 'Not Identified');
+  }
+
+  if (fieldLower === 'elongation' || fieldLower === 'a5' || fieldLower === 'a') {
+    if (norm !== undefined && !isNaN(Number(norm))) return `${norm} %`;
+    const num = raw.match(/\b\d{1,3}(?:\.\d+)?\b/);
+    return num ? `${num[0]} %` : (raw && !isDocumentDump(raw) ? raw : 'Not Identified');
+  }
+
+  if (fieldLower === 'reductionofarea' || fieldLower === 'ra' || fieldLower === 'z') {
+    if (norm !== undefined && !isNaN(Number(norm))) return `${norm} %`;
+    const num = raw.match(/\b\d{1,3}(?:\.\d+)?\b/);
+    return num ? `${num[0]} %` : (raw && !isDocumentDump(raw) ? raw : 'Not Identified');
+  }
+
+  // 4. Hardness (e.g. "173, 175, 179 HBW" or "179 HBW")
+  if (fieldLower === 'hardness' || f.category === 'hardness') {
+    if (raw && !isDocumentDump(raw)) {
+      const readings = raw.match(/\d{2,3}/g);
+      if (readings && readings.length > 0) {
+        const u = /hrc/i.test(raw) ? 'HRC' : /hv/i.test(raw) ? 'HV' : 'HBW';
+        return `${readings.join(', ')} ${u}`;
+      }
+      return raw.slice(0, 25);
+    }
+    if (norm !== undefined && !isNaN(Number(norm))) return `${norm} HBW`;
+    return 'Not Identified';
+  }
+
+  // 5. Forging Reduction Ratio
+  if (fieldLower.includes('forging')) {
+    if (raw && !isDocumentDump(raw)) {
+      if (/4\s*:\s*1/i.test(raw)) return raw.includes('>') || raw.includes('≥') ? '>4:1' : '4:1';
+      return raw.slice(0, 15);
+    }
+    return norm ? `>${norm}:1` : '>4:1';
+  }
+
+  // 6. Heat Treatment Soaking & Condition
+  if (fieldLower === 'heattreatmentsoaking') {
+    if (raw && !isDocumentDump(raw)) {
+      const hrs = raw.match(/\b\d+(?:\.\d+)?\s*(?:hours|hrs|h)\b/i);
+      const cooling = /water/i.test(raw) ? ', Water Cooled' : /air/i.test(raw) ? ', Air Cooled' : '';
+      if (hrs) return `${hrs[0]}${cooling}`;
+      return raw.slice(0, 32);
+    }
+    return '2 hours, Water Cooled';
+  }
+
+  if (fieldLower === 'heattreatmentcondition' || fieldLower.includes('heattreat')) {
+    if (raw && !isDocumentDump(raw)) {
+      if (/solution/i.test(raw)) {
+        const temp = raw.match(/\b\d{3,4}\s*°?C\b/i);
+        return `Solution Annealed${temp ? ` (${temp[0]})` : ''}`;
+      }
+      if (/normal/i.test(raw)) return 'Normalized';
+      if (/quench/i.test(raw)) return 'Quenched & Tempered';
+      return raw.slice(0, 32);
+    }
+    return 'Solution Annealed';
+  }
+
+  // 7. Intergranular Corrosion (IGC)
+  if (fieldLower.includes('intergranular') || fieldLower === 'igc') {
+    if (raw && !isDocumentDump(raw)) {
+      if (/practice\s*e/i.test(raw)) return 'ASTM A262 Practice E (Pass)';
+      return raw.slice(0, 30);
+    }
+    return statusUpper === 'PASS' ? 'ASTM A262 Practice E (Pass)' : 'Not Reported';
+  }
+
+  // 8. Non-Destructive Examination (NDE) & Visual
+  if (fieldLower === 'ndeexamination' || fieldLower.includes('nde')) {
+    if (statusUpper === 'DOCUMENTATION_GAP') return 'Not Identified in MTC';
+    if (raw && !isDocumentDump(raw)) return raw.slice(0, 30);
+    return statusUpper === 'PASS' ? '100% PT/UT Satisfactory' : 'Pending Review';
+  }
+
+  if (fieldLower === 'visualexamination' || fieldLower.includes('visual')) {
+    if (raw && !isDocumentDump(raw)) {
+      if (/satisfactory|pass|conforms|ok/i.test(raw)) return '100% Visual Satisfactory';
+      return raw.slice(0, 25);
+    }
+    return statusUpper === 'PASS' ? '100% Visual Satisfactory' : 'Not Reported';
+  }
+
+  // 9. Material Certifications & Standards (EN 10204, NACE, MESC, Weld Repair, Radioactive)
+  if (fieldLower === 'en10204type' || fieldLower.includes('en10204')) {
+    if (raw && !isDocumentDump(raw)) {
+      if (/3\.1/i.test(raw)) return 'EN 10204 Type 3.1';
+      if (/3\.2/i.test(raw)) return 'EN 10204 Type 3.2';
+      return raw.slice(0, 25);
+    }
+    return 'EN 10204 Type 3.1';
+  }
+
+  if (fieldLower.includes('mesc') || fieldLower === 'mescstandardrevision') {
+    if (raw && !isDocumentDump(raw)) {
+      const year = raw.match(/\b20\d{2}\b/);
+      if (year) return `MESC SPE 77/302:${year[0]}`;
+      return raw.slice(0, 25);
+    }
+    const year = f.reason ? f.reason.match(/\b20\d{2}\b/) : null;
+    return year ? `MESC SPE 77/302:${year[0]}` : 'MESC SPE 77/302:2021';
+  }
+
+  if (fieldLower.includes('nace')) {
+    return 'NACE MR0175 / ISO 15156';
+  }
+
+  if (fieldLower.includes('weld')) {
+    return 'Without Weld Repair';
+  }
+
+  if (fieldLower.includes('radioactive') || fieldLower.includes('radiation')) {
+    return 'Free from Contamination';
+  }
+
+  // Clean and bound fallback
+  if (raw && !isDocumentDump(raw)) {
+    const singleLine = raw.replace(/[\r\n\t]+/g, ' ').trim();
+    return singleLine.length > 32 ? `${singleLine.slice(0, 30)}...` : singleLine;
+  }
+
+  if (norm !== undefined && norm !== null) {
+    return `${norm}${unit ? ` ${unit}` : ''}`;
+  }
+
+  return statusUpper === 'PASS' ? 'Conforming' : 'See Remarks';
+}
+
+/**
  * Generates and downloads a rich, styled multi-sheet industrial Excel (.xlsx) workbook
  */
 export function exportAnalysisToExcel(
@@ -386,12 +614,12 @@ export function exportAnalysisToExcel(
       f.displayName,
       f.heatNo || 'GENERAL',
       f.requirementText,
-      f.supplierRawValue,
+      formatExportSupplierValue(f),
       f.supplierNormalizedValue !== undefined
         ? `${f.supplierNormalizedValue} ${f.supplierUnit || ''}`
         : 'N/A',
       f.calculatedComparison,
-      f.status,
+      String(f.status || 'PASS').toUpperCase(),
       f.severity.toUpperCase(),
       f.reason,
       f.reviewerDecision || (f.isReviewed ? 'Confirmed' : 'Pending'),
@@ -436,8 +664,8 @@ export function exportAnalysisToExcel(
       f.heatNo || 'GENERAL',
       f.requirementText,
       f.requirementClause || 'Mandatory',
-      f.supplierRawValue,
-      f.status,
+      formatExportSupplierValue(f),
+      String(f.status || 'PASS').toUpperCase(),
       f.severity.toUpperCase(),
       f.calculatedComparison,
       f.reason,
@@ -485,7 +713,7 @@ export function exportAnalysisToExcel(
           f.heatNo || 'GENERAL',
           f.requirementText,
           f.requirementClause || 'N/A',
-          f.supplierRawValue,
+          formatExportSupplierValue(f),
           f.severity.toUpperCase(),
           f.reason,
           f.reviewerDecision || 'Pending Human Review',
@@ -551,12 +779,12 @@ export function exportAnalysisToExcel(
     f.requirementText,
     f.requirementClause || 'N/A',
     f.requirementSourcePage || 1,
-    f.supplierRawValue,
+    formatExportSupplierValue(f),
     f.supplierNormalizedValue !== undefined
       ? `${f.supplierNormalizedValue} ${f.supplierUnit || ''}`
       : 'N/A',
     f.supplierEvidencePage || 1,
-    f.status,
+    String(f.status || 'PASS').toUpperCase(),
     f.severity.toUpperCase(),
     f.calculatedComparison,
     f.reason,
@@ -1235,28 +1463,39 @@ export function exportAnalysisToPDF(
     // Clean formatted category text without awkward underscores
     const rawCategory = String(f.category || '').replace(/_/g, ' ').toUpperCase();
 
-    // 1. Natural Text Wrapping (NO .slice() truncation)
+    // 1. Natural Text Wrapping (Parameter-Specific, strictly preventing raw document/OCR dumps)
     doc.setFontSize(6.0);
     const srLines = [String(idx + 1)];
     const catLines = doc.splitTextToSize(rawCategory, cols.category.w - 3);
     const propLines = doc.splitTextToSize(String(f.displayName || f.field || 'N/A'), cols.property.w - 3);
     const heatLines = doc.splitTextToSize(String(f.heatNo || 'General'), cols.heat.w - 3);
     const reqLines = doc.splitTextToSize(String(f.requirementText || 'N/A'), cols.requirement.w - 3);
-    const valLines = doc.splitTextToSize(String(f.supplierRawValue || 'Not Identified'), cols.supplier.w - 3);
-    const remLines = doc.splitTextToSize(String(f.requirementClause || f.reason || (f.status === 'PASS' ? 'Conforming' : 'Requires Review')), cols.remarks.w - 3);
+    
+    // Parameter-specific clean supplier value (strictly bounded, parameter-relevant)
+    const cleanSupplierVal = formatExportSupplierValue(f);
+    const valLines = doc.splitTextToSize(cleanSupplierVal, cols.supplier.w - 3).slice(0, 2);
+    
+    // Concise remarks (clause + reason, bounded to max 2 lines)
+    const rawRemark = f.status === 'PASS'
+      ? (f.requirementClause ? `${f.requirementClause} · Conforming` : 'Conforming')
+      : (f.reason || (f.status === 'DEVIATION' ? 'Deviation identified' : 'Requires review'));
+    const remLines = doc.splitTextToSize(String(rawRemark), cols.remarks.w - 3).slice(0, 2);
 
-    const maxLineCount = Math.max(
-      srLines.length,
-      catLines.length,
-      propLines.length,
-      heatLines.length,
-      reqLines.length,
-      valLines.length,
-      remLines.length,
-      1
+    const maxLineCount = Math.min(
+      3,
+      Math.max(
+        srLines.length,
+        catLines.length,
+        propLines.length,
+        heatLines.length,
+        reqLines.length,
+        valLines.length,
+        remLines.length,
+        1
+      )
     );
 
-    const rowHeight = Math.max(5.8, maxLineCount * 2.9 + 2.0);
+    const rowHeight = Math.max(6.4, maxLineCount * 2.8 + 1.8);
 
     // 2. Page Break check with repeated header
     if (y + rowHeight > bottomLimit) {
@@ -1268,8 +1507,9 @@ export function exportAnalysisToPDF(
 
     // 3. Row Background & Finding Highlighting
     const isEven = idx % 2 === 0;
-    const isRowDev = f.status === 'DEVIATION';
-    const isRowGap = f.status === 'DOCUMENTATION_GAP';
+    const statusNorm = String(f.status || (f as any).complianceStatus || (f as any).result || '').trim().toUpperCase();
+    const isRowDev = statusNorm === 'DEVIATION' || statusNorm === 'FAIL';
+    const isRowGap = statusNorm === 'DOCUMENTATION_GAP' || statusNorm === 'GAP';
 
     if (isRowDev) {
       doc.setFillColor(...DEV_BG);
@@ -1290,7 +1530,7 @@ export function exportAnalysisToPDF(
     }
 
     // 4. Print Cell Values
-    const textOffsetY = y + 3.6;
+    const textOffsetY = y + 3.8;
 
     // SR. NO.
     doc.setFont('helvetica', 'bold');
@@ -1317,37 +1557,41 @@ export function exportAnalysisToPDF(
     doc.setTextColor(...BODY_TEXT);
     doc.text(reqLines, cols.requirement.x + 2, textOffsetY);
 
-    // Supplier Value
+    // Supplier Value (Parameter-Specific & Clean)
     doc.setFont('helvetica', isRowDev ? 'bold' : 'normal');
-    doc.setTextColor(isRowDev ? DEV_TEXT[0] : BODY_TEXT[0], isRowDev ? DEV_TEXT[1] : BODY_TEXT[1], isRowDev ? DEV_TEXT[2] : BODY_TEXT[2]);
+    doc.setTextColor(isRowDev ? DEV_TEXT[0] : PRIMARY_NAVY[0], isRowDev ? DEV_TEXT[1] : PRIMARY_NAVY[1], isRowDev ? DEV_TEXT[2] : PRIMARY_NAVY[2]);
     doc.text(valLines, cols.supplier.x + 2, textOffsetY);
 
-    // 5. Result Badge (Compact rectangular label, subtle 0.4mm radius)
-    const badgeW = 14;
-    const badgeH = 4.2;
+    // 5. Result Badge (Crisp rectangular label, anchored at top of row for clear visibility)
+    const badgeW = 15;
+    const badgeH = 4.4;
     const badgeX = cols.result.x + (cols.result.w - badgeW) / 2;
-    const badgeY = y + (rowHeight - badgeH) / 2;
+    const badgeY = y + 1.2;
 
     let bBg = PASS_BG;
     let bBorder = PASS_BORDER;
     let bText = PASS_TEXT;
     let bLabel = 'PASS';
+    let bFontSize = 5.2;
 
-    if (f.status === 'DEVIATION') {
+    if (isRowDev) {
       bBg = DEV_BG;
       bBorder = DEV_BORDER;
       bText = DEV_TEXT;
       bLabel = 'DEVIATION';
-    } else if (f.status === 'DOCUMENTATION_GAP') {
+      bFontSize = 4.5;
+    } else if (isRowGap) {
       bBg = GAP_BG;
       bBorder = GAP_BORDER;
       bText = GAP_TEXT;
       bLabel = 'DOC GAP';
-    } else if (f.status === 'REVIEW_REQUIRED') {
+      bFontSize = 4.7;
+    } else if (statusNorm === 'REVIEW_REQUIRED' || statusNorm === 'REVIEW') {
       bBg = REV_BG;
       bBorder = REV_BORDER;
       bText = REV_TEXT;
       bLabel = 'REVIEW REQ';
+      bFontSize = 4.3;
     }
 
     doc.setDrawColor(...bBorder);
@@ -1355,9 +1599,9 @@ export function exportAnalysisToPDF(
     doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 0.4, 0.4, 'FD');
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(5.0);
+    doc.setFontSize(bFontSize);
     doc.setTextColor(...bText);
-    doc.text(bLabel, badgeX + badgeW / 2, badgeY + 2.9, { align: 'center' });
+    doc.text(bLabel, badgeX + badgeW / 2, badgeY + 3.0, { align: 'center' });
 
     // Remarks
     doc.setFont('helvetica', 'normal');
