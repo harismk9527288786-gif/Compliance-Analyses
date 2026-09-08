@@ -321,6 +321,7 @@ export const RequirementLibrary: React.FC<RequirementLibraryProps> = ({
                     <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
                     <input
                       type="text"
+                      aria-label="Filter clauses"
                       placeholder="Filter clauses..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
