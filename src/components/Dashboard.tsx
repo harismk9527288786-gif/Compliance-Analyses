@@ -654,7 +654,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
               <input
                 type="text"
-                placeholder="Search MTC / Heat / Supplier..."
+                placeholder="Search MTC / Heat / Supplier..." aria-label="Search records"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all font-medium text-slate-900"
