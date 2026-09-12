@@ -290,7 +290,6 @@ export class DatabaseStore {
         this.lastPostgresError = null;
         this.lastSyncedAtTime = Date.now();
         connected = true;
-        console.log(`Successfully connected to PostgreSQL persistence store via ${candidate.name}.`);
         break;
       } catch (err: any) {
         this.isPostgresConnected = false;
