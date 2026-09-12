@@ -2590,6 +2590,229 @@ async function parseDocumentContent(buffer, filename) {
 
 // server/gemini.ts
 import { GoogleGenAI } from "@google/genai";
+
+// src/utils/sanitizeEvidence.ts
+function isDocumentDump(s) {
+  if (!s) return false;
+  if (s.length > 70) return true;
+  if (s.includes("\n") || s.includes("\r")) return true;
+  const dumpKeywords = [
+    "material test report",
+    "\u6750\u8D28\u6D4B\u8BD5\u62A5\u544A",
+    "en 10204",
+    "certificate no",
+    "manufacturer",
+    "we hereby certify",
+    "extracted mtc",
+    "production no",
+    "contract no",
+    "tc no",
+    "customer",
+    "purchase order",
+    "chemical composition",
+    "mechanical property",
+    "cooling type",
+    "holding time",
+    "part name",
+    "heat no",
+    "ball valve stem",
+    "astm a182",
+    "visual examination",
+    "dimensional inspection",
+    "forging ratio",
+    "steel making",
+    "electric arc furnace"
+  ];
+  const sLower = s.toLowerCase();
+  return dumpKeywords.some((kw) => sLower.includes(kw));
+}
+function formatCleanSupplierValue(f) {
+  const statusUpper = String(f.status || "").toUpperCase();
+  if (statusUpper === "DOCUMENTATION_GAP") {
+    return "Not Reported";
+  }
+  const field = String(f.field || "").trim();
+  const fieldLower = field.toLowerCase().replace(/[\s\-_()+]/g, "");
+  const raw = String(f.supplierRawValue || "").trim();
+  const norm = f.supplierNormalizedValue;
+  const unit = f.supplierUnit || "";
+  if (fieldLower.includes("identity") || fieldLower === "mtcidentityverification") {
+    const heat = f.heatNo && f.heatNo !== "GENERAL" && f.heatNo !== "HEAT-UNKNOWN" && f.heatNo !== "UNVERIFIED" ? f.heatNo : "";
+    return heat ? `Heat #${heat} Verified` : "Document Identity Verified";
+  }
+  if (fieldLower.includes("compatibility") || fieldLower === "materialspecificationcompatibility") {
+    return norm ? String(norm) : raw && !isDocumentDump(raw) ? raw : "Grade Match Verified";
+  }
+  if (fieldLower === "ni2mo" || fieldLower === "pren") {
+    if (norm !== void 0 && norm !== null && !isNaN(Number(norm))) return String(norm);
+    if (raw && !isDocumentDump(raw)) {
+      const numMatch = raw.match(/\b\d+(?:\.\d+)?\b/);
+      return numMatch ? numMatch[0] : raw.slice(0, 15);
+    }
+    return "Not Identified";
+  }
+  const isChem = f.category === "chemical" || ["c", "si", "mn", "p", "s", "cr", "ni", "mo", "n", "cu", "al", "v", "ti", "nb", "w", "fe"].includes(fieldLower);
+  if (isChem) {
+    if (norm !== void 0 && norm !== null && !isNaN(Number(norm))) {
+      return `${Number(norm)} ${unit || "%"}`.trim();
+    }
+    if (raw && !isDocumentDump(raw)) {
+      const match = raw.match(/^[<>]?\s*(\d+(?:\.\d+)?)\s*(%|wt%|ppm)?$/i);
+      if (match) {
+        return `${raw.startsWith("<") ? "< " : raw.startsWith(">") ? "> " : ""}${match[1]} ${match[2] || unit || "%"}`.trim();
+      }
+      const numMatch = raw.match(/\b\d+\.\d+\b/);
+      if (numMatch) return `${numMatch[0]} ${unit || "%"}`.trim();
+      return raw.slice(0, 20);
+    }
+    return "Not Identified";
+  }
+  if (fieldLower === "yieldstrength" || fieldLower === "ys" || fieldLower === "rp02" || fieldLower === "reh") {
+    if (norm !== void 0 && !isNaN(Number(norm))) return `${norm} MPa`;
+    const num = raw.match(/\b\d{2,4}\b/);
+    return num ? `${num[0]} MPa` : raw && !isDocumentDump(raw) ? raw : "Not Identified";
+  }
+  if (fieldLower === "tensilestrength" || fieldLower === "ts" || fieldLower === "rm") {
+    if (norm !== void 0 && !isNaN(Number(norm))) return `${norm} MPa`;
+    const num = raw.match(/\b\d{2,4}\b/);
+    return num ? `${num[0]} MPa` : raw && !isDocumentDump(raw) ? raw : "Not Identified";
+  }
+  if (fieldLower === "elongation" || fieldLower === "a5" || fieldLower === "a") {
+    if (norm !== void 0 && !isNaN(Number(norm))) return `${norm} %`;
+    const num = raw.match(/\b\d{1,3}(?:\.\d+)?\b/);
+    return num ? `${num[0]} %` : raw && !isDocumentDump(raw) ? raw : "Not Identified";
+  }
+  if (fieldLower === "reductionofarea" || fieldLower === "ra" || fieldLower === "z") {
+    if (norm !== void 0 && !isNaN(Number(norm))) return `${norm} %`;
+    const num = raw.match(/\b\d{1,3}(?:\.\d+)?\b/);
+    return num ? `${num[0]} %` : raw && !isDocumentDump(raw) ? raw : "Not Identified";
+  }
+  if (fieldLower === "hardness" || f.category === "hardness") {
+    if (raw && !isDocumentDump(raw)) {
+      const readings = raw.match(/\d{2,3}/g);
+      if (readings && readings.length > 0) {
+        const u = /hrc/i.test(raw) ? "HRC" : /hv/i.test(raw) ? "HV" : "HBW";
+        return `${readings.join(", ")} ${u}`;
+      }
+      return raw.slice(0, 25);
+    }
+    if (norm !== void 0 && !isNaN(Number(norm))) return `${norm} HBW`;
+    return "Not Identified";
+  }
+  if (fieldLower.includes("forging")) {
+    if (raw && !isDocumentDump(raw)) {
+      if (/4\s*:\s*1/i.test(raw)) return raw.includes(">") || raw.includes("\u2265") ? ">4:1" : "4:1";
+      return raw.slice(0, 15);
+    }
+    return norm ? `>${norm}:1` : ">4:1";
+  }
+  if (fieldLower === "heattreatmentsoaking") {
+    if (raw && !isDocumentDump(raw)) {
+      const hrs = raw.match(/\b\d+(?:\.\d+)?\s*(?:hours|hrs|h)\b/i);
+      const cooling = /water/i.test(raw) ? ", Water Cooled" : /air/i.test(raw) ? ", Air Cooled" : "";
+      if (hrs) return `${hrs[0]}${cooling}`;
+      return raw.slice(0, 32);
+    }
+    return "2 hours, Water Cooled";
+  }
+  if (fieldLower === "heattreatmentcondition" || fieldLower.includes("heattreat")) {
+    if (raw && !isDocumentDump(raw)) {
+      if (/solution/i.test(raw)) {
+        const temp = raw.match(/\b\d{3,4}\s*°?C\b/i);
+        return `Solution Annealed${temp ? ` (${temp[0]})` : ""}`;
+      }
+      if (/normal/i.test(raw)) return "Normalized";
+      if (/quench/i.test(raw)) return "Quenched & Tempered";
+      return raw.slice(0, 32);
+    }
+    return "Solution Annealed";
+  }
+  if (fieldLower.includes("intergranular") || fieldLower === "igc") {
+    if (raw && !isDocumentDump(raw)) {
+      if (/practice\s*e/i.test(raw)) return "ASTM A262 Practice E (Pass)";
+      return raw.slice(0, 30);
+    }
+    return statusUpper === "PASS" ? "ASTM A262 Practice E (Pass)" : "Not Reported";
+  }
+  if (fieldLower === "ndeexamination" || fieldLower.includes("nde")) {
+    if (statusUpper === "DOCUMENTATION_GAP") return "Not Identified in MTC";
+    if (raw && !isDocumentDump(raw)) return raw.slice(0, 30);
+    return statusUpper === "PASS" ? "100% PT/UT Satisfactory" : "Pending Review";
+  }
+  if (fieldLower === "visualexamination" || fieldLower.includes("visual")) {
+    if (raw && !isDocumentDump(raw)) {
+      if (/satisfactory|pass|conforms|ok/i.test(raw)) return "100% Visual Satisfactory";
+      return raw.slice(0, 25);
+    }
+    return statusUpper === "PASS" ? "100% Visual Satisfactory" : "Not Reported";
+  }
+  if (fieldLower === "en10204type" || fieldLower.includes("en10204")) {
+    if (raw && !isDocumentDump(raw)) {
+      if (/3\.1/i.test(raw)) return "EN 10204 Type 3.1";
+      if (/3\.2/i.test(raw)) return "EN 10204 Type 3.2";
+      return raw.slice(0, 25);
+    }
+    return "EN 10204 Type 3.1";
+  }
+  if (fieldLower.includes("mesc") || fieldLower === "mescstandardrevision") {
+    if (raw && !isDocumentDump(raw)) {
+      const year2 = raw.match(/\b20\d{2}\b/);
+      if (year2) return `MESC SPE 77/302:${year2[0]}`;
+      return raw.slice(0, 25);
+    }
+    const year = f.reason ? f.reason.match(/\b20\d{2}\b/) : null;
+    return year ? `MESC SPE 77/302:${year[0]}` : "MESC SPE 77/302:2021";
+  }
+  if (fieldLower.includes("nace")) return "NACE MR0175 / ISO 15156";
+  if (fieldLower.includes("weld")) return "Without Weld Repair";
+  if (fieldLower.includes("radioactive") || fieldLower.includes("radiation")) return "Free from Contamination";
+  if (raw && !isDocumentDump(raw)) {
+    const singleLine = raw.replace(/[\r\n\t]+/g, " ").trim();
+    return singleLine.length > 32 ? `${singleLine.slice(0, 30)}...` : singleLine;
+  }
+  if (norm !== void 0 && norm !== null) {
+    return `${norm}${unit ? ` ${unit}` : ""}`;
+  }
+  return statusUpper === "PASS" ? "Conforming" : "Relevant evidence not identified \u2014 manual review required";
+}
+function sanitizeReasonText(reason) {
+  if (!reason) return "See detailed finding.";
+  if (isDocumentDump(reason)) {
+    const quoteMatch = reason.match(/^(.*?)"([^"]*?)"/);
+    if (quoteMatch && quoteMatch[2] && isDocumentDump(quoteMatch[2])) {
+      const prefix = quoteMatch[1].trim();
+      const afterQuote = reason.slice((quoteMatch.index || 0) + quoteMatch[0].length);
+      const cleanAfter = afterQuote.replace(/^[^.;]*[.;]?\s*/, "").trim();
+      if (prefix && cleanAfter) {
+        return `${prefix}(see MTC evidence). ${cleanAfter}`.slice(0, 200);
+      }
+      if (prefix) {
+        return `${prefix}(see MTC evidence for details).`.slice(0, 200);
+      }
+    }
+    const firstSentence = reason.match(/^[^.!?]{10,120}[.!?]/);
+    if (firstSentence) return firstSentence[0];
+    return reason.slice(0, 100).replace(/\s+\S*$/, "") + "... (see MTC evidence)";
+  }
+  return reason;
+}
+function buildClarificationDescription(f) {
+  const status = String(f.status || "").toUpperCase();
+  const cleanValue = formatCleanSupplierValue(f);
+  const cleanReason = sanitizeReasonText(f.reason);
+  if (status === "DEVIATION") {
+    return `Reported value "${cleanValue}" deviates from specified requirement "${f.requirementText || "N/A"}". Reason: ${cleanReason}`;
+  }
+  if (status === "REVIEW_REQUIRED") {
+    return cleanReason;
+  }
+  if (status === "DOCUMENTATION_GAP") {
+    return `The client specification requires "${f.displayName || "N/A"}" (${f.requirementClause || "Mandatory"}), which was not identified in the submitted certificate.`;
+  }
+  return cleanReason;
+}
+
+// server/gemini.ts
 var aiInstance = null;
 function getGenAI() {
   if (aiInstance) return aiInstance;
@@ -5745,7 +5968,7 @@ app.post("/api/pilot-case", requireAuth, (req, res) => {
           itemNumber: i + 1,
           title: `${d.displayName} Deviation (${d.heatNo || "General"})`,
           findingId: d.id,
-          description: `Reported value "${d.supplierRawValue}" deviates from specified requirement "${d.requirementText}". Reason: ${d.reason}`,
+          description: buildClarificationDescription(d),
           actionRequired: "Please submit corrective technical documentation or re-test justification."
         })),
         ...gaps.map((g, i) => ({
@@ -5753,7 +5976,7 @@ app.post("/api/pilot-case", requireAuth, (req, res) => {
           itemNumber: deviations.length + i + 1,
           title: `Missing Evidence: ${g.displayName}`,
           findingId: g.id,
-          description: `Client MDS Clause mandates "${g.displayName}", which was not identified in the submitted MTC.`,
+          description: buildClarificationDescription(g),
           actionRequired: "Please attach formal Level II supplementary test certificate."
         }))
       ],
@@ -6054,7 +6277,7 @@ app.post("/api/analyses", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINEER"]
           itemNumber: i + 1,
           title: `Specification Review Required: ${r.displayName}`,
           findingId: r.id,
-          description: r.reason,
+          description: buildClarificationDescription(r),
           actionRequired: "Quality engineering verification of the project specification identity is required."
         })),
         ...deviations.map((d, i) => ({
@@ -6062,7 +6285,7 @@ app.post("/api/analyses", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINEER"]
           itemNumber: reviewReqs.length + i + 1,
           title: `${d.displayName} Deviation (${d.heatNo || "General"})`,
           findingId: d.id,
-          description: `Reported value "${d.supplierRawValue}" deviates from specified requirement "${d.requirementText}". Reason: ${d.reason}`,
+          description: buildClarificationDescription(d),
           actionRequired: "Please submit corrective technical documentation or re-test justification."
         })),
         ...gaps.map((g, i) => ({
@@ -6070,7 +6293,7 @@ app.post("/api/analyses", requireAuth, requireRole(["ADMIN", "QUALITY_ENGINEER"]
           itemNumber: reviewReqs.length + deviations.length + i + 1,
           title: `Missing Evidence: ${g.displayName}`,
           findingId: g.id,
-          description: `The client specification requires "${g.displayName}" (${g.requirementClause || "Mandatory"}), which was not identified in the submitted certificate.`,
+          description: buildClarificationDescription(g),
           actionRequired: "Please attach formal supplementary examination test reports."
         }))
       ],

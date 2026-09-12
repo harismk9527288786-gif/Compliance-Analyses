@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { AnalysisRecord, ComplianceFinding, ExternalFeedbackDraft, User } from '../types';
 import { exportAnalysisToExcel, exportAnalysisToPDF, formatExportSupplierValue } from '../utils/exportUtils';
+import { buildClarificationDescription } from '../utils/sanitizeEvidence';
 
 interface ReportModalProps {
   analysis: AnalysisRecord;
@@ -53,20 +54,23 @@ export const ReportModal: React.FC<ReportModalProps> = ({
       openingStatement: `The submitted Material Test Certificate (${analysis.mtcNumber}) for PO ${analysis.poNumber || 'N/A'} has been analyzed against client specification ${analysis.requirementSetTitle}.`,
       conformingSummary: `Chemical composition and primary tensile/yield mechanical properties have been verified against applicable ASTM/NACE thresholds.`,
       clarificationPoints: findings
-        .filter((f) => f.status === 'DEVIATION' || f.status === 'DOCUMENTATION_GAP')
+        .filter((f) => f.status === 'DEVIATION' || f.status === 'DOCUMENTATION_GAP' || f.status === 'REVIEW_REQUIRED')
         .map((f, i) => ({
           id: `pt-${i + 1}`,
           itemNumber: i + 1,
           findingId: f.id,
-          title: `${f.displayName} (${f.heatNo || 'General'})`,
-          description:
-            f.status === 'DEVIATION'
-              ? `Reported value "${formatExportSupplierValue(f)}" deviates from specified requirement "${f.requirementText}". Reason: ${f.reason}`
-              : `The client specification requires "${f.displayName}" (${f.requirementClause || 'Mandatory'}), which was not identified in the submitted certificate.`,
+          title: f.status === 'REVIEW_REQUIRED'
+            ? `Specification Review Required: ${f.displayName}`
+            : f.status === 'DOCUMENTATION_GAP'
+              ? `Missing Evidence: ${f.displayName}`
+              : `${f.displayName} (${f.heatNo || 'General'})`,
+          description: buildClarificationDescription(f),
           actionRequired:
             f.status === 'DEVIATION'
               ? 'Please submit corrective technical concession justification or re-test records.'
-              : 'Please attach formal supplementary examination test certificates.',
+              : f.status === 'REVIEW_REQUIRED'
+                ? 'Quality engineering verification of the project specification identity is required.'
+                : 'Please attach formal supplementary examination test certificates.',
         })),
       closingStatement:
         'Please provide written clarification and supporting documentation for the above points to enable final material acceptance.',

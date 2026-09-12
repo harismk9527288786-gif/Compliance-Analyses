@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { Requirement, SupplierEvidence, CertificateRecord } from '../src/types';
+import { formatCleanSupplierValue, sanitizeReasonText } from '../src/utils/sanitizeEvidence';
 
 let aiInstance: GoogleGenAI | null = null;
 
@@ -1772,7 +1773,7 @@ export async function draftSupplierClarificationWithAI(
   const prompt = `Draft a polite, professional, formal metallurgical quality clarification letter from an engineering company to supplier "${supplierName}" regarding Material Test Certificate ${mtcNumber} for PO ${poNumber}.
 
 Deviations found:
-${deviations.map((d, i) => `${i + 1}. ${d.displayName} (${d.heatNo || 'General'}): Supplier reports "${d.supplierRawValue}", but client specification requires "${d.requirementText}". Reason: ${d.reason}`).join('\n')}
+${deviations.map((d, i) => `${i + 1}. ${d.displayName} (${d.heatNo || 'General'}): Supplier reports "${formatCleanSupplierValue(d)}", but client specification requires "${d.requirementText}". Reason: ${sanitizeReasonText(d.reason)}`).join('\n')}
 
 Documentation gaps:
 ${gaps.map((g, i) => `${i + 1}. ${g.displayName}: Client requirement "${g.requirementText}" was not identified in the MTC.`).join('\n')}
@@ -1806,7 +1807,7 @@ We have completed the quality engineering review of the subject Material Test Ce
 While standard chemistry and base mechanical values are largely conforming, the following critical points require immediate resolution prior to material acceptance:
 
 DEVIATIONS:
-${deviations.map((d, i) => `${i + 1}. [Heat ${d.heatNo || 'N/A'}] ${d.displayName}: Extracted value "${d.supplierRawValue}" deviates from requirement "${d.requirementText}". (${d.reason})`).join('\n')}
+${deviations.map((d, i) => `${i + 1}. [Heat ${d.heatNo || 'N/A'}] ${d.displayName}: Extracted value "${formatCleanSupplierValue(d)}" deviates from requirement "${d.requirementText}". (${sanitizeReasonText(d.reason)})`).join('\n')}
 
 DOCUMENTATION GAPS:
 ${gaps.map((g, i) => `${i + 1}. ${g.displayName}: Required verification documentation was not identified in the submitted certificate package.`).join('\n')}

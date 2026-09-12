@@ -1,6 +1,7 @@
 import XLSX from 'xlsx-js-style';
 import { jsPDF } from 'jspdf';
 import { AnalysisRecord, ComplianceFinding, ExternalFeedbackDraft } from '../types';
+import { isDocumentDump as isDocDump } from './sanitizeEvidence';
 
 // Industrial Color Palette for Excel Formatting (Hex without #)
 const C = {
@@ -874,7 +875,14 @@ export function exportAnalysisToExcel(
     rIdx++;
 
     feedbackDraft.clarificationPoints.forEach((pt, idx) => {
-      const pRow = [idx + 1, pt.title, pt.description, pt.actionRequired];
+      // Sanitize description at render time — guard against previously-persisted raw document dumps
+      let cleanDesc = String(pt.description || 'See detailed finding.');
+      if (isDocDump(cleanDesc)) {
+        const firstSentence = cleanDesc.match(/^[^.!?]{10,120}[.!?]/);
+        cleanDesc = firstSentence ? firstSentence[0] : cleanDesc.slice(0, 100).replace(/\s+\S*$/, '') + '... (see MTC evidence)';
+      }
+
+      const pRow = [idx + 1, pt.title, cleanDesc, pt.actionRequired];
       for (let c = 0; c < 4; c++) {
         wsDraft[XLSX.utils.encode_cell({ r: rIdx, c })] = {
           v: pRow[c],
@@ -1641,8 +1649,15 @@ export function exportAnalysisToPDF(
       const isDevPoint = pt.title?.toLowerCase().includes('deviation');
       const accentColor = isDevPoint ? DEV_TEXT : GAP_TEXT;
 
-      const descLines = doc.splitTextToSize(`Description: ${pt.description}`, contentWidth - 12);
-      const actLines = doc.splitTextToSize(`Required Action: ${pt.actionRequired}`, contentWidth - 12);
+      // Sanitize description at render time — guard against previously-persisted raw document dumps
+      let cleanDesc = String(pt.description || 'See detailed finding.');
+      if (isDocDump(cleanDesc)) {
+        // Extract the first meaningful sentence before any embedded dump
+        const firstSentence = cleanDesc.match(/^[^.!?]{10,120}[.!?]/);
+        cleanDesc = firstSentence ? firstSentence[0] : cleanDesc.slice(0, 100).replace(/\s+\S*$/, '') + '... (see MTC evidence)';
+      }
+      const descLines = doc.splitTextToSize(`Description: ${cleanDesc}`, contentWidth - 12).slice(0, 4);
+      const actLines = doc.splitTextToSize(`Required Action: ${pt.actionRequired}`, contentWidth - 12).slice(0, 2);
 
       const cardH = 6 + (descLines.length + actLines.length) * 2.8 + 1.5;
 
