@@ -165,10 +165,11 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({ currentUser, o
           </div>
           <button
             type="button"
+            aria-label="Close admin users modal"
             onClick={onClose}
             className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
@@ -262,10 +263,11 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({ currentUser, o
             <span>Active Team Members ({users.length})</span>
             <button
               type="button"
+              aria-label="Refresh user list"
               onClick={fetchUsersAndInvites}
               className="text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
               <span>Refresh</span>
             </button>
           </div>
