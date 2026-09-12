@@ -1,0 +1,28 @@
+{
+  "version": "1.0.0",
+  "createdAt": "2026-09-12T15:42:00+05:30",
+  "workflow": {
+    "rigor": "full",
+    "autoCommit": true,
+    "commitPrefix": "gsd",
+    "branchStrategy": "main",
+    "reviewGates": true,
+    "testingGates": true,
+    "auditTrail": true
+  },
+  "project": {
+    "name": "MTC Compliance Checker",
+    "type": "fullstack-webapp",
+    "domain": "document-analysis-ai-verification",
+    "repo": "https://github.com/harismk9527288786-gif/Compliance-Analyses",
+    "rootPath": "d:/mtc-compliance-checker"
+  },
+  "team": {
+    "size": "solo",
+    "developer": "haris"
+  },
+  "model": {
+    "preference": "opus",
+    "fallback": "flash"
+  }
+}
