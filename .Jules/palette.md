@@ -1,0 +1,3 @@
+## 2026-09-16 - Icon-Only Button Accessibility in Modals
+**Learning:** Found inconsistent accessibility practices across the app's modals for the close (X) buttons. While `DataRetentionModal.tsx` and some custom drawers had `aria-label` or `sr-only` spans, modals like `LoginPage.tsx` (Forgot Password, Quality Standards), `AdminUsersModal.tsx`, and `FramerToast.tsx` were missing accessible names entirely.
+**Action:** Always verify `aria-label` is present on icon-only buttons (like `X` to close) and add `aria-hidden="true"` on the decorative SVG elements to ensure consistent screen reader support.
