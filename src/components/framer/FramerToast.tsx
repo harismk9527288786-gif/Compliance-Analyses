@@ -55,8 +55,9 @@ export const FramerToast: React.FC<FramerToastProps> = ({ toasts, onDismiss }) =
                 type="button"
                 onClick={() => onDismiss(t.id)}
                 className="shrink-0 p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                aria-label="Dismiss toast"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-3.5 h-3.5" aria-hidden="true" />
               </button>
             </motion.div>
           );
