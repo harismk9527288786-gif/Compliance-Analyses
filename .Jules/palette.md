@@ -1,0 +1,3 @@
+## 2026-08-24 - Modal Close Button Accessibility Consistency
+**Learning:** Found an accessibility issue pattern specific to this app's components where custom modal dialog close buttons were frequently missing `aria-label` attributes and the inner SVGs lacked `aria-hidden="true"`, preventing screen readers from properly interpreting the action.
+**Action:** Ensure all icon-only buttons (especially 'X' close buttons in modals) always have an `aria-label` explicitly defining their action, and that decorative SVGs inside them have `aria-hidden="true"`.
