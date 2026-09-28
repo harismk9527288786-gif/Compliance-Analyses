@@ -1,0 +1,3 @@
+## 2026-09-28 - Consistent Accessibility for Password Toggles
+**Learning:** When a UI pattern (like a password visibility toggle) is reused across different forms within the same component or app (e.g., login, registration, invite acceptance), accessibility attributes (like `aria-label` and `aria-hidden`) are easily missed in later implementations if not componentized.
+**Action:** Always verify a11y attributes on all instances of a duplicated pattern, or ideally, extract it into a reusable component to ensure consistent accessibility.
