@@ -1049,6 +1049,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               </div>
               <button
                 type="button"
+                aria-label="Close forgot password modal"
                 onClick={() => setShowForgotModal(false)}
                 className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors cursor-pointer"
               >
@@ -1176,6 +1177,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               </div>
               <button
                 type="button"
+                aria-label="Close standards modal"
                 onClick={() => setShowStandardsModal(false)}
                 className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors cursor-pointer"
               >
