@@ -165,10 +165,11 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({ currentUser, o
           </div>
           <button
             type="button"
+            aria-label="Close modal"
             onClick={onClose}
             className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
