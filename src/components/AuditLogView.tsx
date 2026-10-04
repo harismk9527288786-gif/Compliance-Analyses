@@ -136,6 +136,7 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({ auditLogs }) => {
             <input
               type="text"
               placeholder="Search actors, actions..."
+              aria-label="Search audit logs"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 text-slate-900 font-medium"
