@@ -1051,6 +1051,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 type="button"
                 onClick={() => setShowForgotModal(false)}
                 className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors cursor-pointer"
+                aria-label="Close modal"
               >
                 <X className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -1178,6 +1179,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 type="button"
                 onClick={() => setShowStandardsModal(false)}
                 className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors cursor-pointer"
+                aria-label="Close modal"
               >
                 <X className="w-4 h-4" aria-hidden="true" />
               </button>
