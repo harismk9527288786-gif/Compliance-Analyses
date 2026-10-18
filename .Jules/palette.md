@@ -1,0 +1,3 @@
+## 2024-05-18 - Added ARIA labels to close modals
+**Learning:** Found multiple icon-only buttons for closing modals (<X /> icon) in the app that lacked accessible names. The preferred pattern in this app for modal close buttons seems to be adding an aria-label="Close" or using `<span className="sr-only">Close</span>` inside the button. I'm adding `aria-label="Close modal"` directly on the button to be consistent with accessible UX standards when `sr-only` text is missing.
+**Action:** Add `aria-label="Close modal"` to all close `<X />` buttons across different modal components that lack screen reader text.
