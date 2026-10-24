@@ -1,0 +1,3 @@
+## 2024-09-08 - Added accessible aria-labels to search inputs
+**Learning:** Form inputs like search bars often miss explicitly linked labels (`<label>` or `aria-label`) when designed with a minimalist placeholder approach, potentially causing accessibility issues for screen readers. In this application, several search inputs across multiple views (Dashboard, HistoryView, AnalysisView) rely on placeholders instead of proper accessible labels.
+**Action:** Add `aria-label` attributes to all standalone `<input type="text">` search fields to ensure they are fully accessible to assistive technologies while preserving their visual design.
