@@ -60,13 +60,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   // Partition analyses into active review queue vs signed-off history
   const list = Array.isArray(analyses) ? analyses : [];
-  const signedOffAnalyses = list.filter((a) => a && a.status === 'approved');
+  const signedOffAnalyses = list.filter((a) => a && (a.status === 'approved' || a.status === 'rejected'));
   // Active review queue includes all pending, in-progress, and unverified records awaiting QC sign-off
-  const activeAnalyses = list.filter((a) => a && a.status !== 'approved');
+  const activeAnalyses = list.filter((a) => a && a.status !== 'approved' && a.status !== 'rejected');
 
   // Active queue metrics (signed-off records do NOT alarm active dashboard metrics)
   const activeReviews = activeAnalyses.length;
-  const activeRejected = activeAnalyses.filter((a) => a && a.status === 'rejected').length;
+  const activeRejected = activeAnalyses.filter((a) => a && a.status === 'rejected').length; // Now 0 since rejected is excluded
   const activePass = activeAnalyses.reduce((acc, a) => acc + (a?.passCount || 0), 0);
   const activeDeviations = activeAnalyses.reduce((acc, a) => acc + (a?.deviationCount || 0), 0);
   const activeGaps = activeAnalyses.reduce((acc, a) => acc + (a?.documentationGapCount || 0), 0);
@@ -259,7 +259,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 border-b border-slate-800 pb-2">
               <span className="uppercase tracking-wider font-semibold">Active Review Queue</span>
               <span className="font-bold text-slate-300">
-                {activeReviews} Pending {signedOffAnalyses.length > 0 && `(${signedOffAnalyses.length} Signed Off)`}
+                {activeReviews} Pending {signedOffAnalyses.length > 0 && `(${signedOffAnalyses.length} Archived)`}
               </span>
             </div>
 
@@ -268,7 +268,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 signedOffAnalyses.length > 0 ? (
                   <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-emerald-950/80 text-emerald-300 border border-emerald-700 text-xs font-bold font-mono">
                     <CheckCircle2 className="w-4 h-4 stroke-[2.5] text-emerald-400 shrink-0" aria-hidden="true" />
-                    <span>ALL REVIEWS SIGNED OFF & ARCHIVED</span>
+                    <span>ALL REVIEWS ARCHIVED</span>
                   </div>
                 ) : (
                   <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-900 text-slate-300 border border-slate-700 text-xs font-bold font-mono">
@@ -318,7 +318,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </div>
                 {signedOffAnalyses.length > 0 && (
                   <div className="flex justify-between pt-1 border-t border-slate-800/80 text-slate-400">
-                    <span className="text-slate-400">Signed-Off & In History:</span>
+                    <span className="text-slate-400">Archived & In History:</span>
                     <span className="text-emerald-400 font-bold">{signedOffAnalyses.length}</span>
                   </div>
                 )}
@@ -429,7 +429,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </div>
               <p className="text-[11px] text-slate-500 font-medium">
                 {signedOffAnalyses.length > 0
-                  ? `${signedOffAnalyses.length} signed off & in History`
+                  ? `${signedOffAnalyses.length} archived in History`
                   : 'Across all approved mill suppliers'}
               </p>
             </div>
@@ -546,7 +546,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       {/* 4. VERIFICATION LOGS & TRACEABILITY TABLE */}
       <section id="all-records-table" aria-label="Verification Records Table" className="bg-white rounded-xl border border-slate-300 shadow-xs p-5 space-y-4">
-        {/* Signed-Off Archive Notice Banner */}
+        {/* Archived Notice Banner */}
         {signedOffAnalyses.length > 0 && (
           <div className="bg-emerald-50/90 border border-emerald-200 rounded-lg p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -555,12 +555,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </div>
               <div className="min-w-0">
                 <p className="text-xs font-bold text-emerald-950">
-                  {signedOffAnalyses.length} Material Certificate{signedOffAnalyses.length > 1 ? 's' : ''} Technically Signed Off & Archived
+                  {signedOffAnalyses.length} Material Certificate{signedOffAnalyses.length > 1 ? 's' : ''} Archived
                 </p>
                 <p className="text-[11px] text-emerald-800">
                   {viewScope === 'pending'
-                    ? 'Active Dashboard shows unreviewed/pending queue only. Signed-off certificates are stored in History.'
-                    : 'Showing all records including signed-off historical certificates.'}
+                    ? 'Active Dashboard shows unreviewed/pending queue only. Archived certificates are stored in History.'
+                    : 'Showing all records including archived historical certificates.'}
                 </p>
               </div>
             </div>

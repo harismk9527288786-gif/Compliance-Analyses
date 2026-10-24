@@ -1,4 +1,4 @@
-import puppeteer from 'puppeteer-core';
+import puppeteer from 'puppeteer';
 import fs from 'fs';
 
 const db = JSON.parse(fs.readFileSync('./data/mtc_compliance_database.json', 'utf8'));
