@@ -1,0 +1,3 @@
+## 2024-09-07 - Add ARIA Labels to Icon-Only Buttons
+**Learning:** Icon-only buttons (e.g., using a Lucide React `<X />` icon for close buttons) present a severe accessibility barrier when they lack screen-reader context (`aria-label`) and visual keyboard focus indicators (`focus-visible`).
+**Action:** Always add an explicit `aria-label` attribute (e.g., `aria-label="Close modal"`) to the `<button>`, mark the decorative icon as `aria-hidden="true"`, and ensure visible focus styling (e.g., `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400`) on all newly created or refactored icon-only buttons.
