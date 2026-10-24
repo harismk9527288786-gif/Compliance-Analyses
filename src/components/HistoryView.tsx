@@ -344,6 +344,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                 placeholder="Search MTC / Heat / PO..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                aria-label="Search MTC / Heat / PO..."
                 className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all font-medium text-slate-900"
               />
             </div>
